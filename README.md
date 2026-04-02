@@ -19,7 +19,7 @@
   - [Usage](#usage)
     - [Running an Auditory Experiment](#running-an-auditory-experiment)
     - [Experiment Modes](#experiment-modes)
-    - [Running the SimplerMaze](#running-the-simplermaze)
+    - [Running the Tactile experiments](#running-the-tactile-experiments)
   - [Configuration](#configuration)
   - [Repository Structure](#repository-structure)
   - [Testing](#testing)
@@ -51,7 +51,7 @@ The system supports two main experimental paradigms:
 | Paradigm | Description |
 |---|---|
 | **Auditory Maze** | Multi-arm maze with auditory stimuli (pure tones, musical intervals, temporal envelope modulation, tone sequences, vocalisations). Real-time ROI tracking triggers sound playback when the mouse enters specific arms. |
-| **SimplerMaze** | Y-maze with servo-controlled moveable walls for reward-based navigation studies. |
+| **Tactile Maze** | 2-level binary decision tree with servo-controlled moveable grating walls and reward delivery system, for reward-based navigation studies. |
 
 ### Key Features
 
@@ -145,14 +145,14 @@ Set `experiment_mode` in `config.py` to one of:
 | `sequences` | Tone-pattern sequences (ABAB, AoAo, etc.) |
 | `vocalisation` | Each ROI plays a different vocalisation recording |
 
-### Running the SimplerMaze
+### Running the Tactile experiments
 
 ```bash
 cd src/simplermaze
 python simplerCode.py
 ```
 
-This runs the Y-maze paradigm with servo-controlled walls.
+This runs the tactile paradigm with servo-controlled gratings walls and automated reward delivery.
 
 ---
 
@@ -195,7 +195,7 @@ aMAZEing-maze/
 │   │       ├── vision.py       #   ROI tracking (OpenCV)
 │   │       ├── data_manager.py #   Session & visit logging
 │   │       └── hardware.py     #   Arduino/camera control
-│   └── simplermaze/            # Y-maze with servos
+│   └── simplermaze/            # Tactile maze with servos
 │       ├── simplerCode.py      #   Main script
 │       └── supFun.py           #   Support functions
 │
@@ -206,7 +206,7 @@ aMAZEing-maze/
 │
 ├── analysis/
 │   ├── auditory/               # Auditory experiment analysis notebooks
-│   ├── simplermaze/            # SimplerMaze analysis & DLC pipeline
+│   ├── simplermaze/            # Tactile experiment analysis & DLC pipeline
 │   │   ├── first_paper_exploratory_analysis/
 │   │   └── trials_segmentation/
 │   └── calibration/            # Speaker frequency-response calibration
@@ -266,7 +266,7 @@ See `hardware/drawings/` for schematics and `hardware/photos/` for assembly refe
 
 ## Analysis Pipeline
 
-The SimplerMaze behavioural analysis pipeline lives in `analysis/simplermaze/first_paper_exploratory_analysis/`. It processes DeepLabCut (or SLEAP) pose-estimation data alongside trial CSVs to produce publication-ready figures and statistics.
+The Tactile maze behavioural analysis pipeline lives in `analysis/simplermaze/first_paper_exploratory_analysis/`. It processes DeepLabCut (or SLEAP) pose-estimation data alongside trial CSVs to produce publication-ready figures and statistics.
 
 ### Prerequisites
 
