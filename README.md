@@ -72,10 +72,23 @@ The system supports two main experimental paradigms:
 - **Python** 3.10 or later
 - **OS**: Windows 10/11 (tested), Linux/macOS (should work with minor path adjustments)
 - **Hardware** (optional, for live experiments):
-  - USB camera (any OpenCV-compatible webcam)
-  - Audio interface capable of 192 kHz output
-  - Arduino Uno/Nano (for TTL sync)
-  - Raspberry Pi Pico with PCA9685 (for servo control)
+  - USB camera
+  - a computer with at least 8GB RAM
+  - Makerbeam posts
+  - Bolts
+  - Acrylic panel
+  - Metal holding structure 
+  You can find the dimensions [here](docs\dimensions.md) and the companies we sourced these materials from [here](docs\local_materials_company.md)
+  - **For Auditory experiments:**
+    - Audio interface capable of 192 kHz output (we use Focusrite)
+    - Ultrasonic speaker (we use the [Vifa Ultrasonic dynamic speaker](https://avisoft.com/playback/vifa/)) in combination with a pre-amp (we use the [Portable Ultrasonic Power Amplifier](https://avisoft.com/playback/power-amplifier/)).
+    - Arduino Uno/Nano (for TTL sync)
+  - **For Tactile experiments**
+    - Adafruit PCA9685 (for servo control)
+    - BeeHive control board 
+    - servos for sensory presentation and reward delivery 
+    - 3D printer (see 3D printable gratings and reward delivery)
+
 
 ---
 
@@ -83,7 +96,7 @@ The system supports two main experimental paradigms:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/aMAZEing-maze.git
+git clone https://github.com/MaravallLab/aMAZEing-maze.git
 cd aMAZEing-maze 
 
 # Create a virtual environment (recommended)
