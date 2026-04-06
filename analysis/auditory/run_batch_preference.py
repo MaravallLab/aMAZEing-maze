@@ -18,15 +18,16 @@ Dependencies (pip install):
     numpy  pandas  matplotlib  seaborn  scipy  statsmodels
 
 Outputs  → <DATA_ROOT>/BATCH_ANALYSIS/
-    preference_data.csv           per-mouse per-session PI + metrics
-    stimulus_breakdown.csv        per-stimulus-type visit duration
+    preference_data.csv           per-mouse per-session PI + voc_pi
+    stimulus_breakdown.csv        per-stimulus-type visit duration + stim_pi
     fig1_pi_trajectories.png/pdf  individual mouse PI trajectories
     fig2_pi_by_day.png/pdf        mean PI per day ±95 % CI
     fig3_pi_violins.png/pdf       violin plots by day
     fig4_complexity_heatmap.png   visit duration by stimulus type
-    fig5_vocalisation_contrast.png vocalisation vs other days
+    fig5_vocalisation_contrast.png vocalisation PI analysis (3 panels)
     fig6_re_vs_pi.png/pdf         roaming entropy → PI
     fig7_icc_summary.png/pdf      ICC variance decomposition
+    fig8_stimulus_pi.png/pdf      per-stimulus PI vs silent baseline
     stats_report.txt              all statistical test results
 """
 
@@ -65,35 +66,35 @@ EXPERIMENT_DAYS = {
         "mode": "temporal_envelope_modulation",
         "label": "Day 1: Temporal Envelope",
         "short": "D1 (TEM)",
-        "complexity_order": ["smooth", "constant_rough", "complex_rough"],
+        "complexity_order": ["smooth", "rough", "rough_complex", "control", "vocalisation"],
     },
     "w1_d2": {
         "folder": "w1_d2",
         "mode": "complex_intervals",
         "label": "Day 2: Intervals (consonant/dissonant)",
         "short": "D2 (Int)",
-        "complexity_order": ["consonant", "dissonant"],
+        "complexity_order": ["smooth", "rough", "consonant", "dissonant", "control", "vocalisation"],
     },
     "w1_d3": {
         "folder": "w1_d3",
         "mode": "complex_intervals",
         "label": "Day 3: Intervals (consonant/dissonant)",
         "short": "D3 (Int)",
-        "complexity_order": ["consonant", "dissonant"],
+        "complexity_order": ["smooth", "rough", "consonant", "dissonant", "control", "vocalisation"],
     },
     "w1_d4": {
         "folder": "w1_d4",
         "mode": "complex_intervals",
         "label": "Day 4: Intervals (no silent control)",
         "short": "D4 (Int)",
-        "complexity_order": ["consonant", "dissonant"],
+        "complexity_order": ["smooth", "rough", "consonant", "dissonant", "control", "vocalisation"],
     },
     "w2_sequences": {
         "folder": "w2_sequences",
         "mode": "sequences",
         "label": "Week 2: Sequences",
         "short": "W2 (Seq)",
-        "complexity_order": ["AAAAA", "AoAo", "ABAB", "ABCABC"],
+        "complexity_order": ["AAAAA", "AoAo", "ABAB", "ABCABC", "BABA", "ABBA"],
     },
     "w2_vocalisations": {
         "folder": "w2_vocalisations",
@@ -175,23 +176,41 @@ def classify_stimulus(row, day_key):
     mode = EXPERIMENT_DAYS[day_key]["mode"]
     if mode == "temporal_envelope_modulation":
         st = str(row.get("sound_type", "")).strip().lower()
-        if st in ("smooth", "constant_rough", "complex_rough"):
-            return st
-        if st in ("silent", "silent_trial"):
+        freq = str(row.get("frequency", "")).strip().lower()
+        mod = str(row.get("temporal_modulation", "")).strip().lower()
+        # silent arms
+        if freq in ("0", "silent_arm", "") or st in ("silent", "silent_trial"):
             return "silent"
-        freq = row.get("frequency", 0)
-        return "silent" if freq == 0 or str(freq) == "0" else "smooth"
+        # vocalisation control (sound_type=control, frequency=vocalisation)
+        if freq == "vocalisation" or mod == "vocalisation":
+            return "vocalisation"
+        # no-stimulus control (sound_type=control, frequency=silent_arm)
+        if st == "control" and mod == "no_stimulus":
+            return "silent"
+        # the three TEM categories
+        if st in ("smooth", "rough", "rough_complex"):
+            return st
+        if st == "control":
+            return "control"
+        return st if st else "unknown"
     elif mode == "complex_intervals":
         it = str(row.get("interval_type", "")).strip().lower()
-        if it in ("consonant", "dissonant", "control"):
-            return it
-        if it == "silent_trial":
+        freq = str(row.get("frequency", "")).strip().lower()
+        # silent / no-stimulus
+        if it == "silent_trial" or freq in ("0", ""):
             return "silent"
-        freq = row.get("frequency", 0)
-        return "silent" if freq == 0 or str(freq) == "0" else "consonant"
+        # vocalisation control
+        if freq == "vocalisation":
+            return "vocalisation"
+        # main categories
+        if it in ("consonant", "dissonant", "smooth", "rough"):
+            return it
+        if it == "control":
+            return "control"
+        return it if it else "unknown"
     elif mode == "sequences":
         pat = str(row.get("pattern", "")).strip()
-        if pat in ("AAAAA", "AoAo", "ABAB", "ABCABC"):
+        if pat in ("AAAAA", "AoAo", "ABAB", "ABCABC", "BABA", "ABBA"):
             return pat
         if pat in ("silence", "0"):
             return "silent"
@@ -219,6 +238,43 @@ def compute_roaming_entropy(time_per_roi, n_rois=8):
     props = np.array(time_per_roi) / total
     props = props[props > 0]
     return shannon_entropy(props, base=2) / np.log2(n_rois)
+
+
+def _is_file_locally_available(path):
+    """Check if a file is locally available (not a cloud-only stub).
+
+    On Windows, Box Drive / OneDrive online-only files have the
+    FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS (0x00400000) or
+    FILE_ATTRIBUTE_OFFLINE (0x00001000) attribute.  Reading such
+    files blocks until the cloud provider downloads them, which
+    can take minutes.  This check lets us skip them.
+    """
+    try:
+        import ctypes
+        attrs = ctypes.windll.kernel32.GetFileAttributesW(str(path))
+        if attrs == -1:
+            return False
+        if attrs & 0x00400000 or attrs & 0x00001000:
+            return False
+        return True
+    except Exception:
+        # Non-Windows: just try a quick byte read
+        try:
+            with open(path, "rb") as f:
+                f.read(1)
+            return True
+        except Exception:
+            return False
+
+
+def safe_read_csv(path):
+    """Read a CSV, skipping cloud-only files that would block."""
+    if not _is_file_locally_available(path):
+        return None
+    try:
+        return pd.read_csv(path)
+    except Exception:
+        return None
 
 
 def safe_savefig(fig, path, **kwargs):
@@ -327,15 +383,50 @@ def main():
             v = series.sum()
             return 0 if np.isnan(v) else v
 
-        sound_time = _safe_sum(sound_rois["time_spent"]) if "time_spent" in sound_rois.columns else 0
-        sound_visits = _safe_sum(sound_rois["visitation_count"]) if "visitation_count" in sound_rois.columns else 0
+        # ---- classify each ROI within sound trials ----
+        # Separate actual-sound ROIs from silent-control ROIs within sound trials
+        sound_stim_labels = []
+        for _, row in sound_rois.iterrows():
+            sound_stim_labels.append(classify_stimulus(row, sess.day))
+        sound_rois = sound_rois.copy()
+        sound_rois["_stim_label"] = sound_stim_labels
+
+        # Actual sound ROIs: exclude silent controls within sound trials
+        actual_sound = sound_rois[sound_rois["_stim_label"] != "silent"]
+
+        # Silent baseline: all ROIs in silent trials (3,5,7,9)
         silent_time = _safe_sum(silent_rois["time_spent"]) if "time_spent" in silent_rois.columns else 0
         silent_visits = _safe_sum(silent_rois["visitation_count"]) if "visitation_count" in silent_rois.columns else 0
-
-        avg_sound_dur = sound_time / sound_visits if sound_visits > 0 else 0
         avg_silent_dur = silent_time / silent_visits if silent_visits > 0 else 0
+
+        # Sound aggregate: ONLY actual sound ROIs (excluding silent_arm)
+        sound_time = _safe_sum(actual_sound["time_spent"]) if "time_spent" in actual_sound.columns else 0
+        sound_visits_n = _safe_sum(actual_sound["visitation_count"]) if "visitation_count" in actual_sound.columns else 0
+        avg_sound_dur = sound_time / sound_visits_n if sound_visits_n > 0 else 0
+
         denom = avg_sound_dur + avg_silent_dur
         pi = (avg_sound_dur - avg_silent_dur) / denom if denom > 0 else np.nan
+
+        # ---- per-stimulus-type PI ----
+        stim_pi_dict = {}
+        for stim_type in actual_sound["_stim_label"].unique():
+            stim_subset = actual_sound[actual_sound["_stim_label"] == stim_type]
+            st_time = _safe_sum(stim_subset["time_spent"])
+            st_visits = _safe_sum(stim_subset["visitation_count"])
+            avg_st = st_time / st_visits if st_visits > 0 else 0
+            d = avg_st + avg_silent_dur
+            stim_pi_dict[stim_type] = (avg_st - avg_silent_dur) / d if d > 0 else np.nan
+
+        # Vocalisation-specific PI
+        voc_pi = stim_pi_dict.get("vocalisation", np.nan)
+        # For w2_vocalisations, aggregate all individual vocalisation files
+        if sess.day == "w2_vocalisations" and np.isnan(voc_pi):
+            # all non-silent stim types are vocalisations
+            voc_time = _safe_sum(actual_sound["time_spent"])
+            voc_visits = _safe_sum(actual_sound["visitation_count"])
+            avg_voc = voc_time / voc_visits if voc_visits > 0 else 0
+            d = avg_voc + avg_silent_dur
+            voc_pi = (avg_voc - avg_silent_dur) / d if d > 0 else np.nan
 
         records.append({
             "mouse_id": sess.mouse_id,
@@ -343,12 +434,13 @@ def main():
             "day_label": EXPERIMENT_DAYS[sess.day]["short"],
             "mode": EXPERIMENT_DAYS[sess.day]["mode"],
             "sound_time_ms": sound_time,
-            "sound_visits": sound_visits,
+            "sound_visits": sound_visits_n,
             "silent_time_ms": silent_time,
             "silent_visits": silent_visits,
             "avg_sound_dur_ms": avg_sound_dur,
             "avg_silent_dur_ms": avg_silent_dur,
             "preference_index": pi,
+            "voc_pi": voc_pi,
             "hab_time_ms": hab_total,
             "hab_visits": hab_visits,
             "roaming_entropy": roaming_entropy,
@@ -356,13 +448,17 @@ def main():
 
         # per-stimulus breakdown
         for _, row in sound_rois.iterrows():
-            stim_type = classify_stimulus(row, sess.day)
+            stim_type = row["_stim_label"]
             if stim_type == "silent":
                 continue
             t = row.get("time_spent", 0)
             v = row.get("visitation_count", 0)
             t = 0 if pd.isna(t) else t
             v = 0 if pd.isna(v) else v
+            avg_dur = t / v if v > 0 else 0
+            # per-stimulus PI vs silent baseline
+            d = avg_dur + avg_silent_dur
+            stim_pi = (avg_dur - avg_silent_dur) / d if d > 0 else np.nan
             stim_records.append({
                 "mouse_id": sess.mouse_id,
                 "day": sess.day,
@@ -371,7 +467,8 @@ def main():
                 "stim_type": stim_type,
                 "time_spent_ms": t,
                 "visitation_count": v,
-                "avg_visit_dur_ms": t / v if v > 0 else 0,
+                "avg_visit_dur_ms": avg_dur,
+                "stim_pi": stim_pi,
             })
 
     print(f"\nLoaded {loaded} sessions, skipped {skipped}")
@@ -538,66 +635,100 @@ def main():
         print("  Saved fig4")
 
     # ── 6. Fig 5: Vocalisation contrast ──────────────────────────────
+    # Uses voc_pi (stimulus-specific vocalisation PI) for a fair comparison
     print("Plotting Figure 5: Vocalisation contrast...")
-    voc_mice = set(df_pi[df_pi["day"] == "w2_vocalisations"]["mouse_id"])
-    non_voc_days = [d for d in PI_DAYS if d != "w2_vocalisations"]
 
-    fig5, axes5 = plt.subplots(1, 2, figsize=(14, 6))
+    fig5, axes5 = plt.subplots(1, 3, figsize=(18, 6))
+
+    # Panel A: voc_pi across ALL days (wherever vocalisations appeared)
+    df_voc_pi = df_pref.dropna(subset=["voc_pi"]).copy()
+    df_voc_pi["day_short"] = df_voc_pi["day"].map(DAY_SHORT)
+    ax = axes5[0]
+    if len(df_voc_pi) > 0:
+        voc_day_order = [DAY_SHORT[d] for d in DAY_ORDER
+                         if d in df_voc_pi["day"].values]
+        sns.boxplot(data=df_voc_pi, x="day_short", y="voc_pi",
+                    order=voc_day_order, ax=ax, palette="Reds_d",
+                    hue="day_short", legend=False)
+        sns.stripplot(data=df_voc_pi, x="day_short", y="voc_pi",
+                      order=voc_day_order, ax=ax, color="black",
+                      alpha=0.4, size=4)
+        ax.axhline(0, color="grey", ls="--", alpha=0.5)
+        ax.set_ylabel("Vocalisation PI", fontsize=12)
+        ax.set_xlabel("")
+        ax.set_title("Vocalisation-specific PI by day\n(voc visit dur vs silent baseline)",
+                     fontsize=11)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        # One-sample tests
+        for d in DAY_ORDER:
+            vals = df_voc_pi[df_voc_pi["day"] == d]["voc_pi"].dropna().values
+            if len(vals) >= 6:
+                stat, p = wilcoxon(vals)
+                log_stat(f"  Voc PI {DAY_SHORT[d]}: median={np.median(vals):.3f}, "
+                         f"mean={np.mean(vals):.3f}, Wilcoxon p={p:.4f} (n={len(vals)})",
+                         stats_lines)
+
+    # Panel B: paired voc PI vs overall PI (same mice)
+    ax = axes5[1]
     paired_data = []
-    for mouse in voc_mice:
-        voc_pi = df_pi[(df_pi["mouse_id"] == mouse) &
-                       (df_pi["day"] == "w2_vocalisations")]["preference_index"]
-        other_pis = df_pi[(df_pi["mouse_id"] == mouse) &
-                          (df_pi["day"].isin(non_voc_days))]["preference_index"]
-        if len(voc_pi) > 0 and len(other_pis) > 0:
+    for _, row in df_pref.iterrows():
+        if not np.isnan(row.get("voc_pi", np.nan)) and not np.isnan(row["preference_index"]):
             paired_data.append({
-                "mouse_id": mouse,
-                "pi_voc": voc_pi.values[0],
-                "pi_other": other_pis.mean(),
+                "mouse_id": row["mouse_id"],
+                "day": row["day"],
+                "pi_overall": row["preference_index"],
+                "pi_voc": row["voc_pi"],
             })
-
     if paired_data:
         df_paired = pd.DataFrame(paired_data)
-        ax = axes5[0]
         for _, row in df_paired.iterrows():
-            ax.plot([0, 1], [row["pi_other"], row["pi_voc"]],
-                    "o-", color="#888888", alpha=0.4, ms=5)
-        ax.plot(0, df_paired["pi_other"].mean(), "D", color="#457B9D", ms=12, zorder=5)
+            ax.plot([0, 1], [row["pi_overall"], row["pi_voc"]],
+                    "o-", color="#888888", alpha=0.3, ms=4)
+        ax.plot(0, df_paired["pi_overall"].mean(), "D", color="#457B9D", ms=12, zorder=5)
         ax.plot(1, df_paired["pi_voc"].mean(), "D", color="#E63946", ms=12, zorder=5)
         ax.set_xticks([0, 1])
-        ax.set_xticklabels(["Other days\n(mean)", "Vocalisations"], fontsize=11)
+        ax.set_xticklabels(["Overall PI\n(all stimuli)", "Vocalisation PI\n(voc only)"],
+                           fontsize=11)
         ax.set_ylabel("Preference Index", fontsize=12)
         ax.axhline(0, color="grey", ls="--", alpha=0.5)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         if len(df_paired) >= 6:
-            stat, p_wil = wilcoxon(df_paired["pi_voc"], df_paired["pi_other"])
-            log_stat(f"\nVocalisation vs Other (Wilcoxon): W={stat:.1f}, p={p_wil:.4f}",
+            stat, p_wil = wilcoxon(df_paired["pi_voc"], df_paired["pi_overall"])
+            log_stat(f"\nVoc PI vs Overall PI (Wilcoxon): W={stat:.1f}, p={p_wil:.4f}",
                      stats_lines)
             ax.set_title(f"Paired (n={len(df_paired)}), Wilcoxon p={p_wil:.4f}",
                          fontsize=11)
         else:
             ax.set_title(f"Paired (n={len(df_paired)})", fontsize=11)
 
-    ax = axes5[1]
-    df_pi["is_voc"] = df_pi["day"] == "w2_vocalisations"
-    df_pi["group"] = df_pi["is_voc"].map({True: "Vocalisations", False: "Other days"})
-    sns.violinplot(data=df_pi, x="group", y="preference_index",
-                   palette={"Other days": "#457B9D", "Vocalisations": "#E63946"},
-                   inner="quart", alpha=0.4, ax=ax, hue="group", legend=False)
-    sns.stripplot(data=df_pi, x="group", y="preference_index",
-                  color="black", alpha=0.4, size=4, ax=ax)
-    ax.axhline(0, color="grey", ls="--", alpha=0.5)
-    ax.set_xlabel(""); ax.set_ylabel("Preference Index", fontsize=12)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-
-    voc_vals = df_pi[df_pi["is_voc"]]["preference_index"].dropna()
-    other_vals = df_pi[~df_pi["is_voc"]]["preference_index"].dropna()
-    if len(voc_vals) > 0 and len(other_vals) > 0:
-        _, p_mwu = mannwhitneyu(voc_vals, other_vals, alternative="two-sided")
-        ax.set_title(f"All sessions (MWU p={p_mwu:.4f})", fontsize=11)
-        log_stat(f"Voc vs Other (MWU): p={p_mwu:.4f}", stats_lines)
+    # Panel C: per-stimulus PI box plots for w2_vocalisations
+    ax = axes5[2]
+    voc_day_stim = df_stim[df_stim["day"] == "w2_vocalisations"]
+    if len(voc_day_stim) > 0 and "stim_pi" in voc_day_stim.columns:
+        voc_means = voc_day_stim.groupby(["mouse_id", "stim_type"])[
+            "stim_pi"].mean().reset_index()
+        # keep top stimulus types by median PI
+        stim_medians = voc_means.groupby("stim_type")["stim_pi"].median()
+        top_stims = stim_medians.nlargest(8).index.tolist()
+        voc_plot = voc_means[voc_means["stim_type"].isin(top_stims)]
+        if len(voc_plot) > 0:
+            # shorten names for display
+            voc_plot = voc_plot.copy()
+            voc_plot["stim_short"] = voc_plot["stim_type"].apply(
+                lambda s: s[:25] + "..." if len(s) > 28 else s)
+            sns.boxplot(data=voc_plot, x="stim_short", y="stim_pi",
+                        ax=ax, palette="Reds_d", hue="stim_short", legend=False)
+            ax.axhline(0, color="grey", ls="--", alpha=0.5)
+            ax.set_ylabel("PI vs silent", fontsize=11)
+            ax.set_xlabel("")
+            ax.tick_params(axis="x", rotation=45)
+            ax.set_title("W2 Voc: PI by recording", fontsize=11)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+    else:
+        ax.set_visible(False)
 
     plt.suptitle("Do vocalisations drive stronger preference?", fontsize=14, y=1.02)
     plt.tight_layout()
@@ -742,7 +873,54 @@ def main():
                  bbox_inches="tight")
     print("  Saved fig7")
 
-    # ── 9. Complexity stats ──────────────────────────────────────────
+    # ── 9. Fig 8: Per-stimulus PI by day ────────────────────────────
+    print("Plotting Figure 8: Per-stimulus PI by day...")
+    if len(df_stim) > 0 and "stim_pi" in df_stim.columns:
+        fig8, axes8 = plt.subplots(2, 3, figsize=(18, 10))
+        axes8 = axes8.flatten()
+        for idx, day in enumerate(DAY_ORDER):
+            ax = axes8[idx]
+            day_stim = df_stim[df_stim["day"] == day]
+            if len(day_stim) == 0:
+                ax.set_visible(False)
+                continue
+            pivot = day_stim.groupby(["mouse_id", "stim_type"])[
+                "stim_pi"].mean().reset_index()
+            if len(pivot) == 0:
+                ax.set_visible(False)
+                continue
+            stim_order = EXPERIMENT_DAYS[day].get("complexity_order", [])
+            available = [s for s in stim_order if s in pivot["stim_type"].values]
+            extras = [s for s in pivot["stim_type"].unique()
+                      if s not in available and s != "silent"]
+            plot_order = available + sorted(extras)
+            if not plot_order:
+                ax.set_visible(False)
+                continue
+            plot_data = pivot[pivot["stim_type"].isin(plot_order)]
+            sns.boxplot(data=plot_data, x="stim_type", y="stim_pi",
+                        order=plot_order, ax=ax, palette="viridis",
+                        hue="stim_type", legend=False)
+            sns.stripplot(data=plot_data, x="stim_type", y="stim_pi",
+                          order=plot_order, ax=ax, color="black",
+                          alpha=0.4, size=3)
+            ax.axhline(0, color="grey", ls="--", alpha=0.5)
+            ax.set_title(DAY_SHORT[day], fontsize=11)
+            ax.set_xlabel("")
+            ax.set_ylabel("PI vs silent" if idx % 3 == 0 else "")
+            ax.tick_params(axis="x", rotation=45)
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+        plt.suptitle("Per-stimulus preference index (each stimulus vs silent baseline)",
+                     fontsize=14, y=1.02)
+        plt.tight_layout()
+        fig8.savefig(os.path.join(output_dir, "fig8_stimulus_pi.png"),
+                     dpi=200, bbox_inches="tight")
+        safe_savefig(fig8, os.path.join(output_dir, "fig8_stimulus_pi.pdf"),
+                     bbox_inches="tight")
+        print("  Saved fig8")
+
+    # ── 10. Complexity stats ─────────────────────────────────────────
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("SENSORY COMPLEXITY ANALYSIS", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -769,7 +947,7 @@ def main():
             stat, p = kruskal(*groups)
             log_stat(f"  Kruskal-Wallis: H={stat:.2f}, p={p:.4f}", stats_lines)
 
-    # ── 10. One-sample PI tests ──────────────────────────────────────
+    # ── 11. One-sample PI tests ─────────────────────────────────────
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("ONE-SAMPLE TESTS: PI vs 0", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -783,7 +961,30 @@ def main():
         else:
             log_stat(f"  {DAY_SHORT[d]}: n={len(vals)} (too few)", stats_lines)
 
-    # ── 11. Save stats ───────────────────────────────────────────────
+    # ── 11b. Vocalisation-specific PI tests ──────────────────────────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("VOCALISATION-SPECIFIC PI TESTS", stats_lines)
+    log_stat("=" * 60, stats_lines)
+    voc_all = df_pref.dropna(subset=["voc_pi"])
+    if len(voc_all) >= 6:
+        vals = voc_all["voc_pi"].values
+        stat, p = wilcoxon(vals)
+        log_stat(f"  All days combined: median={np.median(vals):.3f}, "
+                 f"mean={np.mean(vals):.3f}, Wilcoxon p={p:.4f} (n={len(vals)})",
+                 stats_lines)
+    for d in DAY_ORDER:
+        vals = voc_all[voc_all["day"] == d]["voc_pi"].dropna().values
+        if len(vals) >= 6:
+            stat, p = wilcoxon(vals)
+            log_stat(f"  {DAY_SHORT[d]}: median={np.median(vals):.3f}, "
+                     f"mean={np.mean(vals):.3f}, Wilcoxon p={p:.4f} (n={len(vals)})",
+                     stats_lines)
+        elif len(vals) > 0:
+            log_stat(f"  {DAY_SHORT[d]}: median={np.median(vals):.3f}, "
+                     f"mean={np.mean(vals):.3f}, n={len(vals)} (too few for test)",
+                     stats_lines)
+
+    # ── 12. Save stats ───────────────────────────────────────────────
     stats_path = os.path.join(output_dir, "stats_report.txt")
     with open(stats_path, "w") as f:
         f.write("\n".join(stats_lines))

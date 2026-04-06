@@ -72,34 +72,43 @@ def classify_stimulus(row, day_key):
 
     if mode == "temporal_envelope_modulation":
         st = str(row.get("sound_type", "")).strip().lower()
-        if st in ("smooth", "constant_rough", "complex_rough"):
+        freq = str(row.get("frequency", "")).strip().lower()
+        mod = str(row.get("temporal_modulation", "")).strip().lower()
+        # silent arms
+        if freq in ("0", "silent_arm", "") or st in ("silent", "silent_trial"):
+            return "silent"
+        # vocalisation control (sound_type=control, frequency=vocalisation)
+        if freq == "vocalisation" or mod == "vocalisation":
+            return "vocalisation"
+        # no-stimulus control (sound_type=control, frequency=silent_arm)
+        if st == "control" and mod == "no_stimulus":
+            return "silent"
+        # the three TEM categories
+        if st in ("smooth", "rough", "rough_complex"):
             return st
-        if st in ("silent", "silent_trial"):
-            return "silent"
-        # fallback: check frequency
-        freq = row.get("frequency", 0)
-        if freq == 0 or str(freq) == "0":
-            return "silent"
-        return "smooth"  # default for simple_smooth
+        if st == "control":
+            return "control"
+        return st if st else "unknown"
 
     elif mode == "complex_intervals":
         it = str(row.get("interval_type", "")).strip().lower()
-        if it in ("consonant", "dissonant", "control"):
+        freq = str(row.get("frequency", "")).strip().lower()
+        if it == "silent_trial" or freq in ("0", ""):
+            return "silent"
+        if freq == "vocalisation":
+            return "vocalisation"
+        if it in ("consonant", "dissonant", "smooth", "rough"):
             return it
-        if it == "silent_trial":
-            return "silent"
-        freq = row.get("frequency", 0)
-        if freq == 0 or str(freq) == "0":
-            return "silent"
-        return "consonant"
+        if it == "control":
+            return "control"
+        return it if it else "unknown"
 
     elif mode == "sequences":
         pat = str(row.get("pattern", "")).strip()
-        if pat in ("AAAAA", "AoAo", "ABAB", "ABCABC"):
+        if pat in ("AAAAA", "AoAo", "ABAB", "ABCABC", "BABA", "ABBA"):
             return pat
         if pat in ("silence", "0"):
             return "silent"
-        # vocalisation pattern in sequences day
         if "vocalisation" in pat.lower():
             return "vocalisation"
         freq = row.get("frequency", 0)
@@ -232,27 +241,48 @@ for sess in all_sessions:
 
     # Filter to ROI rows (not entrance)
     roi_names = [f"ROI{i}" for i in range(1, 9)]
-    sound_rois = sound_trials[sound_trials["ROIs"].isin(roi_names)]
+    sound_rois = sound_trials[sound_trials["ROIs"].isin(roi_names)].copy()
     silent_rois = silent_trials[silent_trials["ROIs"].isin(roi_names)]
 
-    sound_time = sound_rois["time_spent"].sum() if "time_spent" in sound_rois.columns else 0
-    sound_visits = sound_rois["visitation_count"].sum() if "visitation_count" in sound_rois.columns else 0
-    silent_time = silent_rois["time_spent"].sum() if "time_spent" in silent_rois.columns else 0
-    silent_visits = silent_rois["visitation_count"].sum() if "visitation_count" in silent_rois.columns else 0
+    # Classify each ROI within sound trials
+    sound_rois["_stim_label"] = [classify_stimulus(row, sess.day)
+                                  for _, row in sound_rois.iterrows()]
 
-    # handle NaN
-    sound_time = 0 if np.isnan(sound_time) else sound_time
-    sound_visits = 0 if np.isnan(sound_visits) else sound_visits
-    silent_time = 0 if np.isnan(silent_time) else silent_time
-    silent_visits = 0 if np.isnan(silent_visits) else silent_visits
+    # Exclude silent control arms from sound aggregate
+    actual_sound = sound_rois[sound_rois["_stim_label"] != "silent"]
 
-    # Average visit duration (ms per visit)
-    avg_sound_dur = sound_time / sound_visits if sound_visits > 0 else 0
+    def _safe_val(x):
+        return 0 if (isinstance(x, float) and np.isnan(x)) else x
+
+    silent_time = _safe_val(silent_rois["time_spent"].sum() if "time_spent" in silent_rois.columns else 0)
+    silent_visits = _safe_val(silent_rois["visitation_count"].sum() if "visitation_count" in silent_rois.columns else 0)
     avg_silent_dur = silent_time / silent_visits if silent_visits > 0 else 0
+
+    sound_time = _safe_val(actual_sound["time_spent"].sum() if "time_spent" in actual_sound.columns else 0)
+    sound_visits = _safe_val(actual_sound["visitation_count"].sum() if "visitation_count" in actual_sound.columns else 0)
+    avg_sound_dur = sound_time / sound_visits if sound_visits > 0 else 0
 
     # Preference Index
     denom = avg_sound_dur + avg_silent_dur
     pi = (avg_sound_dur - avg_silent_dur) / denom if denom > 0 else np.nan
+
+    # Vocalisation-specific PI
+    voc_subset = actual_sound[actual_sound["_stim_label"] == "vocalisation"]
+    voc_time = _safe_val(voc_subset["time_spent"].sum())
+    voc_visits_n = _safe_val(voc_subset["visitation_count"].sum())
+    voc_pi = np.nan
+    if voc_visits_n > 0:
+        avg_voc = voc_time / voc_visits_n
+        d = avg_voc + avg_silent_dur
+        voc_pi = (avg_voc - avg_silent_dur) / d if d > 0 else np.nan
+    elif sess.day == "w2_vocalisations" and len(actual_sound) > 0:
+        # all non-silent stim types are vocalisations
+        vt = _safe_val(actual_sound["time_spent"].sum())
+        vv = _safe_val(actual_sound["visitation_count"].sum())
+        if vv > 0:
+            avg_voc = vt / vv
+            d = avg_voc + avg_silent_dur
+            voc_pi = (avg_voc - avg_silent_dur) / d if d > 0 else np.nan
 
     records.append({
         "mouse_id": sess.mouse_id,
@@ -266,6 +296,7 @@ for sess in all_sessions:
         "avg_sound_dur_ms": avg_sound_dur,
         "avg_silent_dur_ms": avg_silent_dur,
         "preference_index": pi,
+        "voc_pi": voc_pi,
         "hab_time_ms": hab_total,
         "hab_visits": hab_visits,
         "roaming_entropy": roaming_entropy,
@@ -273,13 +304,16 @@ for sess in all_sessions:
 
     # ---- per-stimulus-type breakdown (within sound trials only) ----
     for _, row in sound_rois.iterrows():
-        stim_type = classify_stimulus(row, sess.day)
+        stim_type = row["_stim_label"]
         if stim_type == "silent":
-            continue  # shouldn't happen in sound trials but just in case
+            continue
         t = row.get("time_spent", 0)
         v = row.get("visitation_count", 0)
         t = 0 if pd.isna(t) else t
         v = 0 if pd.isna(v) else v
+        avg_dur = t / v if v > 0 else 0
+        d = avg_dur + avg_silent_dur
+        stim_pi = (avg_dur - avg_silent_dur) / d if d > 0 else np.nan
         stim_records.append({
             "mouse_id": sess.mouse_id,
             "day": sess.day,
@@ -288,7 +322,8 @@ for sess in all_sessions:
             "stim_type": stim_type,
             "time_spent_ms": t,
             "visitation_count": v,
-            "avg_visit_dur_ms": t / v if v > 0 else 0,
+            "avg_visit_dur_ms": avg_dur,
+            "stim_pi": stim_pi,
         })
 
 print(f"\nLoaded {loaded} sessions, skipped {skipped}")
