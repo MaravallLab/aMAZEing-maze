@@ -25,6 +25,12 @@ SILENT_TRIAL_VISIT_CAP_MS = 130_000    # slightly above 2-min trial duration
 SOUND_TRIAL_IDS = {2, 4, 6, 8}
 SILENT_TRIAL_IDS = {3, 5, 7, 9}
 
+# Per-visit clip applied to BOTH detailed_visits and trials.csv data.
+# This catches residual cases where the "trial-boundary bug" in main.py
+# (visits not closed at trial end) bleeds a long visit into DV as well.
+# Override with VISIT_CLIP_MS env var.  Set to 0 to disable.
+INDIVIDUAL_VISIT_CLIP_MS = int(os.environ.get("VISIT_CLIP_MS", "10000"))  # 10 s
+
 # ── paths ─────────────────────────────────────────────────────────────
 
 # Override with MAZE_DATA_DIR env var if running on a different machine.
@@ -250,6 +256,10 @@ def load_session_visits(sess: "SessionInfo") -> Tuple[Optional[pd.DataFrame], st
             dv["_dur_ms"] = pd.to_numeric(
                 dv["time_spent_seconds"], errors="coerce") * 1000.0
             dv = dv.dropna(subset=["_dur_ms"])
+            # Clip individual visits that exceed the per-visit cap
+            # (boundary-spanning bug residuals).
+            if INDIVIDUAL_VISIT_CLIP_MS > 0:
+                dv["_dur_ms"] = dv["_dur_ms"].clip(upper=INDIVIDUAL_VISIT_CLIP_MS)
             agg = (dv.groupby(["trial_ID", "ROI_visited"])
                      .agg(_dv_time=("_dur_ms", "sum"),
                           _dv_count=("_dur_ms", "size"))
@@ -268,6 +278,7 @@ def load_session_visits(sess: "SessionInfo") -> Tuple[Optional[pd.DataFrame], st
         avg = df["time_spent"] / vc
         is_sound = df["trial_ID"].isin(SOUND_TRIAL_IDS)
         is_silent = df["trial_ID"].isin(SILENT_TRIAL_IDS)
+        # Strong cap: zero-out rows physically impossible (boundary bug)
         bad = (
             (is_sound & (avg > SOUND_TRIAL_VISIT_CAP_MS))
             | (is_silent & (avg > SILENT_TRIAL_VISIT_CAP_MS))
@@ -278,7 +289,25 @@ def load_session_visits(sess: "SessionInfo") -> Tuple[Optional[pd.DataFrame], st
             df.loc[bad, "visitation_count"] = 0
             df["_visit_source"] = "trials_capped"
             df.attrs["n_capped_rows"] = n_bad
+            # Also apply per-visit cap to remaining rows
+            if INDIVIDUAL_VISIT_CLIP_MS > 0:
+                vc2 = df["visitation_count"].where(df["visitation_count"] > 0, np.nan)
+                avg2 = df["time_spent"] / vc2
+                over = avg2 > INDIVIDUAL_VISIT_CLIP_MS
+                if over.any():
+                    df.loc[over, "time_spent"] = (
+                        df.loc[over, "visitation_count"] * INDIVIDUAL_VISIT_CLIP_MS
+                    )
             return df, "trials_capped"
+        # Per-visit clip even if no row-level corruption
+        if INDIVIDUAL_VISIT_CLIP_MS > 0:
+            over = avg > INDIVIDUAL_VISIT_CLIP_MS
+            if over.any():
+                df.loc[over, "time_spent"] = (
+                    df.loc[over, "visitation_count"] * INDIVIDUAL_VISIT_CLIP_MS
+                )
+                df["_visit_source"] = "trials_clipped"
+                return df, "trials_clipped"
 
     df["_visit_source"] = "trials_raw"
     return df, "trials_raw"
