@@ -533,7 +533,7 @@ Please keep the test suite green and add tests for new functionality.
 - Oluwaseyi Jesusanmi
 - Isabel Maranhao
 - Maja Nowak
-- Narcus Burnell-Spetcor
+- Marcus Burnell-Spector
 - Yuri Elias Rodrigues
   
 

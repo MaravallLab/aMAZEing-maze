@@ -269,12 +269,79 @@ def _is_file_locally_available(path):
 
 def safe_read_csv(path):
     """Read a CSV, skipping cloud-only files that would block."""
-    if not _is_file_locally_available(path):
+    if path is None or not _is_file_locally_available(path):
         return None
     try:
         return pd.read_csv(path)
     except Exception:
         return None
+
+
+# ── visit-data loader: detailed_visits first, sanity-capped trials.csv ──
+SOUND_TRIAL_VISIT_CAP_MS = 60_000      # real visits never exceed ~25 s
+SILENT_TRIAL_VISIT_CAP_MS = 130_000    # silent trials are 2 min long
+SOUND_TRIAL_IDS_SET = {2, 4, 6, 8}
+SILENT_TRIAL_IDS_SET = {3, 5, 7, 9}
+
+
+def load_session_visits(sess):
+    """Load (trial, ROI) visit aggregates with corruption fixes.
+
+    Prefers detailed_visits.csv (ground truth) when available.  Falls
+    back to trials.csv with a sanity cap that zeroes physically
+    impossible rows (visits longer than the trial itself).
+
+    Returns (DataFrame, source_label) or (None, reason).
+    """
+    if not sess.trials_csv:
+        return None, "no_trials_csv"
+
+    df = safe_read_csv(sess.trials_csv)
+    if df is None or "trial_ID" not in df.columns or "ROIs" not in df.columns:
+        return None, "bad_trials_csv"
+
+    for col in ["time_spent", "visitation_count", "time_in_maze_ms"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # ---- Try DV override ----
+    if sess.detailed_visits_csv:
+        dv = safe_read_csv(sess.detailed_visits_csv)
+        if (dv is not None and len(dv) > 0
+                and "ROI_visited" in dv.columns
+                and "time_spent_seconds" in dv.columns
+                and "trial_ID" in dv.columns):
+            dv = dv.copy()
+            dv["_dur_ms"] = pd.to_numeric(
+                dv["time_spent_seconds"], errors="coerce") * 1000.0
+            dv = dv.dropna(subset=["_dur_ms"])
+            agg = (dv.groupby(["trial_ID", "ROI_visited"])
+                     .agg(_dv_time=("_dur_ms", "sum"),
+                          _dv_count=("_dur_ms", "size"))
+                     .reset_index()
+                     .rename(columns={"ROI_visited": "ROIs"}))
+            df = df.merge(agg, on=["trial_ID", "ROIs"], how="left")
+            df["time_spent"] = df["_dv_time"].fillna(0.0)
+            df["visitation_count"] = df["_dv_count"].fillna(0).astype(int)
+            df = df.drop(columns=["_dv_time", "_dv_count"])
+            return df, "detailed_visits"
+
+    # ---- Sanity cap on trials.csv ----
+    if "time_spent" in df.columns and "visitation_count" in df.columns:
+        vc = df["visitation_count"].where(df["visitation_count"] > 0, np.nan)
+        avg = df["time_spent"] / vc
+        is_sound = df["trial_ID"].isin(SOUND_TRIAL_IDS_SET)
+        is_silent = df["trial_ID"].isin(SILENT_TRIAL_IDS_SET)
+        bad = (
+            (is_sound & (avg > SOUND_TRIAL_VISIT_CAP_MS))
+            | (is_silent & (avg > SILENT_TRIAL_VISIT_CAP_MS))
+        )
+        if bad.any():
+            df.loc[bad, "time_spent"] = 0.0
+            df.loc[bad, "visitation_count"] = 0
+            return df, "trials_capped"
+
+    return df, "trials_raw"
 
 
 def safe_savefig(fig, path, **kwargs):
@@ -344,24 +411,15 @@ def main():
     records = []
     stim_records = []
     skipped = loaded = 0
+    source_counts = {"detailed_visits": 0, "trials_capped": 0, "trials_raw": 0}
 
     for sess in all_sessions:
-        if not sess.trials_csv:
-            skipped += 1
-            continue
-        try:
-            df = pd.read_csv(sess.trials_csv)
-        except Exception:
-            skipped += 1
-            continue
-        if "trial_ID" not in df.columns or "ROIs" not in df.columns:
+        df, source = load_session_visits(sess)
+        if df is None:
             skipped += 1
             continue
         loaded += 1
-
-        for col in ["time_spent", "visitation_count", "time_in_maze_ms"]:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
+        source_counts[source] = source_counts.get(source, 0) + 1
 
         # habituation (trial 1)
         hab = df[df["trial_ID"] == 1]
@@ -472,6 +530,9 @@ def main():
             })
 
     print(f"\nLoaded {loaded} sessions, skipped {skipped}")
+    print(f"Visit-data sources: {source_counts}")
+    log_stat(f"\nVisit-data sources (after corruption fix): {source_counts}",
+             stats_lines)
 
     df_pref = pd.DataFrame(records)
     df_stim = pd.DataFrame(stim_records)
@@ -919,6 +980,310 @@ def main():
         safe_savefig(fig8, os.path.join(output_dir, "fig8_stimulus_pi.pdf"),
                      bbox_inches="tight")
         print("  Saved fig8")
+
+    # ── 9b. Interactive Plotly figures ─────────────────────────────────
+    try:
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+        HAS_PLOTLY = True
+    except ImportError:
+        HAS_PLOTLY = False
+        print("  (Plotly not installed -- skipping interactive figures)")
+
+    if HAS_PLOTLY:
+        print("\nGenerating interactive Plotly figures...")
+
+        # ---- Plotly Fig 1: PI trajectories ----
+        try:
+            fig1_ly = go.Figure()
+            cmap_hex = [matplotlib.colors.to_hex(c)
+                        for c in plt.cm.tab20(np.linspace(0, 1, max(len(multi_mice), 1)))]
+            for i, mouse in enumerate(sorted(multi_mice)):
+                sub = df_traj[df_traj["mouse_id"] == mouse].copy()
+                sub["x"] = sub["day"].map(day_x)
+                sub = sub.sort_values("x")
+                fig1_ly.add_trace(go.Scatter(
+                    x=[DAY_SHORT[d] for d in sub["day"]],
+                    y=sub["preference_index"],
+                    mode="lines+markers", name=mouse,
+                    line=dict(color=cmap_hex[i % len(cmap_hex)], width=1.5),
+                    marker=dict(size=6),
+                    opacity=0.6,
+                    hovertemplate=f"<b>{mouse}</b><br>%{{x}}<br>PI: %{{y:.3f}}<extra></extra>",
+                ))
+            # Grand means
+            grand_x = [DAY_SHORT[d] for d in PI_DAYS]
+            grand_y = [df_pi[df_pi["day"] == d]["preference_index"].dropna().mean() for d in PI_DAYS]
+            fig1_ly.add_trace(go.Scatter(
+                x=grand_x, y=grand_y, mode="markers", name="Grand mean",
+                marker=dict(size=14, color="black", symbol="diamond"),
+                hovertemplate="<b>Grand mean</b><br>%{x}<br>PI: %{y:.3f}<extra></extra>",
+            ))
+            fig1_ly.add_hline(y=0, line_dash="dash", line_color="grey", opacity=0.5)
+            fig1_ly.update_layout(
+                title="Fig 1: Individual mouse preference trajectories<br>"
+                      "<sup>Click legend to show/hide mice, hover for details</sup>",
+                xaxis_title="Experiment Day", yaxis_title="Preference Index",
+                yaxis_range=[-1.05, 1.05], template="plotly_white",
+                height=600, width=1000,
+            )
+            fig1_ly.write_html(os.path.join(output_dir, "fig1_pi_trajectories.html"))
+            print("  Saved fig1 interactive")
+        except Exception as e:
+            print(f"  WARNING: Plotly fig1 failed: {e}")
+
+        # ---- Plotly Fig 3: PI violins with mouse IDs ----
+        try:
+            fig3_ly = go.Figure()
+            for d in PI_DAYS:
+                sub = df_pi[df_pi["day"] == d].dropna(subset=["preference_index"])
+                fig3_ly.add_trace(go.Box(
+                    y=sub["preference_index"],
+                    x=[DAY_SHORT[d]] * len(sub),
+                    name=DAY_SHORT[d],
+                    boxpoints="all", jitter=0.3, pointpos=0,
+                    marker=dict(
+                        color="#E63946" if d == "w2_vocalisations" else "#457B9D",
+                        size=6,
+                    ),
+                    text=sub["mouse_id"],
+                    hovertemplate="<b>%{text}</b><br>PI: %{y:.3f}<extra></extra>",
+                    showlegend=False,
+                ))
+            fig3_ly.add_hline(y=0, line_dash="dash", line_color="grey", opacity=0.5)
+            fig3_ly.update_layout(
+                title="Fig 3: PI distribution by day<br>"
+                      "<sup>Hover over points to identify mice</sup>",
+                yaxis_title="Preference Index", template="plotly_white",
+                height=600, width=900,
+            )
+            fig3_ly.write_html(os.path.join(output_dir, "fig3_pi_violins.html"))
+            print("  Saved fig3 interactive")
+        except Exception as e:
+            print(f"  WARNING: Plotly fig3 failed: {e}")
+
+        # ---- Plotly Fig 4: Complexity box plots ----
+        try:
+            if len(df_stim) > 0:
+                fig4_ly = make_subplots(
+                    rows=2, cols=3,
+                    subplot_titles=[DAY_SHORT[d] for d in DAY_ORDER],
+                    horizontal_spacing=0.06, vertical_spacing=0.12,
+                )
+                for idx, day in enumerate(DAY_ORDER):
+                    r, c = divmod(idx, 3)
+                    day_stim = df_stim[df_stim["day"] == day]
+                    if len(day_stim) == 0:
+                        continue
+                    pivot = day_stim.groupby(["mouse_id", "stim_type"])[
+                        "avg_visit_dur_ms"].mean().reset_index()
+                    stim_order = EXPERIMENT_DAYS[day].get("complexity_order", [])
+                    available = [s for s in stim_order if s in pivot["stim_type"].values]
+                    extras = [s for s in pivot["stim_type"].unique()
+                              if s not in available and s != "silent"]
+                    plot_order = available + extras
+                    if not plot_order:
+                        continue
+                    for stim in plot_order:
+                        stim_data = pivot[pivot["stim_type"] == stim]
+                        fig4_ly.add_trace(go.Box(
+                            y=stim_data["avg_visit_dur_ms"],
+                            x=[stim] * len(stim_data),
+                            boxpoints="all", jitter=0.3, pointpos=0,
+                            marker=dict(size=5),
+                            text=stim_data["mouse_id"],
+                            hovertemplate="<b>%{text}</b><br>%{x}<br>Duration: %{y:.0f}ms<extra></extra>",
+                            showlegend=False,
+                        ), row=r + 1, col=c + 1)
+                    fig4_ly.update_yaxes(title_text="Avg visit dur (ms)" if c == 0 else "",
+                                         row=r + 1, col=c + 1)
+                fig4_ly.update_layout(
+                    title="Fig 4: Visit duration by stimulus type<br>"
+                          "<sup>Hover over points to identify mice</sup>",
+                    template="plotly_white", height=800, width=1200,
+                )
+                fig4_ly.write_html(os.path.join(output_dir, "fig4_complexity_heatmap.html"))
+                print("  Saved fig4 interactive")
+        except Exception as e:
+            print(f"  WARNING: Plotly fig4 failed: {e}")
+
+        # ---- Plotly Fig 5: Vocalisation contrast ----
+        try:
+            fig5_ly = make_subplots(
+                rows=1, cols=3,
+                subplot_titles=["Voc PI by day", "Overall vs Voc PI", "W2 Voc: PI by recording"],
+                horizontal_spacing=0.08,
+            )
+            # Panel A
+            df_voc_pi2 = df_pref.dropna(subset=["voc_pi"]).copy()
+            if len(df_voc_pi2) > 0:
+                for d in DAY_ORDER:
+                    sub = df_voc_pi2[df_voc_pi2["day"] == d]
+                    if len(sub) == 0:
+                        continue
+                    fig5_ly.add_trace(go.Box(
+                        y=sub["voc_pi"], x=[DAY_SHORT[d]] * len(sub),
+                        boxpoints="all", jitter=0.3, pointpos=0,
+                        marker=dict(size=5, color="#E63946"),
+                        text=sub["mouse_id"],
+                        hovertemplate="<b>%{text}</b><br>Voc PI: %{y:.3f}<extra></extra>",
+                        showlegend=False,
+                    ), row=1, col=1)
+            fig5_ly.add_hline(y=0, line_dash="dash", line_color="grey", opacity=0.5,
+                              row=1, col=1)
+
+            # Panel B: paired lines
+            if paired_data:
+                df_p = pd.DataFrame(paired_data)
+                for _, row in df_p.iterrows():
+                    fig5_ly.add_trace(go.Scatter(
+                        x=["Overall PI", "Voc PI"],
+                        y=[row["pi_overall"], row["pi_voc"]],
+                        mode="lines+markers",
+                        line=dict(color="#888888", width=1), opacity=0.4,
+                        marker=dict(size=5),
+                        hovertemplate=f"<b>{row['mouse_id']}</b> ({DAY_SHORT.get(row['day'], row['day'])})<br>"
+                                      "%{x}: %{y:.3f}<extra></extra>",
+                        showlegend=False,
+                    ), row=1, col=2)
+            fig5_ly.add_hline(y=0, line_dash="dash", line_color="grey", opacity=0.5,
+                              row=1, col=2)
+
+            # Panel C: per-recording for w2_voc
+            voc_day_stim2 = df_stim[df_stim["day"] == "w2_vocalisations"]
+            if len(voc_day_stim2) > 0 and "stim_pi" in voc_day_stim2.columns:
+                voc_m = voc_day_stim2.groupby(["mouse_id", "stim_type"])[
+                    "stim_pi"].mean().reset_index()
+                stim_medians2 = voc_m.groupby("stim_type")["stim_pi"].median()
+                top_s = stim_medians2.nlargest(8).index.tolist()
+                voc_p = voc_m[voc_m["stim_type"].isin(top_s)]
+                for stim in top_s:
+                    sd = voc_p[voc_p["stim_type"] == stim]
+                    short = stim[:25] + "..." if len(stim) > 28 else stim
+                    fig5_ly.add_trace(go.Box(
+                        y=sd["stim_pi"], x=[short] * len(sd),
+                        boxpoints="all", jitter=0.3, pointpos=0,
+                        marker=dict(size=5),
+                        text=sd["mouse_id"],
+                        hovertemplate="<b>%{text}</b><br>%{x}<br>PI: %{y:.3f}<extra></extra>",
+                        showlegend=False,
+                    ), row=1, col=3)
+            fig5_ly.add_hline(y=0, line_dash="dash", line_color="grey", opacity=0.5,
+                              row=1, col=3)
+
+            fig5_ly.update_layout(
+                title="Fig 5: Vocalisation preference<br>"
+                      "<sup>Hover to identify mice</sup>",
+                template="plotly_white", height=550, width=1400,
+            )
+            fig5_ly.write_html(os.path.join(output_dir, "fig5_vocalisation_contrast.html"))
+            print("  Saved fig5 interactive")
+        except Exception as e:
+            print(f"  WARNING: Plotly fig5 failed: {e}")
+
+        # ---- Plotly Fig 6: RE vs PI ----
+        try:
+            fig6_ly = make_subplots(
+                rows=1, cols=2,
+                subplot_titles=["Within-mouse", "Between-mouse"],
+                horizontal_spacing=0.1,
+            )
+            df_re2 = df_pi.dropna(subset=["roaming_entropy", "preference_index"]).copy()
+            if len(df_re2) > 10:
+                mm = df_re2.groupby("mouse_id").agg(
+                    mean_re=("roaming_entropy", "mean"),
+                    mean_pi=("preference_index", "mean"))
+                df_re2 = df_re2.merge(mm, on="mouse_id")
+                df_re2["dev_re"] = df_re2["roaming_entropy"] - df_re2["mean_re"]
+                df_re2["dev_pi"] = df_re2["preference_index"] - df_re2["mean_pi"]
+                fig6_ly.add_trace(go.Scatter(
+                    x=df_re2["dev_re"], y=df_re2["dev_pi"],
+                    mode="markers",
+                    marker=dict(size=7, color="#457B9D", opacity=0.5),
+                    text=df_re2["mouse_id"],
+                    customdata=np.stack([
+                        df_re2["day"].map(DAY_SHORT),
+                        df_re2["roaming_entropy"],
+                        df_re2["preference_index"],
+                    ], axis=-1),
+                    hovertemplate="<b>%{text}</b> (%{customdata[0]})<br>"
+                                  "RE: %{customdata[1]:.3f}<br>"
+                                  "PI: %{customdata[2]:.3f}<extra></extra>",
+                    showlegend=False,
+                ), row=1, col=1)
+            fig6_ly.update_xaxes(title_text="Dev from mouse mean RE", row=1, col=1)
+            fig6_ly.update_yaxes(title_text="Dev from mouse mean PI", row=1, col=1)
+
+            ma2 = df_pi.dropna(subset=["roaming_entropy", "preference_index"]).groupby(
+                "mouse_id").agg(mean_re=("roaming_entropy", "mean"),
+                                mean_pi=("preference_index", "mean")).reset_index()
+            if len(ma2) > 5:
+                fig6_ly.add_trace(go.Scatter(
+                    x=ma2["mean_re"], y=ma2["mean_pi"],
+                    mode="markers",
+                    marker=dict(size=9, color="#E63946", opacity=0.7),
+                    text=ma2["mouse_id"],
+                    hovertemplate="<b>%{text}</b><br>Mean RE: %{x:.3f}<br>Mean PI: %{y:.3f}<extra></extra>",
+                    showlegend=False,
+                ), row=1, col=2)
+            fig6_ly.update_xaxes(title_text="Mean Roaming Entropy", row=1, col=2)
+            fig6_ly.update_yaxes(title_text="Mean PI", row=1, col=2)
+
+            fig6_ly.update_layout(
+                title="Fig 6: Roaming entropy vs preference<br>"
+                      "<sup>Hover to identify mice</sup>",
+                template="plotly_white", height=500, width=1000,
+            )
+            fig6_ly.write_html(os.path.join(output_dir, "fig6_re_vs_pi.html"))
+            print("  Saved fig6 interactive")
+        except Exception as e:
+            print(f"  WARNING: Plotly fig6 failed: {e}")
+
+        # ---- Plotly Fig 8: Per-stimulus PI ----
+        try:
+            if len(df_stim) > 0 and "stim_pi" in df_stim.columns:
+                fig8_ly = make_subplots(
+                    rows=2, cols=3,
+                    subplot_titles=[DAY_SHORT[d] for d in DAY_ORDER],
+                    horizontal_spacing=0.06, vertical_spacing=0.12,
+                )
+                for idx, day in enumerate(DAY_ORDER):
+                    r, c = divmod(idx, 3)
+                    day_stim = df_stim[df_stim["day"] == day]
+                    if len(day_stim) == 0:
+                        continue
+                    pivot = day_stim.groupby(["mouse_id", "stim_type"])[
+                        "stim_pi"].mean().reset_index()
+                    stim_order = EXPERIMENT_DAYS[day].get("complexity_order", [])
+                    available = [s for s in stim_order if s in pivot["stim_type"].values]
+                    extras = [s for s in pivot["stim_type"].unique()
+                              if s not in available and s != "silent"]
+                    plot_order = available + sorted(extras)
+                    if not plot_order:
+                        continue
+                    for stim in plot_order:
+                        sd = pivot[pivot["stim_type"] == stim]
+                        fig8_ly.add_trace(go.Box(
+                            y=sd["stim_pi"], x=[stim] * len(sd),
+                            boxpoints="all", jitter=0.3, pointpos=0,
+                            marker=dict(size=5),
+                            text=sd["mouse_id"],
+                            hovertemplate="<b>%{text}</b><br>%{x}<br>PI: %{y:.3f}<extra></extra>",
+                            showlegend=False,
+                        ), row=r + 1, col=c + 1)
+                    fig8_ly.add_hline(y=0, line_dash="dash", line_color="grey",
+                                      opacity=0.5, row=r + 1, col=c + 1)
+                    fig8_ly.update_yaxes(title_text="PI vs silent" if c == 0 else "",
+                                         row=r + 1, col=c + 1)
+                fig8_ly.update_layout(
+                    title="Fig 8: Per-stimulus PI vs silent baseline<br>"
+                          "<sup>Hover over points to identify mice</sup>",
+                    template="plotly_white", height=800, width=1200,
+                )
+                fig8_ly.write_html(os.path.join(output_dir, "fig8_stimulus_pi.html"))
+                print("  Saved fig8 interactive")
+        except Exception as e:
+            print(f"  WARNING: Plotly fig8 failed: {e}")
 
     # ── 10. Complexity stats ─────────────────────────────────────────
     log_stat("\n" + "=" * 60, stats_lines)

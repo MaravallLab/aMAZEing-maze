@@ -37,7 +37,7 @@ from scipy.stats import wilcoxon, spearmanr
 
 from preference_analysis_config import (
     BASE_PATH, OUTPUT_DIR, EXPERIMENT_DAYS, DAY_ORDER, DAY_SHORT,
-    discover_sessions,
+    discover_sessions, load_session_visits,
 )
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -147,24 +147,15 @@ print(f"Found {len(all_sessions)} sessions across {len(EXPERIMENT_DAYS)} days")
 
 records = []
 skipped = loaded = 0
+source_counts = {"detailed_visits": 0, "trials_capped": 0, "trials_raw": 0}
 
 for sess in all_sessions:
-    if not sess.trials_csv:
-        skipped += 1
-        continue
-
-    df = safe_read_csv(sess.trials_csv)
+    df, source = load_session_visits(sess)
     if df is None:
         skipped += 1
         continue
-    if "trial_ID" not in df.columns or "ROIs" not in df.columns:
-        skipped += 1
-        continue
     loaded += 1
-
-    for col in ["time_spent", "visitation_count"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+    source_counts[source] = source_counts.get(source, 0) + 1
 
     # Only sound trials (2, 4, 6, 8)
     roi_names = [f"ROI{i}" for i in range(1, 9)]
@@ -211,6 +202,7 @@ for sess in all_sessions:
     })
 
 print(f"\nLoaded {loaded} sessions, skipped {skipped}")
+print(f"Visit-data sources: {source_counts}")
 
 df_all = pd.DataFrame(records)
 
@@ -327,6 +319,96 @@ fig.savefig(os.path.join(OUTPUT_DIR, "fig_within_trial_preference.png"),
 safe_savefig(fig, os.path.join(OUTPUT_DIR, "fig_within_trial_preference.pdf"),
              bbox_inches="tight")
 print("Saved fig_within_trial_preference")
+
+
+# ── interactive Plotly figure ───────────────────────────────────────
+
+try:
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    fig_ly = make_subplots(
+        rows=nrows, cols=ncols,
+        subplot_titles=[DAY_SHORT[d] for d in days_with_data],
+        horizontal_spacing=0.08, vertical_spacing=0.12,
+    )
+
+    for idx, day in enumerate(days_with_data):
+        r, c = divmod(idx, ncols)
+        sub = df_mouse[df_mouse["day"] == day].dropna(
+            subset=["avg_sound_dur_ms", "avg_silent_dur_ms"]
+        )
+        if len(sub) == 0:
+            continue
+
+        x = sub["avg_silent_dur_ms"].values
+        y = sub["avg_sound_dur_ms"].values
+        mice = sub["mouse_id"].values
+        n_sess = sub["n_sessions"].values
+
+        hover = [
+            f"<b>Mouse {m}</b><br>"
+            f"Silent: {sx:.0f} ms<br>"
+            f"Sound: {sy:.0f} ms<br>"
+            f"Diff: {sy - sx:+.0f} ms<br>"
+            f"Sessions: {ns}"
+            for m, sx, sy, ns in zip(mice, x, y, n_sess)
+        ]
+
+        fig_ly.add_trace(
+            go.Scatter(
+                x=x, y=y, mode="markers",
+                marker=dict(size=9, color="#333333", line=dict(width=1, color="white")),
+                text=hover, hoverinfo="text",
+                name=DAY_SHORT[day], showlegend=False,
+            ),
+            row=r + 1, col=c + 1,
+        )
+
+        # Diagonal y = x
+        lo = max(min(x.min(), y.min()) * 0.85, 0)
+        hi = max(x.max(), y.max()) * 1.10
+        fig_ly.add_trace(
+            go.Scatter(
+                x=[lo, hi], y=[lo, hi], mode="lines",
+                line=dict(dash="dash", color="black", width=1),
+                hoverinfo="skip", showlegend=False,
+            ),
+            row=r + 1, col=c + 1,
+        )
+
+        fig_ly.update_xaxes(
+            title_text="Silent Visit Duration, ms", row=r + 1, col=c + 1,
+            range=[lo, hi], scaleanchor=f"y{idx + 1}" if idx > 0 else "y",
+            scaleratio=1,
+        )
+        fig_ly.update_yaxes(
+            title_text="Sound Visit Duration, ms", row=r + 1, col=c + 1,
+            range=[lo, hi],
+        )
+
+    fig_ly.update_layout(
+        title=dict(
+            text=(
+                "Within-trial preference: sound vs silent-arm visit duration<br>"
+                "<sup>Hover over points to identify mice — each point = one mouse, "
+                "averaged across trials 2, 4, 6, 8</sup>"
+            ),
+            x=0.5,
+        ),
+        height=500 * nrows, width=550 * ncols,
+        template="plotly_white",
+    )
+
+    plotly_path = os.path.join(OUTPUT_DIR, "fig_within_trial_preference.html")
+    fig_ly.write_html(plotly_path)
+    print(f"Saved interactive Plotly figure: {plotly_path}")
+
+except ImportError:
+    print("  (Plotly not installed — skipping interactive figure)")
+except Exception as e:
+    print(f"  WARNING: Plotly figure failed: {e}")
+
 
 # Print stats
 if stats_lines:
