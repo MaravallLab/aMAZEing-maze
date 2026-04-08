@@ -1354,6 +1354,32 @@ def main():
     with open(stats_path, "w") as f:
         f.write("\n".join(stats_lines))
     print(f"\nStats report saved to {stats_path}")
+
+    # ── 13. Run within-trial preference analysis (02_*) ──────────────
+    # 02_within_trial_preference.py uses preference_analysis_config.py,
+    # which respects the MAZE_DATA_DIR env var.  We pass base_path that way.
+    print(f"\n{'='*60}")
+    print("Running 02_within_trial_preference.py ...")
+    print(f"{'='*60}")
+    try:
+        import subprocess
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_02 = os.path.join(script_dir, "02_within_trial_preference.py")
+        if os.path.isfile(script_02):
+            env = os.environ.copy()
+            env["MAZE_DATA_DIR"] = base_path
+            # Inherit VISIT_CLIP_MS if set so both scripts use same setting
+            result = subprocess.run(
+                [sys.executable, script_02],
+                cwd=script_dir, env=env,
+            )
+            if result.returncode != 0:
+                print(f"  WARNING: 02_within_trial_preference.py exited with code {result.returncode}")
+        else:
+            print(f"  Skipping: {script_02} not found")
+    except Exception as e:
+        print(f"  WARNING: failed to run 02_within_trial_preference.py: {e}")
+
     print(f"\n{'='*60}")
     print(f"All outputs saved to: {output_dir}")
     print(f"{'='*60}")
