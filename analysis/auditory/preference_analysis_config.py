@@ -9,7 +9,21 @@ Run this file directly to verify session discovery:
 import os
 import glob
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
+
+import numpy as np
+import pandas as pd
+
+# Sanity caps for visit duration (ms).
+# Real visits in detailed_visits never exceed ~25 s, and trial duration
+# is 15 min for sound trials and 2 min for silent trials.  Anything
+# above these caps in trials.csv is a known data-recording bug
+# (the aggregator sometimes records the trial duration instead of
+# the actual visit duration).
+SOUND_TRIAL_VISIT_CAP_MS = 60_000      # 60 s
+SILENT_TRIAL_VISIT_CAP_MS = 130_000    # slightly above 2-min trial duration
+SOUND_TRIAL_IDS = {2, 4, 6, 8}
+SILENT_TRIAL_IDS = {3, 5, 7, 9}
 
 # ── paths ─────────────────────────────────────────────────────────────
 
@@ -159,6 +173,115 @@ def get_mice_with_min_sessions(sessions: List[SessionInfo],
             seen.add(key)
             day_counts[s.mouse_id] += 1
     return {m for m, c in day_counts.items() if c >= min_sessions}
+
+
+# ── safe IO helpers ───────────────────────────────────────────────────
+
+def _is_file_locally_available(path):
+    """Skip Box Drive / OneDrive cloud-only files (would block on read)."""
+    try:
+        import ctypes
+        attrs = ctypes.windll.kernel32.GetFileAttributesW(str(path))
+        if attrs == -1:
+            return False
+        if attrs & 0x00400000 or attrs & 0x00001000:
+            return False
+        return True
+    except Exception:
+        try:
+            with open(path, "rb") as f:
+                f.read(1)
+            return True
+        except Exception:
+            return False
+
+
+def safe_read_csv(path):
+    if path is None or not _is_file_locally_available(path):
+        return None
+    try:
+        return pd.read_csv(path)
+    except Exception:
+        return None
+
+
+# ── visit-data loader (DV-first, capped trials.csv fallback) ──────────
+
+def load_session_visits(sess: "SessionInfo") -> Tuple[Optional[pd.DataFrame], str]:
+    """Load a session's per-(trial, ROI) visit aggregates with corruption fixes.
+
+    Strategy:
+      1. Load trials.csv to get the row layout (one row per trial-ROI)
+         plus stimulus metadata columns (sound_type, frequency, etc.).
+      2. If detailed_visits.csv exists and has data, REPLACE the
+         time_spent and visitation_count columns with values aggregated
+         from detailed_visits (ground truth).  Rows not present in DV
+         are set to zero (mouse never visited).
+      3. Otherwise, apply a sanity cap: zero out any row whose average
+         visit duration exceeds the trial-type cap.
+
+    Returns
+    -------
+    (df, source) : (DataFrame or None, str)
+        source is one of:
+          'detailed_visits'  -- DV used as ground truth
+          'trials_capped'    -- trials.csv used with sanity cap applied
+          'trials_raw'       -- trials.csv used unmodified (no bad rows)
+    """
+    if not sess.trials_csv:
+        return None, "no_trials_csv"
+
+    df = safe_read_csv(sess.trials_csv)
+    if df is None or "trial_ID" not in df.columns or "ROIs" not in df.columns:
+        return None, "bad_trials_csv"
+
+    for col in ["time_spent", "visitation_count", "time_in_maze_ms"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # ---- 1. Try DV override ----
+    if sess.detailed_visits_csv:
+        dv = safe_read_csv(sess.detailed_visits_csv)
+        if (dv is not None and len(dv) > 0
+                and "ROI_visited" in dv.columns
+                and "time_spent_seconds" in dv.columns
+                and "trial_ID" in dv.columns):
+            dv = dv.copy()
+            dv["_dur_ms"] = pd.to_numeric(
+                dv["time_spent_seconds"], errors="coerce") * 1000.0
+            dv = dv.dropna(subset=["_dur_ms"])
+            agg = (dv.groupby(["trial_ID", "ROI_visited"])
+                     .agg(_dv_time=("_dur_ms", "sum"),
+                          _dv_count=("_dur_ms", "size"))
+                     .reset_index()
+                     .rename(columns={"ROI_visited": "ROIs"}))
+            df = df.merge(agg, on=["trial_ID", "ROIs"], how="left")
+            df["time_spent"] = df["_dv_time"].fillna(0.0)
+            df["visitation_count"] = df["_dv_count"].fillna(0).astype(int)
+            df = df.drop(columns=["_dv_time", "_dv_count"])
+            df["_visit_source"] = "detailed_visits"
+            return df, "detailed_visits"
+
+    # ---- 2. Sanity cap on trials.csv ----
+    if "time_spent" in df.columns and "visitation_count" in df.columns:
+        vc = df["visitation_count"].where(df["visitation_count"] > 0, np.nan)
+        avg = df["time_spent"] / vc
+        is_sound = df["trial_ID"].isin(SOUND_TRIAL_IDS)
+        is_silent = df["trial_ID"].isin(SILENT_TRIAL_IDS)
+        bad = (
+            (is_sound & (avg > SOUND_TRIAL_VISIT_CAP_MS))
+            | (is_silent & (avg > SILENT_TRIAL_VISIT_CAP_MS))
+        )
+        n_bad = int(bad.sum())
+        if n_bad > 0:
+            df.loc[bad, "time_spent"] = 0.0
+            df.loc[bad, "visitation_count"] = 0
+            df["_visit_source"] = "trials_capped"
+            df.attrs["n_capped_rows"] = n_bad
+            return df, "trials_capped"
+
+    df["_visit_source"] = "trials_raw"
+    return df, "trials_raw"
 
 
 # ── run as standalone to verify ───────────────────────────────────────
