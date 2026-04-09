@@ -51,7 +51,9 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import seaborn as sns
 from scipy.stats import (entropy as shannon_entropy,
-                          kruskal, mannwhitneyu, spearmanr, wilcoxon)
+                          kruskal, mannwhitneyu, spearmanr, wilcoxon,
+                          norm, rankdata)
+from statsmodels.stats.multitest import multipletests
 
 try:
     import statsmodels.formula.api as smf
@@ -1291,6 +1293,518 @@ def main():
             log_stat(f"  {DAY_SHORT[d]}: median={np.median(vals):.3f}, "
                      f"mean={np.mean(vals):.3f}, n={len(vals)} (too few for test)",
                      stats_lines)
+
+    # ══════════════════════════════════════════════════════════════════
+    #  ENHANCED ANALYSIS
+    # ══════════════════════════════════════════════════════════════════
+    log_stat("\n\n" + "#" * 70, stats_lines)
+    log_stat("#  ENHANCED ANALYSIS", stats_lines)
+    log_stat("#  (post-hoc tests, effect sizes, trend tests, corrections)", stats_lines)
+    log_stat("#" * 70, stats_lines)
+
+    # ── helper: Wilcoxon rank-biserial effect size ──────────────────
+    def wilcoxon_effect_size(x, y=None):
+        """Rank-biserial r = Z / sqrt(N).
+        If y is None, one-sample test of x vs 0."""
+        if y is not None:
+            diff = np.array(x) - np.array(y)
+        else:
+            diff = np.asarray(x)
+        diff_nz = diff[diff != 0]
+        n = len(diff_nz)
+        if n < 6:
+            return np.nan, np.nan, np.nan
+        stat, p = wilcoxon(diff_nz)
+        # z approximation: W ~ N(mu, sigma) where mu = n(n+1)/4
+        mu = n * (n + 1) / 4.0
+        sigma = np.sqrt(n * (n + 1) * (2 * n + 1) / 24.0)
+        z = (stat - mu) / sigma if sigma > 0 else 0.0
+        r = z / np.sqrt(n)
+        return stat, p, r
+
+    # ── helper: Kruskal-Wallis epsilon-squared ──────────────────────
+    def kw_epsilon_squared(H, groups):
+        """Epsilon-squared = (H - k + 1) / (N - k)."""
+        k = len(groups)
+        N = sum(len(g) for g in groups)
+        if N <= k:
+            return np.nan
+        return (H - k + 1) / (N - k)
+
+    # ── helper: Dunn's post-hoc with Holm correction ───────────────
+    def dunns_posthoc(groups, labels):
+        """Dunn's test with Holm-Bonferroni correction.
+        Returns list of (label_a, label_b, z, p_raw, p_adj)."""
+        # Pool all observations and rank
+        all_data = np.concatenate(groups)
+        all_ranks = rankdata(all_data)
+        N = len(all_data)
+
+        # Assign ranks back to groups
+        idx = 0
+        group_ranks = []
+        for g in groups:
+            group_ranks.append(all_ranks[idx:idx + len(g)])
+            idx += len(g)
+
+        mean_ranks = [np.mean(r) for r in group_ranks]
+        ns = [len(g) for g in groups]
+
+        # Tied-ranks correction for sigma
+        _, counts = np.unique(all_ranks, return_counts=True)
+        tie_corr = np.sum(counts ** 3 - counts)
+        sigma_base = (N * (N + 1) / 12.0) - tie_corr / (12.0 * (N - 1)) if N > 1 else 1.0
+
+        pairs = []
+        for i in range(len(groups)):
+            for j in range(i + 1, len(groups)):
+                diff = mean_ranks[i] - mean_ranks[j]
+                se = np.sqrt(sigma_base * (1.0 / ns[i] + 1.0 / ns[j]))
+                z = diff / se if se > 0 else 0.0
+                p = 2.0 * norm.sf(abs(z))
+                pairs.append((labels[i], labels[j], z, p))
+
+        if not pairs:
+            return []
+        raw_ps = [p for _, _, _, p in pairs]
+        _, adj_ps, _, _ = multipletests(raw_ps, method="holm")
+        return [(a, b, z, rp, ap)
+                for (a, b, z, rp), ap in zip(pairs, adj_ps)]
+
+    # ── helper: Jonckheere-Terpstra trend test ──────────────────────
+    def jonckheere_terpstra_test(groups):
+        """JT test for ordered alternatives.
+        groups: list of arrays in hypothesised order (low->high).
+        Returns (JT statistic, z, p_one_sided)."""
+        k = len(groups)
+        if k < 2:
+            return np.nan, np.nan, np.nan
+        # Count concordant pairs across ordered groups
+        J = 0
+        for i in range(k):
+            for j in range(i + 1, k):
+                for xi in groups[i]:
+                    for xj in groups[j]:
+                        if xj > xi:
+                            J += 1
+                        elif xj == xi:
+                            J += 0.5
+        # Expected value and variance under H0
+        N = sum(len(g) for g in groups)
+        ns = [len(g) for g in groups]
+        E_J = (N ** 2 - sum(n ** 2 for n in ns)) / 4.0
+        # Variance (no-tie formula)
+        sum_ni2 = sum(n ** 2 for n in ns)
+        sum_ni3 = sum(n ** 3 for n in ns)
+        var_num = (N ** 2 * (2 * N + 3) - sum_ni2 * (2 * sum_ni2 + 3))  # approximation
+        # More precise: use the standard JT variance formula
+        var_J = (1.0 / 72.0) * (
+            N ** 2 * (2 * N + 3)
+            - sum(n ** 2 * (2 * n + 3) for n in ns)
+        )
+        if var_J <= 0:
+            return J, 0.0, 0.5
+        z = (J - E_J) / np.sqrt(var_J)
+        p = norm.sf(z)  # one-sided (testing increasing trend)
+        return J, z, p
+
+    # ── helper: format table row ───────────────────────────────────
+    def fmt_test(test_name, stat_name, stat_val, df_or_n, p_raw,
+                 p_adj=None, effect_name=None, effect_val=None):
+        """Consistent output: stat | df/N | p_raw | p_adj | effect."""
+        parts = [f"  {test_name}: {stat_name}={stat_val:.3f}"]
+        parts.append(f"N={df_or_n}" if isinstance(df_or_n, int) else f"df={df_or_n}")
+        parts.append(f"p={p_raw:.4f}")
+        if p_adj is not None:
+            parts.append(f"p_adj={p_adj:.4f}")
+        if effect_name and effect_val is not None and not np.isnan(effect_val):
+            parts.append(f"{effect_name}={effect_val:.3f}")
+        return " | ".join(parts)
+
+    # ────────────────────────────────────────────────────────────────
+    # EA-1. ONE-SAMPLE PI TESTS WITH EFFECT SIZES + HOLM CORRECTION
+    # ────────────────────────────────────────────────────────────────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("EA-1. ONE-SAMPLE PI TESTS (effect sizes + Holm correction)",
+             stats_lines)
+    log_stat("=" * 60, stats_lines)
+
+    onesamp_results = []
+    for d in PI_DAYS:
+        vals = df_pi[df_pi["day"] == d]["preference_index"].dropna().values
+        if len(vals) >= 6:
+            W, p_raw, r_rb = wilcoxon_effect_size(vals)
+            onesamp_results.append((d, len(vals), W, p_raw, r_rb))
+
+    if onesamp_results:
+        raw_ps = [r[3] for r in onesamp_results]
+        _, adj_ps, _, _ = multipletests(raw_ps, method="holm")
+        for (d, n, W, p_raw, r_rb), p_adj in zip(onesamp_results, adj_ps):
+            log_stat(
+                fmt_test(DAY_SHORT[d], "W", W, n, p_raw,
+                         p_adj=p_adj, effect_name="r_rb", effect_val=r_rb),
+                stats_lines)
+
+    # ────────────────────────────────────────────────────────────────
+    # EA-2. KRUSKAL-WALLIS ACROSS DAYS + DUNN'S POST-HOC + EFFECT SIZE
+    # ────────────────────────────────────────────────────────────────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("EA-2. KRUSKAL-WALLIS ACROSS DAYS (post-hoc + effect size)",
+             stats_lines)
+    log_stat("=" * 60, stats_lines)
+
+    day_groups_kw = []
+    day_labels_kw = []
+    for d in PI_DAYS:
+        g = df_pi[df_pi["day"] == d]["preference_index"].dropna().values
+        if len(g) > 0:
+            day_groups_kw.append(g)
+            day_labels_kw.append(DAY_SHORT[d])
+
+    if len(day_groups_kw) > 1:
+        H, p_kw = kruskal(*day_groups_kw)
+        eps2 = kw_epsilon_squared(H, day_groups_kw)
+        log_stat(
+            fmt_test("Across days", "H", H, len(day_labels_kw),
+                     p_kw, effect_name="eps2", effect_val=eps2),
+            stats_lines)
+        if p_kw < 0.05:
+            log_stat("\n  Dunn's pairwise post-hoc (Holm-corrected):", stats_lines)
+            dunn_results = dunns_posthoc(day_groups_kw, day_labels_kw)
+            log_stat(f"  {'Pair':<28s} {'z':>8s} {'p_raw':>8s} {'p_adj':>8s} {'sig':>5s}",
+                     stats_lines)
+            log_stat(f"  {'-'*61}", stats_lines)
+            for a, b, z, rp, ap in dunn_results:
+                sig = "***" if ap < 0.001 else "**" if ap < 0.01 else "*" if ap < 0.05 else ""
+                log_stat(f"  {a+' vs '+b:<28s} {z:>8.3f} {rp:>8.4f} {ap:>8.4f} {sig:>5s}",
+                         stats_lines)
+
+    # ────────────────────────────────────────────────────────────────
+    # EA-3. SENSORY COMPLEXITY: JT TREND + KW POST-HOC + EFFECT SIZES
+    # ────────────────────────────────────────────────────────────────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("EA-3. SENSORY COMPLEXITY (JT trend + KW post-hoc + effect sizes)",
+             stats_lines)
+    log_stat("=" * 60, stats_lines)
+
+    for day in DAY_ORDER:
+        order = EXPERIMENT_DAYS[day].get("complexity_order", [])
+        if len(order) < 2:
+            continue
+        day_data = df_stim[df_stim["day"] == day]
+        if len(day_data) == 0:
+            continue
+        mouse_means = day_data.groupby(["mouse_id", "stim_type"])[
+            "avg_visit_dur_ms"].mean().reset_index()
+        available = [s for s in order if s in mouse_means["stim_type"].values]
+        if len(available) < 2:
+            continue
+
+        log_stat(f"\n--- {DAY_SHORT[day]}: {' < '.join(available)} ---", stats_lines)
+        groups = [mouse_means[mouse_means["stim_type"] == s][
+            "avg_visit_dur_ms"].values for s in available]
+        for s, g in zip(available, groups):
+            log_stat(f"  {s}: mean={np.mean(g):.1f}ms, median={np.median(g):.1f}ms, n={len(g)}",
+                     stats_lines)
+
+        # Kruskal-Wallis + effect size
+        if all(len(g) > 0 for g in groups):
+            H, p_kw = kruskal(*groups)
+            eps2 = kw_epsilon_squared(H, groups)
+            log_stat(
+                fmt_test("KW", "H", H, len(available), p_kw,
+                         effect_name="eps2", effect_val=eps2),
+                stats_lines)
+            if p_kw < 0.05:
+                log_stat("  Dunn's pairwise post-hoc (Holm-corrected):", stats_lines)
+                dunn_results = dunns_posthoc(groups, available)
+                log_stat(f"    {'Pair':<32s} {'z':>8s} {'p_raw':>8s} {'p_adj':>8s} {'sig':>5s}",
+                         stats_lines)
+                log_stat(f"    {'-'*65}", stats_lines)
+                for a, b, z, rp, ap in dunn_results:
+                    sig = "***" if ap < 0.001 else "**" if ap < 0.01 else "*" if ap < 0.05 else ""
+                    log_stat(f"    {a+' vs '+b:<32s} {z:>8.3f} {rp:>8.4f} {ap:>8.4f} {sig:>5s}",
+                             stats_lines)
+
+        # Jonckheere-Terpstra trend test
+        if len(available) >= 3 and all(len(g) >= 3 for g in groups):
+            J, z_jt, p_jt = jonckheere_terpstra_test(groups)
+            log_stat(
+                fmt_test("JT trend", "J", J, sum(len(g) for g in groups),
+                         p_jt, effect_name="z", effect_val=z_jt),
+                stats_lines)
+            if p_jt < 0.05:
+                log_stat("    --> Significant increasing trend in visit duration "
+                         "with stimulus complexity", stats_lines)
+
+    # ────────────────────────────────────────────────────────────────
+    # EA-4. VOC PI TESTS WITH EFFECT SIZES + HOLM CORRECTION
+    # ────────────────────────────────────────────────────────────────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("EA-4. VOC PI TESTS (effect sizes + Holm correction)", stats_lines)
+    log_stat("=" * 60, stats_lines)
+
+    voc_results = []
+    for d in DAY_ORDER:
+        vals = voc_all[voc_all["day"] == d]["voc_pi"].dropna().values
+        if len(vals) >= 6:
+            W, p_raw, r_rb = wilcoxon_effect_size(vals)
+            voc_results.append((d, len(vals), W, p_raw, r_rb))
+
+    if voc_results:
+        raw_ps = [r[3] for r in voc_results]
+        _, adj_ps, _, _ = multipletests(raw_ps, method="holm")
+        for (d, n, W, p_raw, r_rb), p_adj in zip(voc_results, adj_ps):
+            log_stat(
+                fmt_test(DAY_SHORT[d], "W", W, n, p_raw,
+                         p_adj=p_adj, effect_name="r_rb", effect_val=r_rb),
+                stats_lines)
+
+    # ────────────────────────────────────────────────────────────────
+    # EA-5. WITHIN-MOUSE RE-PI: MIXED MODEL (replacing Pearson r)
+    # ────────────────────────────────────────────────────────────────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("EA-5. WITHIN-MOUSE RE-PI ASSOCIATION (mixed model)", stats_lines)
+    log_stat("=" * 60, stats_lines)
+
+    if HAS_STATSMODELS:
+        df_re_ea = df_pi.dropna(subset=["roaming_entropy", "preference_index"]).copy()
+        if len(df_re_ea) > 10 and df_re_ea["mouse_id"].nunique() > 2:
+            mouse_re = df_re_ea.groupby("mouse_id")["roaming_entropy"].mean()
+            df_re_ea["re_mouse_mean"] = df_re_ea["mouse_id"].map(mouse_re)
+            df_re_ea["re_within"] = df_re_ea["roaming_entropy"] - df_re_ea["re_mouse_mean"]
+            try:
+                m_within = smf.mixedlm(
+                    "preference_index ~ re_within",
+                    df_re_ea, groups=df_re_ea["mouse_id"]
+                ).fit(reml=True)
+                coef = m_within.fe_params["re_within"]
+                se = m_within.bse_fe["re_within"]
+                z_val = m_within.tvalues["re_within"]
+                p_val = m_within.pvalues["re_within"]
+                log_stat("  Mixed model: PI ~ re_within + (1|mouse)", stats_lines)
+                log_stat(f"    re_within: coef={coef:.4f}, SE={se:.4f}, "
+                         f"z={z_val:.3f}, p={p_val:.4f}", stats_lines)
+                log_stat("  (This supersedes the flat within-mouse Pearson r)", stats_lines)
+            except Exception as e:
+                log_stat(f"  Within-mouse mixed model failed: {e}", stats_lines)
+
+    # ────────────────────────────────────────────────────────────────
+    # EA-6. MIXED MODEL COMPARISON: AIC, BIC, LRT
+    # ────────────────────────────────────────────────────────────────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("EA-6. MODEL COMPARISON (AIC, BIC, LRT)", stats_lines)
+    log_stat("=" * 60, stats_lines)
+
+    if HAS_STATSMODELS:
+        df_model_ea = df_pi.dropna(subset=["preference_index"]).copy()
+        if len(df_model_ea) > 10 and df_model_ea["mouse_id"].nunique() > 2:
+            try:
+                # Refit with ML (not REML) for valid LRT comparison
+                m1_ml = smf.mixedlm(
+                    "preference_index ~ 1", df_model_ea,
+                    groups=df_model_ea["mouse_id"]
+                ).fit(reml=False)
+
+                df_model_ea["day_cat"] = pd.Categorical(
+                    df_model_ea["day"], categories=PI_DAYS)
+                m2_ml = smf.mixedlm(
+                    "preference_index ~ C(day_cat)", df_model_ea,
+                    groups=df_model_ea["mouse_id"]
+                ).fit(reml=False)
+
+                models = [("M1: PI ~ 1 + (1|mouse)", m1_ml),
+                          ("M2: PI ~ day + (1|mouse)", m2_ml)]
+
+                # Model 3: RE predictors
+                df_re_m_ea = df_model_ea.dropna(subset=["roaming_entropy"]).copy()
+                m3_ml = None
+                if len(df_re_m_ea) > 10:
+                    mouse_re3 = df_re_m_ea.groupby("mouse_id")["roaming_entropy"].mean()
+                    grand_re3 = mouse_re3.mean()
+                    df_re_m_ea["re_mouse_mean"] = df_re_m_ea["mouse_id"].map(mouse_re3)
+                    df_re_m_ea["re_within"] = df_re_m_ea["roaming_entropy"] - df_re_m_ea["re_mouse_mean"]
+                    df_re_m_ea["re_between"] = df_re_m_ea["re_mouse_mean"] - grand_re3
+                    try:
+                        m3_ml = smf.mixedlm(
+                            "preference_index ~ re_within + re_between",
+                            df_re_m_ea, groups=df_re_m_ea["mouse_id"]
+                        ).fit(reml=False)
+                        models.append(("M3: PI ~ RE_w + RE_b + (1|mouse)", m3_ml))
+                    except Exception:
+                        pass
+
+                # Table
+                log_stat(f"\n  {'Model':<40s} {'LL':>10s} {'AIC':>10s} {'BIC':>10s} {'k':>4s}",
+                         stats_lines)
+                log_stat(f"  {'-'*76}", stats_lines)
+                for name, m in models:
+                    ll = m.llf
+                    aic_val = -2 * ll + 2 * m.df_modelwc
+                    bic_val = -2 * ll + np.log(m.nobs) * m.df_modelwc
+                    log_stat(
+                        f"  {name:<40s} {ll:>10.2f} {aic_val:>10.2f} {bic_val:>10.2f} {m.df_modelwc:>4d}",
+                        stats_lines)
+
+                # LRT: M1 vs M2
+                from scipy.stats import chi2
+                ll1 = m1_ml.llf
+                ll2 = m2_ml.llf
+                lr_stat = 2 * (ll2 - ll1)
+                lr_df = m2_ml.df_modelwc - m1_ml.df_modelwc
+                lr_p = chi2.sf(lr_stat, lr_df) if lr_df > 0 else np.nan
+                log_stat(f"\n  LRT M1 vs M2: chi2={lr_stat:.3f}, df={lr_df}, p={lr_p:.4f}",
+                         stats_lines)
+
+                # LRT: M1 vs M3
+                if m3_ml is not None:
+                    # M3 may be on a subset — refit M1 on same subset
+                    try:
+                        m1_sub = smf.mixedlm(
+                            "preference_index ~ 1", df_re_m_ea,
+                            groups=df_re_m_ea["mouse_id"]
+                        ).fit(reml=False)
+                        lr3 = 2 * (m3_ml.llf - m1_sub.llf)
+                        lr3_df = m3_ml.df_modelwc - m1_sub.df_modelwc
+                        lr3_p = chi2.sf(lr3, lr3_df) if lr3_df > 0 else np.nan
+                        log_stat(f"  LRT M1 vs M3: chi2={lr3:.3f}, df={lr3_df}, p={lr3_p:.4f} "
+                                 f"(on RE subset, n={len(df_re_m_ea)})", stats_lines)
+                    except Exception:
+                        pass
+
+                # Marginal & conditional R-squared (Nakagawa & Schielzeth)
+                log_stat("\n  Marginal & conditional R-squared (Nakagawa & Schielzeth):",
+                         stats_lines)
+                for name, m in models:
+                    try:
+                        var_fe = np.var(m.fittedvalues - m.random_effects_cov  # not right
+                                        if hasattr(m, 'random_effects_cov') else 0)
+                    except Exception:
+                        pass
+                    # Approximate: var_fixed, var_random, var_resid
+                    try:
+                        # Fixed-effects predicted values (population level)
+                        Xb = np.array(m.fittedvalues) - np.array(
+                            [m.random_effects[g]["Group"] if "Group" in m.random_effects.get(g, {})
+                             else 0.0 for g in df_model_ea["mouse_id"]]
+                            if name != models[-1][0] or m3_ml is None
+                            else [m.random_effects[g]["Group"] if "Group" in m.random_effects.get(g, {})
+                                  else 0.0 for g in df_re_m_ea["mouse_id"]]
+                        )
+                        var_f = np.var(Xb)
+                        var_u = m.cov_re.iloc[0, 0] if hasattr(m.cov_re, 'iloc') else float(m.cov_re)
+                        var_e = m.scale
+                        r2_marginal = var_f / (var_f + var_u + var_e)
+                        r2_conditional = (var_f + var_u) / (var_f + var_u + var_e)
+                        log_stat(f"    {name}: R2m={r2_marginal:.4f}, R2c={r2_conditional:.4f}",
+                                 stats_lines)
+                    except Exception as e:
+                        log_stat(f"    {name}: R2 computation failed ({e})", stats_lines)
+
+            except Exception as e:
+                log_stat(f"  Model comparison failed: {e}", stats_lines)
+
+    # ────────────────────────────────────────────────────────────────
+    # EA-7. BETA REGRESSION SENSITIVITY CHECK
+    # ────────────────────────────────────────────────────────────────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("EA-7. BETA REGRESSION SENSITIVITY CHECK", stats_lines)
+    log_stat("  PI_scaled = (PI + 1) / 2, mapped to (0, 1)", stats_lines)
+    log_stat("=" * 60, stats_lines)
+
+    if HAS_STATSMODELS:
+        try:
+            import statsmodels.api as sm
+            from statsmodels.genmod.families import Tweedie
+        except ImportError:
+            pass
+
+        df_beta = df_pi.dropna(subset=["preference_index"]).copy()
+        # Transform PI [-1,1] -> (0,1), squeezing away exact 0/1
+        df_beta["pi_scaled"] = (df_beta["preference_index"] + 1.0) / 2.0
+        # Squeeze to open interval (epsilon, 1-epsilon) for beta regression
+        eps = 1e-6
+        df_beta["pi_scaled"] = df_beta["pi_scaled"].clip(eps, 1.0 - eps)
+
+        try:
+            # Try statsmodels GLM with Binomial(logit) as beta-like approximation
+            # (true Beta family not in statsmodels; use quasi-likelihood with logit link)
+            import statsmodels.api as sm
+
+            # Model 1: intercept-only
+            X1 = sm.add_constant(np.ones(len(df_beta)))
+            glm1 = sm.GLM(
+                df_beta["pi_scaled"], X1,
+                family=sm.families.Binomial(link=sm.families.links.Logit())
+            ).fit()
+
+            # Model 2: with day dummies
+            day_dummies = pd.get_dummies(
+                df_beta["day"].astype(pd.CategoricalDtype(categories=PI_DAYS)),
+                drop_first=True, dtype=float
+            )
+            X2 = sm.add_constant(day_dummies.values)
+            glm2 = sm.GLM(
+                df_beta["pi_scaled"], X2,
+                family=sm.families.Binomial(link=sm.families.links.Logit())
+            ).fit()
+
+            log_stat("\n  Quasi-beta (Binomial/logit GLM) sensitivity check:", stats_lines)
+            log_stat(f"  Note: uses logit-link Binomial as beta-like approximation", stats_lines)
+
+            # Compare intercept
+            mu_logit = glm1.params[0]
+            mu_prob = 1.0 / (1.0 + np.exp(-mu_logit))
+            mu_pi = mu_prob * 2.0 - 1.0  # back-transform to PI scale
+            log_stat(f"\n  M1 (intercept-only):", stats_lines)
+            log_stat(f"    logit(PI_scaled) intercept = {mu_logit:.4f} (p={glm1.pvalues[0]:.4f})",
+                     stats_lines)
+            log_stat(f"    Back-transformed grand mean PI = {mu_pi:.3f}", stats_lines)
+
+            # Day effects
+            log_stat(f"\n  M2 (with day effects):", stats_lines)
+            day_names = ["Intercept (D1)"] + [
+                f"vs {DAY_SHORT[d]}" for d in PI_DAYS[1:]]
+            for i, (nm, coef, p) in enumerate(
+                    zip(day_names, glm2.params, glm2.pvalues)):
+                log_stat(f"    {nm}: coef={coef:.4f}, p={p:.4f}", stats_lines)
+
+            # Compare conclusions with linear mixed model
+            log_stat("\n  Comparison with linear mixed model:", stats_lines)
+            linear_sign = m1_ml.fe_params["Intercept"] < 0  # negative PI?
+            beta_sign = mu_pi < 0
+            if linear_sign == beta_sign:
+                log_stat("    --> Conclusions AGREE: same direction of grand mean PI",
+                         stats_lines)
+            else:
+                log_stat("    --> WARNING: Conclusions DIFFER in direction of grand mean PI",
+                         stats_lines)
+
+        except Exception as e:
+            log_stat(f"  Beta regression failed: {e}", stats_lines)
+
+    # ────────────────────────────────────────────────────────────────
+    # EA-8. PAIRED VOC-PI vs OVERALL-PI WITH EFFECT SIZE
+    # ────────────────────────────────────────────────────────────────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("EA-8. PAIRED VOC PI vs OVERALL PI (with effect size)", stats_lines)
+    log_stat("=" * 60, stats_lines)
+
+    if paired_data:
+        df_paired_ea = pd.DataFrame(paired_data)
+        if len(df_paired_ea) >= 6:
+            W, p_raw, r_rb = wilcoxon_effect_size(
+                df_paired_ea["pi_voc"].values,
+                df_paired_ea["pi_overall"].values)
+            log_stat(
+                fmt_test("Voc PI vs Overall PI", "W", W,
+                         len(df_paired_ea), p_raw,
+                         effect_name="r_rb", effect_val=r_rb),
+                stats_lines)
+
+    log_stat("\n" + "#" * 70, stats_lines)
+    log_stat("#  END OF ENHANCED ANALYSIS", stats_lines)
+    log_stat("#" * 70, stats_lines)
 
     # ── 12. Save stats ───────────────────────────────────────────────
     stats_path = os.path.join(output_dir, "stats_report.txt")
