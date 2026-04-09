@@ -277,71 +277,11 @@ def safe_read_csv(path):
         return None
 
 
-# ── visit-data loader: detailed_visits first, sanity-capped trials.csv ──
-SOUND_TRIAL_VISIT_CAP_MS = 60_000      # real visits never exceed ~25 s
-SILENT_TRIAL_VISIT_CAP_MS = 130_000    # silent trials are 2 min long
-SOUND_TRIAL_IDS_SET = {2, 4, 6, 8}
-SILENT_TRIAL_IDS_SET = {3, 5, 7, 9}
-
-
-def load_session_visits(sess):
-    """Load (trial, ROI) visit aggregates with corruption fixes.
-
-    Prefers detailed_visits.csv (ground truth) when available.  Falls
-    back to trials.csv with a sanity cap that zeroes physically
-    impossible rows (visits longer than the trial itself).
-
-    Returns (DataFrame, source_label) or (None, reason).
-    """
-    if not sess.trials_csv:
-        return None, "no_trials_csv"
-
-    df = safe_read_csv(sess.trials_csv)
-    if df is None or "trial_ID" not in df.columns or "ROIs" not in df.columns:
-        return None, "bad_trials_csv"
-
-    for col in ["time_spent", "visitation_count", "time_in_maze_ms"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    # ---- Try DV override ----
-    if sess.detailed_visits_csv:
-        dv = safe_read_csv(sess.detailed_visits_csv)
-        if (dv is not None and len(dv) > 0
-                and "ROI_visited" in dv.columns
-                and "time_spent_seconds" in dv.columns
-                and "trial_ID" in dv.columns):
-            dv = dv.copy()
-            dv["_dur_ms"] = pd.to_numeric(
-                dv["time_spent_seconds"], errors="coerce") * 1000.0
-            dv = dv.dropna(subset=["_dur_ms"])
-            agg = (dv.groupby(["trial_ID", "ROI_visited"])
-                     .agg(_dv_time=("_dur_ms", "sum"),
-                          _dv_count=("_dur_ms", "size"))
-                     .reset_index()
-                     .rename(columns={"ROI_visited": "ROIs"}))
-            df = df.merge(agg, on=["trial_ID", "ROIs"], how="left")
-            df["time_spent"] = df["_dv_time"].fillna(0.0)
-            df["visitation_count"] = df["_dv_count"].fillna(0).astype(int)
-            df = df.drop(columns=["_dv_time", "_dv_count"])
-            return df, "detailed_visits"
-
-    # ---- Sanity cap on trials.csv ----
-    if "time_spent" in df.columns and "visitation_count" in df.columns:
-        vc = df["visitation_count"].where(df["visitation_count"] > 0, np.nan)
-        avg = df["time_spent"] / vc
-        is_sound = df["trial_ID"].isin(SOUND_TRIAL_IDS_SET)
-        is_silent = df["trial_ID"].isin(SILENT_TRIAL_IDS_SET)
-        bad = (
-            (is_sound & (avg > SOUND_TRIAL_VISIT_CAP_MS))
-            | (is_silent & (avg > SILENT_TRIAL_VISIT_CAP_MS))
-        )
-        if bad.any():
-            df.loc[bad, "time_spent"] = 0.0
-            df.loc[bad, "visitation_count"] = 0
-            return df, "trials_capped"
-
-    return df, "trials_raw"
+# Import the canonical visit-data loader from the shared config module.
+# This ensures run_batch_preference.py uses the exact same DV-first loading,
+# sanity caps, and per-visit clip as 02_within_trial_preference.py.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from preference_analysis_config import load_session_visits
 
 
 def safe_savefig(fig, path, **kwargs):
@@ -432,32 +372,35 @@ def main():
         roaming_entropy = compute_roaming_entropy(hab_time_per_roi)
         hab_visits = hab["visitation_count"].sum() if "visitation_count" in hab.columns else 0
 
-        # sound vs silent
+        # ---- within-trial comparison (sound trials 2,4,6,8 only) ----
+        # Both the "sound" and "silent" baselines come from the SAME
+        # trials, split by ROI classification: sound-playing vs silent-arm.
+        # This avoids the bias from comparing 15-min sound trials against
+        # 2-min silent trials.
         roi_names = [f"ROI{i}" for i in range(1, 9)]
         sound_rois = df[df["trial_ID"].isin([2, 4, 6, 8]) & df["ROIs"].isin(roi_names)]
-        silent_rois = df[df["trial_ID"].isin([3, 5, 7, 9]) & df["ROIs"].isin(roi_names)]
 
         def _safe_sum(series):
             v = series.sum()
             return 0 if np.isnan(v) else v
 
-        # ---- classify each ROI within sound trials ----
-        # Separate actual-sound ROIs from silent-control ROIs within sound trials
+        # Classify each ROI within sound trials
         sound_stim_labels = []
         for _, row in sound_rois.iterrows():
             sound_stim_labels.append(classify_stimulus(row, sess.day))
         sound_rois = sound_rois.copy()
         sound_rois["_stim_label"] = sound_stim_labels
 
-        # Actual sound ROIs: exclude silent controls within sound trials
+        # Split: sound-playing ROIs vs silent-arm ROIs (within same trials)
         actual_sound = sound_rois[sound_rois["_stim_label"] != "silent"]
+        silent_ctrl = sound_rois[sound_rois["_stim_label"] == "silent"]
 
-        # Silent baseline: all ROIs in silent trials (3,5,7,9)
-        silent_time = _safe_sum(silent_rois["time_spent"]) if "time_spent" in silent_rois.columns else 0
-        silent_visits = _safe_sum(silent_rois["visitation_count"]) if "visitation_count" in silent_rois.columns else 0
+        # Silent baseline: silent-arm ROIs within sound trials
+        silent_time = _safe_sum(silent_ctrl["time_spent"]) if "time_spent" in silent_ctrl.columns else 0
+        silent_visits = _safe_sum(silent_ctrl["visitation_count"]) if "visitation_count" in silent_ctrl.columns else 0
         avg_silent_dur = silent_time / silent_visits if silent_visits > 0 else 0
 
-        # Sound aggregate: ONLY actual sound ROIs (excluding silent_arm)
+        # Sound aggregate: sound-playing ROIs within sound trials
         sound_time = _safe_sum(actual_sound["time_spent"]) if "time_spent" in actual_sound.columns else 0
         sound_visits_n = _safe_sum(actual_sound["visitation_count"]) if "visitation_count" in actual_sound.columns else 0
         avg_sound_dur = sound_time / sound_visits_n if sound_visits_n > 0 else 0
@@ -493,8 +436,8 @@ def main():
             "mode": EXPERIMENT_DAYS[sess.day]["mode"],
             "sound_time_ms": sound_time,
             "sound_visits": sound_visits_n,
-            "silent_time_ms": silent_time,
-            "silent_visits": silent_visits,
+            "silent_ctrl_time_ms": silent_time,     # silent-arm ROIs in sound trials
+            "silent_ctrl_visits": silent_visits,     # (NOT silent trials 3,5,7,9)
             "avg_sound_dur_ms": avg_sound_dur,
             "avg_silent_dur_ms": avg_silent_dur,
             "preference_index": pi,
