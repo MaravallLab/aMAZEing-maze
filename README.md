@@ -19,7 +19,7 @@
   - [Usage](#usage)
     - [Running an Auditory Experiment](#running-an-auditory-experiment)
     - [Experiment Modes](#experiment-modes)
-    - [Running the Tactile experiments](#running-the-tactile-experiments)
+    - [Running the SimplerMaze](#running-the-simplermaze)
   - [Configuration](#configuration)
   - [Repository Structure](#repository-structure)
   - [Testing](#testing)
@@ -34,8 +34,8 @@
       - [Step 3: Transition probabilities](#step-3-transition-probabilities)
     - [Interpreting the outputs](#interpreting-the-outputs)
     - [Auditory Analysis Pipeline](#auditory-analysis-pipeline)
-      - [1. Preference Analysis (`01_preference_analysis.py`)](#1-preference-analysis-01_preference_analysispy)
-      - [2. Fiber Photometry Alignment (`fibpho_alignment.py`)](#2-fiber-photometry-alignment-fibpho_alignmentpy)
+      - [Key analyses](#key-analyses)
+      - [Fiber Photometry Alignment (`fibpho_alignment.py`)](#fiber-photometry-alignment-fibpho_alignmentpy)
   - [Contributing](#contributing)
   - [Contributors](#contributors)
   - [License](#license)
@@ -51,7 +51,7 @@ The system supports two main experimental paradigms:
 | Paradigm | Description |
 |---|---|
 | **Auditory Maze** | Multi-arm maze with auditory stimuli (pure tones, musical intervals, temporal envelope modulation, tone sequences, vocalisations). Real-time ROI tracking triggers sound playback when the mouse enters specific arms. |
-| **Tactile Maze** | 2-level binary decision tree with servo-controlled moveable grating walls and reward delivery system, for reward-based navigation studies. |
+| **SimplerMaze** | Y-maze with servo-controlled moveable walls for reward-based navigation studies. |
 
 ### Key Features
 
@@ -72,23 +72,10 @@ The system supports two main experimental paradigms:
 - **Python** 3.10 or later
 - **OS**: Windows 10/11 (tested), Linux/macOS (should work with minor path adjustments)
 - **Hardware** (optional, for live experiments):
-  - USB camera
-  - a computer with at least 8GB RAM
-  - Makerbeam posts
-  - Bolts
-  - Acrylic panel
-  - Metal holding structure 
-  You can find the dimensions [here](docs\dimensions.md) and the companies we sourced these materials from [here](docs\local_materials_company.md)
-  - **For Auditory experiments:**
-    - Audio interface capable of 192 kHz output (we use Focusrite)
-    - Ultrasonic speaker (we use the [Vifa Ultrasonic dynamic speaker](https://avisoft.com/playback/vifa/)) in combination with a pre-amp (we use the [Portable Ultrasonic Power Amplifier](https://avisoft.com/playback/power-amplifier/)).
-    - Arduino Uno/Nano (for TTL sync)
-  - **For Tactile experiments**
-    - Adafruit PCA9685 (for servo control)
-    - BeeHive control board 
-    - servos for sensory presentation and reward delivery 
-    - 3D printer (see 3D printable gratings and reward delivery)
-
+  - USB camera (any OpenCV-compatible webcam)
+  - Audio interface capable of 192 kHz output
+  - Arduino Uno/Nano (for TTL sync)
+  - Raspberry Pi Pico with PCA9685 (for servo control)
 
 ---
 
@@ -96,7 +83,7 @@ The system supports two main experimental paradigms:
 
 ```bash
 # Clone the repository
-git clone https://github.com/MaravallLab/aMAZEing-maze.git
+git clone https://github.com/your-username/aMAZEing-maze.git
 cd aMAZEing-maze 
 
 # Create a virtual environment (recommended)
@@ -145,14 +132,14 @@ Set `experiment_mode` in `config.py` to one of:
 | `sequences` | Tone-pattern sequences (ABAB, AoAo, etc.) |
 | `vocalisation` | Each ROI plays a different vocalisation recording |
 
-### Running the Tactile experiments
+### Running the SimplerMaze
 
 ```bash
 cd src/simplermaze
 python simplerCode.py
 ```
 
-This runs the tactile paradigm with servo-controlled gratings walls and automated reward delivery.
+This runs the Y-maze paradigm with servo-controlled walls.
 
 ---
 
@@ -195,7 +182,7 @@ aMAZEing-maze/
 │   │       ├── vision.py       #   ROI tracking (OpenCV)
 │   │       ├── data_manager.py #   Session & visit logging
 │   │       └── hardware.py     #   Arduino/camera control
-│   └── simplermaze/            # Tactile maze with servos
+│   └── simplermaze/            # Y-maze with servos
 │       ├── simplerCode.py      #   Main script
 │       └── supFun.py           #   Support functions
 │
@@ -206,7 +193,7 @@ aMAZEing-maze/
 │
 ├── analysis/
 │   ├── auditory/               # Auditory experiment analysis notebooks
-│   ├── simplermaze/            # Tactile experiment analysis & DLC pipeline
+│   ├── simplermaze/            # SimplerMaze analysis & DLC pipeline
 │   │   ├── first_paper_exploratory_analysis/
 │   │   └── trials_segmentation/
 │   └── calibration/            # Speaker frequency-response calibration
@@ -266,7 +253,7 @@ See `hardware/drawings/` for schematics and `hardware/photos/` for assembly refe
 
 ## Analysis Pipeline
 
-The Tactile maze behavioural analysis pipeline lives in `analysis/simplermaze/first_paper_exploratory_analysis/`. It processes DeepLabCut (or SLEAP) pose-estimation data alongside trial CSVs to produce publication-ready figures and statistics.
+The SimplerMaze behavioural analysis pipeline lives in `analysis/simplermaze/first_paper_exploratory_analysis/`. It processes DeepLabCut (or SLEAP) pose-estimation data alongside trial CSVs to produce publication-ready figures and statistics.
 
 ### Prerequisites
 
@@ -395,16 +382,14 @@ python 03_transition_probabilities.py
 
 ### Auditory Analysis Pipeline
 
-Two independent analysis scripts live under `analysis/auditory/`:
+The auditory analysis pipeline lives under `analysis/auditory/`. It processes visit data from the 8-arm radial maze across 6 experiment days, producing publication-ready figures, interactive visualisations, and comprehensive statistical reports.
 
-#### 1. Preference Analysis (`01_preference_analysis.py`)
-
-Batch computes preference index (PI) and sensory complexity effects across all mice and experiment days in the 8-arm auditory maze.
+For a detailed technical report on the computational modelling component, see [`analysis/auditory/REPORT_aesthetic_value_model.md`](analysis/auditory/REPORT_aesthetic_value_model.md).
 
 **Prerequisites:**
 
 ```bash
-pip install numpy pandas matplotlib seaborn scipy statsmodels
+pip install numpy pandas matplotlib seaborn scipy statsmodels plotly
 ```
 
 **Expected data layout:**
@@ -414,6 +399,7 @@ pip install numpy pandas matplotlib seaborn scipy statsmodels
   w1_d1/                            # Day 1: temporal envelope modulation
     time_2025-06-04_14_22_30mouse10049/
       trials_time_2025-06-04_14_22_30.csv
+      mouseXXXXX_..._detailed_visits.csv   # optional ground-truth log
     ...
   w1_d2/                            # Day 2: consonant/dissonant intervals
   w1_d3/                            # Day 3: consonant/dissonant intervals
@@ -427,6 +413,7 @@ pip install numpy pandas matplotlib seaborn scipy statsmodels
 Edit `preference_analysis_config.py`:
 - `BASE_PATH` -- root folder containing `w1_d1/`, `w1_d2/`, etc.
 - Or set the `MAZE_DATA_DIR` environment variable to override.
+- `VISIT_CLIP_MS` env var -- per-visit duration cap in ms (default 10000).
 
 **Running:**
 
@@ -435,9 +422,25 @@ cd analysis/auditory
 # Verify session discovery first:
 python preference_analysis_config.py
 
-# Run the full analysis:
-python 01_preference_analysis.py
+# Run the full batch analysis (generates all figures + stats):
+python run_batch_preference.py
+
+# Optionally check visit-duration outliers:
+python check_visit_outliers.py
+
+# Run the computational model:
+python aesthetic_value_model_4D.py
 ```
+
+**Scripts overview:**
+
+| Script | Description |
+|--------|-------------|
+| `preference_analysis_config.py` | Shared configuration, session discovery, and data loading with DV-first corruption handling |
+| `run_batch_preference.py` | Main batch pipeline: PI computation, 8 static figures, 6 interactive Plotly figures, enhanced statistics |
+| `02_within_trial_preference.py` | Within-trial scatter plots: sound vs silent-arm visit duration per mouse per day |
+| `check_visit_outliers.py` | Diagnostic tool for identifying and reporting visit-duration outliers |
+| `aesthetic_value_model_4D.py` | Brielmann & Dayan (2022) aesthetic value model -- 4D extension for mouse acoustic preference |
 
 **Outputs** (saved to `BATCH_ANALYSIS/` inside the data folder):
 
@@ -445,6 +448,7 @@ python 01_preference_analysis.py
 |------|-------------|
 | `preference_data.csv` | Per-mouse, per-session PI + visit metrics |
 | `stimulus_breakdown.csv` | Per-stimulus-type visit duration |
+| `within_trial_preference.csv` | Per-mouse, per-day sound vs silent-arm durations |
 | `fig1_pi_trajectories.png/pdf` | Individual mouse PI trajectories across days |
 | `fig2_pi_by_day.png/pdf` | Mean PI per day with 95% CI |
 | `fig3_pi_violins.png/pdf` | Violin plots of PI distribution by day |
@@ -452,17 +456,48 @@ python 01_preference_analysis.py
 | `fig5_vocalisation_contrast.png/pdf` | Paired comparison: vocalisation vs other days |
 | `fig6_re_vs_pi.png/pdf` | Roaming entropy vs preference (within & between mouse) |
 | `fig7_icc_summary.png/pdf` | Variance decomposition (ICC) + Kruskal-Wallis |
-| `stats_report.txt` | All statistical test results |
+| `fig8_*.png/pdf` | Additional analysis panels |
+| `fig_within_trial_preference.png/pdf/html` | Within-trial preference scatter (interactive Plotly version with hover) |
+| `fig1_*.html`, `fig3_*.html`, etc. | Interactive Plotly versions of main figures (hover to identify mice) |
+| `stats_report.txt` | Full statistical report (descriptive, inferential, enhanced analyses) |
+| `aesthetic_value_model_4D.png/pdf` | 6-panel computational model figure |
+| `aesthetic_model_4D_predictions.csv` | Per-stimulus, per-day model predictions |
+| `aesthetic_model_4D_params.csv` | Best-fit model parameters |
 
-**Key analyses:**
+#### Key analyses
 
-- **Preference Index (PI):** `(Avg_Sound_Duration - Avg_Silent_Duration) / (Avg_Sound_Duration + Avg_Silent_Duration)`. Ranges from -1 (prefer silence) to +1 (prefer sound).
-- **Sensory complexity:** Within each day, stimulus types are ordered by complexity (e.g., smooth < constant_rough < complex_rough for TEM day) and visit durations compared via Kruskal-Wallis.
-- **Vocalisation contrast:** Paired Wilcoxon signed-rank comparing each mouse's vocalisation-day PI vs their mean PI on other days.
-- **Mixed-effects models:** (1) Unconditional `PI ~ 1 + (1|mouse)` for ICC decomposition, (2) `PI ~ day + (1|mouse)` to test if vocalisation day differs, (3) `PI ~ RE_within + RE_between + (1|mouse)` to test if exploration predicts preference.
-- **Roaming entropy (RE):** Shannon entropy of time proportions across ROIs during habituation, normalised to [0, 1].
+**1. Preference Index (PI):**
 
-#### 2. Fiber Photometry Alignment (`fibpho_alignment.py`)
+PI is computed using within-trial comparison: sound-playing ROIs vs the silent-control ROI, both measured during sound trials (2, 4, 6, 8) only. This avoids bias from comparing 15-min sound trials against 2-min silent trials.
+
+```
+PI = (Avg_Sound_Duration - Avg_Silent_Duration) / (Avg_Sound_Duration + Avg_Silent_Duration)
+```
+
+Ranges from -1 (prefer silence) to +1 (prefer sound).
+
+**2. Data integrity:**
+
+The pipeline handles a known trial-boundary bug in the experiment control code where visits were not closed at trial end, producing inflated duration values in `trials.csv`. The loader (`load_session_visits`) uses `detailed_visits.csv` as ground truth where available, with a 10 s per-visit clip and sanity caps for fallback to `trials.csv`.
+
+**3. Enhanced statistical analyses:**
+
+| Analysis | Method | Description |
+|----------|--------|-------------|
+| Per-day PI test | One-sample Wilcoxon + rank-biserial effect size | Tests whether PI differs from zero on each day, with Holm-Bonferroni correction |
+| Across-day comparison | Kruskal-Wallis + epsilon-squared | Tests whether PI differs across experiment days |
+| Post-hoc pairwise | Dunn's test (Holm-corrected) | Identifies which day pairs differ significantly |
+| Complexity gradient | Jonckheere-Terpstra trend test | Tests monotone trend in dwell time along the complexity ordering |
+| Vocalisation contrast | Paired Wilcoxon + rank-biserial | Compares vocalisation PI vs overall PI per mouse |
+| Mixed-effects model | LMM with day contrasts + random intercept | `PI ~ day + (1\|mouse)`, reports Nakagawa marginal/conditional R-squared |
+| Model comparison | AIC, BIC, log-likelihood ratio test | Compares null, day-only, and day+RE models |
+| Sensitivity | Beta regression (binomial GLM on scaled PI) | Checks robustness of day effects to distributional assumption |
+
+**4. Computational model (Brielmann & Dayan 2022):**
+
+A 4-dimensional extension of the aesthetic value model, where stimuli are represented as vectors in a feature space of [location_familiarity, spectral_complexity, biological_relevance, temporal_predictability]. The model simulates an agent traversing the full experiment and predicts PI from the difference in aesthetic value between sound and silence. Fitted via 2000 random initialisations of SLSQP. Includes lesioned model comparisons, dimension dropout analysis, and location vs acoustic decomposition. See the [detailed report](analysis/auditory/REPORT_aesthetic_value_model.md) for full documentation.
+
+#### Fiber Photometry Alignment (`fibpho_alignment.py`)
 
 Aligns Tucker-Davis Technologies (TDT) fiber photometry recordings with auditory maze visit CSV timestamps using TTL pulse matching.
 
@@ -533,7 +568,7 @@ Please keep the test suite green and add tests for new functionality.
 - Oluwaseyi Jesusanmi
 - Isabel Maranhao
 - Maja Nowak
-- Marcus Burnell-Spector
+- Narcus Burnell-Spetcor
 - Yuri Elias Rodrigues
   
 
