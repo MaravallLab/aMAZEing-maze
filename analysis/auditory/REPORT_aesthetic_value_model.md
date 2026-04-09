@@ -65,7 +65,7 @@ The Brielmann & Dayan (2022) aesthetic value model provides exactly this framewo
 
 - **Maze:** 8-arm radial, 7 sound arms + 1 silent arm
 - **Reshuffling:** All arm assignments (including silence) randomise every 15 minutes
-- **Sessions:** ~60 minutes per day (approximately 4 reshuffling blocks)
+- **Sessions:** ~90 minutes per day 
 - **Days:** 6 experiment days across 2 weeks, each with different sound categories:
 
 | Day | Sound categories | Mode |
