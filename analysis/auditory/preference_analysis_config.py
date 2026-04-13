@@ -313,6 +313,67 @@ def load_session_visits(sess: "SessionInfo") -> Tuple[Optional[pd.DataFrame], st
     return df, "trials_raw"
 
 
+# ── first-minute roaming entropy ─────────────────────────────────────
+
+def compute_first_minute_re(sess: "SessionInfo", n_rois: int = 8) -> float:
+    """Compute roaming entropy from the first 60 s of habituation (trial 1).
+
+    Uses detailed_visits CSV timestamps to select only visits whose
+    ``sound_on_time`` falls within 60 s of trial start.  Visits that
+    span the 60-s boundary are clipped to the remaining time.
+
+    Returns NaN when detailed_visits is unavailable or has no trial-1 data.
+    """
+    if not sess.detailed_visits_csv:
+        return np.nan
+
+    dv = safe_read_csv(sess.detailed_visits_csv)
+    if dv is None or len(dv) == 0:
+        return np.nan
+
+    required = {"trial_ID", "ROI_visited", "sound_on_time", "time_spent_seconds"}
+    if not required.issubset(dv.columns):
+        return np.nan
+
+    dv = dv.copy()
+    dv["trial_ID"] = pd.to_numeric(dv["trial_ID"], errors="coerce")
+    dv["sound_on_time"] = pd.to_numeric(dv["sound_on_time"], errors="coerce")
+    dv["time_spent_seconds"] = pd.to_numeric(dv["time_spent_seconds"], errors="coerce")
+
+    hab = dv[dv["trial_ID"] == 1].dropna(subset=["sound_on_time", "time_spent_seconds"])
+    if len(hab) == 0:
+        return np.nan
+
+    trial_start = hab["sound_on_time"].min()
+    cutoff = trial_start + 60.0  # 60 seconds
+
+    # Keep visits that start before the cutoff
+    first_min = hab[hab["sound_on_time"] < cutoff].copy()
+    if len(first_min) == 0:
+        return np.nan
+
+    # Clip visits that span the boundary
+    elapsed = first_min["sound_on_time"] - trial_start
+    remaining = 60.0 - elapsed
+    first_min["_dur_clipped"] = first_min["time_spent_seconds"].clip(upper=remaining)
+
+    # Aggregate time per ROI
+    roi_names = [f"ROI{i}" for i in range(1, n_rois + 1)]
+    time_per_roi = []
+    for roi in roi_names:
+        t = first_min.loc[first_min["ROI_visited"] == roi, "_dur_clipped"].sum()
+        time_per_roi.append(t if not np.isnan(t) else 0.0)
+
+    total = sum(time_per_roi)
+    if total <= 0:
+        return np.nan
+
+    from scipy.stats import entropy as shannon_entropy
+    props = np.array(time_per_roi) / total
+    props = props[props > 0]
+    return shannon_entropy(props, base=2) / np.log2(n_rois)
+
+
 # ── run as standalone to verify ───────────────────────────────────────
 
 if __name__ == "__main__":

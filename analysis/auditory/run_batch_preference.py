@@ -283,7 +283,7 @@ def safe_read_csv(path):
 # This ensures run_batch_preference.py uses the exact same DV-first loading,
 # sanity caps, and per-visit clip as 02_within_trial_preference.py.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from preference_analysis_config import load_session_visits
+from preference_analysis_config import load_session_visits, compute_first_minute_re
 
 
 def safe_savefig(fig, path, **kwargs):
@@ -431,6 +431,19 @@ def main():
             d = avg_voc + avg_silent_dur
             voc_pi = (avg_voc - avg_silent_dur) / d if d > 0 else np.nan
 
+        # Other-sounds PI (non-vocalisation, non-silent stimuli)
+        other_subset = actual_sound[actual_sound["_stim_label"] != "vocalisation"]
+        other_time = _safe_sum(other_subset["time_spent"]) if "time_spent" in other_subset.columns else 0
+        other_visits_n = _safe_sum(other_subset["visitation_count"]) if "visitation_count" in other_subset.columns else 0
+        other_sounds_pi = np.nan
+        if other_visits_n > 0:
+            avg_other = other_time / other_visits_n
+            d = avg_other + avg_silent_dur
+            other_sounds_pi = (avg_other - avg_silent_dur) / d if d > 0 else np.nan
+
+        # First-minute roaming entropy (from detailed_visits)
+        re_first_min = compute_first_minute_re(sess)
+
         records.append({
             "mouse_id": sess.mouse_id,
             "day": sess.day,
@@ -444,9 +457,11 @@ def main():
             "avg_silent_dur_ms": avg_silent_dur,
             "preference_index": pi,
             "voc_pi": voc_pi,
+            "other_sounds_pi": other_sounds_pi,
             "hab_time_ms": hab_total,
             "hab_visits": hab_visits,
             "roaming_entropy": roaming_entropy,
+            "re_first_min": re_first_min,
         })
 
         # per-stimulus breakdown
@@ -486,6 +501,11 @@ def main():
     df_stim.to_csv(os.path.join(output_dir, "stimulus_breakdown.csv"), index=False)
     print(f"Saved preference_data.csv ({len(df_pref)} rows)")
     print(f"Saved stimulus_breakdown.csv ({len(df_stim)} rows)")
+
+    # Voc PI vs other sounds PI per session
+    df_voc_other = df_pref[["mouse_id", "day", "day_label", "voc_pi", "other_sounds_pi"]].copy()
+    df_voc_other.to_csv(os.path.join(output_dir, "voc_vs_other_sounds_pi.csv"), index=False)
+    print(f"Saved voc_vs_other_sounds_pi.csv ({len(df_voc_other)} rows)")
 
     if len(df_pref) == 0:
         print("\nERROR: No data loaded. Check that the data path is correct")
@@ -791,6 +811,157 @@ def main():
     safe_savefig(fig6, os.path.join(output_dir, "fig6_re_vs_pi.pdf"),
                  bbox_inches="tight")
     print("  Saved fig6")
+
+    # ── 7b. Fig 6b: First-minute RE vs PI ────────────────────────────
+    print("Plotting Figure 6b: First-minute RE vs PI...")
+    df_re1 = df_pi.dropna(subset=["re_first_min", "preference_index"]).copy()
+    n_re1 = len(df_re1)
+    print(f"  Sessions with first-minute RE: {n_re1} / {len(df_pi)}")
+
+    if n_re1 > 10:
+        fig6b, axes6b = plt.subplots(1, 2, figsize=(14, 6))
+
+        ax = axes6b[0]
+        mm1 = df_re1.groupby("mouse_id").agg(
+            mean_re1=("re_first_min", "mean"),
+            mean_pi=("preference_index", "mean"))
+        df_re1 = df_re1.merge(mm1, on="mouse_id")
+        df_re1["dev_re1"] = df_re1["re_first_min"] - df_re1["mean_re1"]
+        df_re1["dev_pi"] = df_re1["preference_index"] - df_re1["mean_pi"]
+
+        ax.scatter(df_re1["dev_re1"], df_re1["dev_pi"], alpha=0.4, s=20, color="#2a9d8f")
+        r, p = spearmanr(df_re1["dev_re1"], df_re1["dev_pi"])
+        ax.set_xlabel("Dev from mouse mean RE (first min)")
+        ax.set_ylabel("Dev from mouse mean PI")
+        ax.set_title(f"Within-mouse\nSpearman r={r:.3f}, p={p:.4f}")
+        ax.axhline(0, color="grey", ls="--", alpha=0.3)
+        ax.axvline(0, color="grey", ls="--", alpha=0.3)
+        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+        log_stat(f"\nWithin-mouse first-min RE vs PI: r={r:.3f}, p={p:.4f}, n={n_re1}",
+                 stats_lines)
+
+        ax = axes6b[1]
+        ma1 = df_pi.dropna(subset=["re_first_min", "preference_index"]).groupby(
+            "mouse_id").agg(mean_re1=("re_first_min", "mean"),
+                            mean_pi=("preference_index", "mean")).reset_index()
+        if len(ma1) > 5:
+            ax.scatter(ma1["mean_re1"], ma1["mean_pi"], alpha=0.7, s=40, color="#e76f51")
+            r, p = spearmanr(ma1["mean_re1"], ma1["mean_pi"])
+            z = np.polyfit(ma1["mean_re1"], ma1["mean_pi"], 1)
+            x_line = np.linspace(ma1["mean_re1"].min(), ma1["mean_re1"].max(), 100)
+            ax.plot(x_line, np.polyval(z, x_line), "--", color="#e76f51", alpha=0.5)
+            ax.set_xlabel("Mean First-Minute RE"); ax.set_ylabel("Mean PI")
+            ax.set_title(f"Between-mouse\nSpearman r={r:.3f}, p={p:.4f}")
+            ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+            log_stat(f"Between-mouse first-min RE vs PI: n={len(ma1)}, r={r:.3f}, p={p:.4f}",
+                     stats_lines)
+
+        both_re = df_pi.dropna(subset=["roaming_entropy", "re_first_min"])
+        if len(both_re) > 5:
+            r_c, p_c = spearmanr(both_re["roaming_entropy"], both_re["re_first_min"])
+            log_stat(f"Full-hab RE vs first-min RE: r={r_c:.3f}, p={p_c:.4f}, n={len(both_re)}",
+                     stats_lines)
+
+        plt.suptitle("First-minute RE (first 60s of habituation) predicts PI",
+                     fontsize=14, y=1.02)
+        plt.tight_layout()
+        fig6b.savefig(os.path.join(output_dir, "fig6b_re_firstmin_vs_pi.png"),
+                      dpi=200, bbox_inches="tight")
+        safe_savefig(fig6b, os.path.join(output_dir, "fig6b_re_firstmin_vs_pi.pdf"),
+                     bbox_inches="tight")
+        print("  Saved fig6b")
+    else:
+        print(f"  Skipping fig6b: only {n_re1} sessions with first-minute RE")
+
+    # ── 7c. Fig: Voc PI vs Other Sounds PI ───────────────────────────
+    print("Plotting Figure: Voc PI vs Other Sounds PI...")
+    df_voc_vs = df_pref.dropna(subset=["voc_pi", "other_sounds_pi"]).copy()
+    df_voc_vs = df_voc_vs[df_voc_vs["day"] != "w2_vocalisations"]
+
+    if len(df_voc_vs) > 0:
+        days_vb = [d for d in DAY_ORDER
+                   if d in df_voc_vs["day"].values and d != "w2_vocalisations"]
+        n_panels = len(days_vb) + 1  # +1 for pooled
+        nc = min(n_panels, 3)
+        nr = int(np.ceil(n_panels / nc))
+
+        fig_vo, axes_vo = plt.subplots(nr, nc, figsize=(6 * nc, 5.5 * nr), squeeze=False)
+
+        all_vv, all_ov = [], []
+        for idx, day in enumerate(days_vb):
+            r, c = divmod(idx, nc)
+            ax = axes_vo[r][c]
+            sub = df_voc_vs[df_voc_vs["day"] == day]
+            ax.scatter(sub["other_sounds_pi"], sub["voc_pi"], s=40, color="#E63946",
+                       edgecolors="white", linewidths=0.5, zorder=3)
+            lo = min(sub["other_sounds_pi"].min(), sub["voc_pi"].min()) * 1.1
+            hi = max(sub["other_sounds_pi"].max(), sub["voc_pi"].max()) * 1.1
+            lo, hi = min(lo, -0.05), max(hi, 0.05)
+            ax.plot([lo, hi], [lo, hi], "--", color="black", lw=1, alpha=0.6, zorder=1)
+            ax.set_xlim(lo, hi); ax.set_ylim(lo, hi)
+            ax.set_aspect("equal", adjustable="box")
+            ax.set_xlabel("Other Sounds PI", fontsize=10)
+            ax.set_ylabel("Vocalisation PI", fontsize=10)
+            n = len(sub)
+            n_above = int((sub["voc_pi"] > sub["other_sounds_pi"]).sum())
+            title = f"{DAY_SHORT[day]} (n={n})"
+            vv = sub["voc_pi"].values; ov = sub["other_sounds_pi"].values
+            all_vv.extend(vv); all_ov.extend(ov)
+            if n >= 6:
+                diff = vv - ov; diff_nz = diff[diff != 0]
+                if len(diff_nz) >= 6:
+                    stat, p = wilcoxon(diff_nz)
+                    title += f"\nWilcoxon p={p:.4f}"
+            ax.set_title(title, fontsize=11, fontweight="bold")
+            ax.text(0.03, 0.97, f"{n_above} prefer voc",
+                    transform=ax.transAxes, fontsize=9, va="top", color="#E63946")
+            ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+            ax.grid(True, alpha=0.15)
+
+        # Pooled panel
+        pi_idx = len(days_vb)
+        r, c = divmod(pi_idx, nc)
+        ax = axes_vo[r][c]
+        all_vv, all_ov = np.array(all_vv), np.array(all_ov)
+        ax.scatter(all_ov, all_vv, s=40, color="#333333",
+                   edgecolors="white", linewidths=0.5, zorder=3)
+        lo = min(all_ov.min(), all_vv.min()) * 1.1
+        hi = max(all_ov.max(), all_vv.max()) * 1.1
+        lo, hi = min(lo, -0.05), max(hi, 0.05)
+        ax.plot([lo, hi], [lo, hi], "--", color="black", lw=1, alpha=0.6, zorder=1)
+        ax.set_xlim(lo, hi); ax.set_ylim(lo, hi)
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_xlabel("Other Sounds PI", fontsize=10)
+        ax.set_ylabel("Vocalisation PI", fontsize=10)
+        n_pool = len(all_vv)
+        n_above_pool = int((all_vv > all_ov).sum())
+        pool_title = f"All days pooled (n={n_pool})"
+        if n_pool >= 6:
+            diff_pool = all_vv - all_ov; diff_nz = diff_pool[diff_pool != 0]
+            if len(diff_nz) >= 6:
+                stat, p = wilcoxon(diff_nz)
+                pool_title += f"\nWilcoxon p={p:.4f}"
+        ax.set_title(pool_title, fontsize=11, fontweight="bold")
+        ax.text(0.03, 0.97, f"{n_above_pool} prefer voc",
+                transform=ax.transAxes, fontsize=9, va="top", color="#E63946")
+        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+        ax.grid(True, alpha=0.15)
+        for idx in range(pi_idx + 1, nr * nc):
+            r, c = divmod(idx, nc)
+            axes_vo[r][c].set_visible(False)
+
+        fig_vo.suptitle(
+            "Vocalisation PI vs Other Sounds PI per session\n"
+            "(above diagonal = prefers vocalisation)",
+            fontsize=14, fontweight="bold", y=1.02)
+        plt.tight_layout()
+        fig_vo.savefig(os.path.join(output_dir, "fig_voc_vs_other_sounds_pi.png"),
+                       dpi=200, bbox_inches="tight")
+        safe_savefig(fig_vo, os.path.join(output_dir, "fig_voc_vs_other_sounds_pi.pdf"),
+                     bbox_inches="tight")
+        print("  Saved fig_voc_vs_other_sounds_pi")
+    else:
+        print("  No sessions with both voc PI and other sounds PI — skipping")
 
     # ── 8. Mixed models + Fig 7 ──────────────────────────────────────
     print("\nFitting mixed-effects models...")
@@ -1806,13 +1977,176 @@ def main():
     log_stat("#  END OF ENHANCED ANALYSIS", stats_lines)
     log_stat("#" * 70, stats_lines)
 
-    # ── 12. Save stats ───────────────────────────────────────────────
+    # ── 12. Vocalisation vs other sounds (within-session paired) ────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("VOCALISATION vs OTHER SOUNDS (within-session, paired)", stats_lines)
+    log_stat("=" * 60, stats_lines)
+    log_stat("For each mouse × day, compare vocalisation avg visit duration", stats_lines)
+    log_stat("against the mean of all other (non-vocalisation) stimulus types.", stats_lines)
+
+    for d in DAY_ORDER:
+        day_stim = df_stim[df_stim["day"] == d]
+        if len(day_stim) == 0:
+            continue
+
+        mouse_stim = (
+            day_stim.groupby(["mouse_id", "stim_type"])["avg_visit_dur_ms"]
+            .mean()
+            .reset_index()
+        )
+
+        if EXPERIMENT_DAYS[d]["mode"] == "vocalisation":
+            log_stat(f"\n  {DAY_SHORT[d]}: skipped (all stimuli are vocalisations)",
+                     stats_lines)
+            continue
+
+        voc_labels = {"vocalisation"}
+        paired_voc = []
+        paired_other = []
+        for mouse in mouse_stim["mouse_id"].unique():
+            msub = mouse_stim[mouse_stim["mouse_id"] == mouse]
+            voc_rows = msub[msub["stim_type"].isin(voc_labels)]
+            other_rows = msub[~msub["stim_type"].isin(voc_labels | {"silent", "unknown"})]
+            if len(voc_rows) == 0 or len(other_rows) == 0:
+                continue
+            paired_voc.append(voc_rows["avg_visit_dur_ms"].mean())
+            paired_other.append(other_rows["avg_visit_dur_ms"].mean())
+
+        paired_voc = np.array(paired_voc)
+        paired_other = np.array(paired_other)
+        n = len(paired_voc)
+
+        if n == 0:
+            log_stat(f"\n  {DAY_SHORT[d]}: no mice with both voc and other sounds",
+                     stats_lines)
+            continue
+
+        diff = paired_voc - paired_other
+        log_stat(f"\n  {DAY_SHORT[d]} (n={n} mice):", stats_lines)
+        log_stat(f"    Vocalisation avg: {np.mean(paired_voc):.0f}ms "
+                 f"(median {np.median(paired_voc):.0f}ms)", stats_lines)
+        log_stat(f"    Other sounds avg: {np.mean(paired_other):.0f}ms "
+                 f"(median {np.median(paired_other):.0f}ms)", stats_lines)
+        log_stat(f"    Difference (voc − other): mean={np.mean(diff):+.0f}ms, "
+                 f"median={np.median(diff):+.0f}ms", stats_lines)
+
+        if n >= 6:
+            diff_nz = diff[diff != 0]
+            if len(diff_nz) >= 6:
+                stat, p = wilcoxon(diff_nz)
+                log_stat(f"    Wilcoxon signed-rank: W={stat:.1f}, p={p:.4f}",
+                         stats_lines)
+            else:
+                log_stat(f"    Too few non-zero differences for Wilcoxon ({len(diff_nz)})",
+                         stats_lines)
+        else:
+            log_stat(f"    Too few mice for test (n={n})", stats_lines)
+
+    # ── 12b. Voc PI vs Other Sounds PI (per-day paired test) ────────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("VOCALISATION PI vs OTHER SOUNDS PI (per-day, paired)", stats_lines)
+    log_stat("=" * 60, stats_lines)
+    log_stat("For each mouse × day, compare voc_pi against other_sounds_pi.",
+             stats_lines)
+
+    df_vo_stats = df_pref.dropna(subset=["voc_pi", "other_sounds_pi"]).copy()
+    df_vo_stats = df_vo_stats[df_vo_stats["day"] != "w2_vocalisations"]
+
+    for d in DAY_ORDER:
+        if d == "w2_vocalisations":
+            log_stat(f"\n  {DAY_SHORT[d]}: skipped (all stimuli are vocalisations)",
+                     stats_lines)
+            continue
+        sub = df_vo_stats[df_vo_stats["day"] == d]
+        n = len(sub)
+        if n == 0:
+            continue
+
+        vv = sub["voc_pi"].values
+        ov = sub["other_sounds_pi"].values
+        diff = vv - ov
+
+        log_stat(f"\n  {DAY_SHORT[d]} (n={n} mice):", stats_lines)
+        log_stat(f"    Voc PI: mean={np.mean(vv):.3f}, median={np.median(vv):.3f}",
+                 stats_lines)
+        log_stat(f"    Other PI: mean={np.mean(ov):.3f}, median={np.median(ov):.3f}",
+                 stats_lines)
+        log_stat(f"    Diff (voc − other): mean={np.mean(diff):+.3f}, "
+                 f"median={np.median(diff):+.3f}", stats_lines)
+
+        if n >= 6:
+            diff_nz = diff[diff != 0]
+            if len(diff_nz) >= 6:
+                stat, p = wilcoxon(diff_nz)
+                log_stat(f"    Wilcoxon signed-rank: W={stat:.1f}, p={p:.4f}",
+                         stats_lines)
+            else:
+                log_stat(f"    Too few non-zero differences ({len(diff_nz)})",
+                         stats_lines)
+        else:
+            log_stat(f"    Too few mice for test (n={n})", stats_lines)
+
+    # Pooled across days
+    all_vo = df_vo_stats["voc_pi"].values
+    all_ot = df_vo_stats["other_sounds_pi"].values
+    n_pool = len(all_vo)
+    if n_pool >= 6:
+        diff_pool = all_vo - all_ot
+        diff_nz = diff_pool[diff_pool != 0]
+        if len(diff_nz) >= 6:
+            stat, p = wilcoxon(diff_nz)
+            log_stat(f"\n  Pooled across days (n={n_pool}):", stats_lines)
+            log_stat(f"    Voc PI mean={np.mean(all_vo):.3f}, "
+                     f"Other PI mean={np.mean(all_ot):.3f}", stats_lines)
+            log_stat(f"    Wilcoxon signed-rank: W={stat:.1f}, p={p:.4f}",
+                     stats_lines)
+
+    # ── 12c. First-minute RE stats ───────────────────────────────────
+    log_stat("\n" + "=" * 60, stats_lines)
+    log_stat("FIRST-MINUTE ROAMING ENTROPY", stats_lines)
+    log_stat("=" * 60, stats_lines)
+
+    df_re1_stats = df_pi.dropna(subset=["re_first_min"]).copy()
+    n_re1_total = len(df_re1_stats)
+    log_stat(f"  Sessions with first-minute RE: {n_re1_total} / {len(df_pi)}",
+             stats_lines)
+
+    if n_re1_total > 5:
+        log_stat(f"  Mean first-min RE: {df_re1_stats['re_first_min'].mean():.3f}",
+                 stats_lines)
+        log_stat(f"  Median first-min RE: {df_re1_stats['re_first_min'].median():.3f}",
+                 stats_lines)
+
+        both_re = df_pi.dropna(subset=["roaming_entropy", "re_first_min"])
+        if len(both_re) > 5:
+            r, p = spearmanr(both_re["roaming_entropy"], both_re["re_first_min"])
+            log_stat(f"\n  Full-hab RE vs first-min RE:", stats_lines)
+            log_stat(f"    Spearman r={r:.3f}, p={p:.4f}, n={len(both_re)}",
+                     stats_lines)
+
+        if n_re1_total > 10:
+            r, p = spearmanr(df_re1_stats["re_first_min"],
+                             df_re1_stats["preference_index"])
+            log_stat(f"\n  First-min RE vs PI (all sessions):", stats_lines)
+            log_stat(f"    Spearman r={r:.3f}, p={p:.4f}, n={n_re1_total}",
+                     stats_lines)
+
+        mouse_avg_1m = df_re1_stats.groupby("mouse_id").agg(
+            mean_re1=("re_first_min", "mean"),
+            mean_pi=("preference_index", "mean")).reset_index()
+        if len(mouse_avg_1m) > 5:
+            r, p = spearmanr(mouse_avg_1m["mean_re1"], mouse_avg_1m["mean_pi"])
+            log_stat(f"\n  Between-mouse first-min RE vs PI:", stats_lines)
+            log_stat(f"    Spearman r={r:.3f}, p={p:.4f}, n={len(mouse_avg_1m)}",
+                     stats_lines)
+
+    # ── 13. Save stats ───────────────────────────────────────────────
     stats_path = os.path.join(output_dir, "stats_report.txt")
     with open(stats_path, "w") as f:
         f.write("\n".join(stats_lines))
     print(f"\nStats report saved to {stats_path}")
 
-    # ── 13. Run within-trial preference analysis (02_*) ──────────────
+    # ── 14. Run within-trial preference analysis (02_*) ──────────────
     # 02_within_trial_preference.py uses preference_analysis_config.py,
     # which respects the MAZE_DATA_DIR env var.  We pass base_path that way.
     print(f"\n{'='*60}")
