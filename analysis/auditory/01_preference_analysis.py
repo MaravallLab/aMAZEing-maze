@@ -1200,7 +1200,7 @@ for d in DAY_ORDER:
              f"(median {np.median(paired_voc):.0f}ms)")
     log_stat(f"    Other sounds avg: {np.mean(paired_other):.0f}ms "
              f"(median {np.median(paired_other):.0f}ms)")
-    log_stat(f"    Difference (voc − other): mean={np.mean(diff):+.0f}ms, "
+    log_stat(f"    Difference (voc - other): mean={np.mean(diff):+.0f}ms, "
              f"median={np.median(diff):+.0f}ms")
 
     if n >= 6:
@@ -1240,7 +1240,7 @@ for d in DAY_ORDER:
     log_stat(f"\n  {DAY_SHORT[d]} (n={n} mice):")
     log_stat(f"    Voc PI: mean={np.mean(vv):.3f}, median={np.median(vv):.3f}")
     log_stat(f"    Other PI: mean={np.mean(ov):.3f}, median={np.median(ov):.3f}")
-    log_stat(f"    Diff (voc − other): mean={np.mean(diff):+.3f}, "
+    log_stat(f"    Diff (voc - other): mean={np.mean(diff):+.3f}, "
              f"median={np.median(diff):+.3f}")
 
     if n >= 6:
@@ -1309,7 +1309,7 @@ if n_re1_total > 5:
 # ── 13. save stats report ─────────────────────────────────────────────
 
 stats_path = os.path.join(OUTPUT_DIR, "stats_report.txt")
-with open(stats_path, "w") as f:
+with open(stats_path, "w", encoding="utf-8") as f:
     f.write("\n".join(stats_lines))
 print(f"\nStats report saved to {stats_path}")
 

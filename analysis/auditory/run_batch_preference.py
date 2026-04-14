@@ -2027,7 +2027,7 @@ def main():
                  f"(median {np.median(paired_voc):.0f}ms)", stats_lines)
         log_stat(f"    Other sounds avg: {np.mean(paired_other):.0f}ms "
                  f"(median {np.median(paired_other):.0f}ms)", stats_lines)
-        log_stat(f"    Difference (voc − other): mean={np.mean(diff):+.0f}ms, "
+        log_stat(f"    Difference (voc - other): mean={np.mean(diff):+.0f}ms, "
                  f"median={np.median(diff):+.0f}ms", stats_lines)
 
         if n >= 6:
@@ -2071,7 +2071,7 @@ def main():
                  stats_lines)
         log_stat(f"    Other PI: mean={np.mean(ov):.3f}, median={np.median(ov):.3f}",
                  stats_lines)
-        log_stat(f"    Diff (voc − other): mean={np.mean(diff):+.3f}, "
+        log_stat(f"    Diff (voc - other): mean={np.mean(diff):+.3f}, "
                  f"median={np.median(diff):+.3f}", stats_lines)
 
         if n >= 6:
@@ -2142,7 +2142,7 @@ def main():
 
     # ── 13. Save stats ───────────────────────────────────────────────
     stats_path = os.path.join(output_dir, "stats_report.txt")
-    with open(stats_path, "w") as f:
+    with open(stats_path, "w", encoding="utf-8") as f:
         f.write("\n".join(stats_lines))
     print(f"\nStats report saved to {stats_path}")
 
