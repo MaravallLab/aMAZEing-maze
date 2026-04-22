@@ -266,33 +266,35 @@ for sess in all_sessions:
     denom = avg_sound_dur + avg_silent_dur
     pi = (avg_sound_dur - avg_silent_dur) / denom if denom > 0 else np.nan
 
-    # Vocalisation-specific PI
+    # Vocalisation-specific PI + average duration
     voc_subset = actual_sound[actual_sound["_stim_label"] == "vocalisation"]
     voc_time = _safe_val(voc_subset["time_spent"].sum())
     voc_visits_n = _safe_val(voc_subset["visitation_count"].sum())
+    avg_voc_dur = np.nan
     voc_pi = np.nan
     if voc_visits_n > 0:
-        avg_voc = voc_time / voc_visits_n
-        d = avg_voc + avg_silent_dur
-        voc_pi = (avg_voc - avg_silent_dur) / d if d > 0 else np.nan
+        avg_voc_dur = voc_time / voc_visits_n
+        d = avg_voc_dur + avg_silent_dur
+        voc_pi = (avg_voc_dur - avg_silent_dur) / d if d > 0 else np.nan
     elif sess.day == "w2_vocalisations" and len(actual_sound) > 0:
         # all non-silent stim types are vocalisations
         vt = _safe_val(actual_sound["time_spent"].sum())
         vv = _safe_val(actual_sound["visitation_count"].sum())
         if vv > 0:
-            avg_voc = vt / vv
-            d = avg_voc + avg_silent_dur
-            voc_pi = (avg_voc - avg_silent_dur) / d if d > 0 else np.nan
+            avg_voc_dur = vt / vv
+            d = avg_voc_dur + avg_silent_dur
+            voc_pi = (avg_voc_dur - avg_silent_dur) / d if d > 0 else np.nan
 
-    # Other-sounds PI (non-vocalisation, non-silent stimuli)
+    # Other-sounds PI + average duration (non-vocalisation, non-silent stimuli)
     other_subset = actual_sound[actual_sound["_stim_label"] != "vocalisation"]
     other_time = _safe_val(other_subset["time_spent"].sum())
     other_visits_n = _safe_val(other_subset["visitation_count"].sum())
+    avg_other_dur = np.nan
     other_sounds_pi = np.nan
     if other_visits_n > 0:
-        avg_other = other_time / other_visits_n
-        d = avg_other + avg_silent_dur
-        other_sounds_pi = (avg_other - avg_silent_dur) / d if d > 0 else np.nan
+        avg_other_dur = other_time / other_visits_n
+        d = avg_other_dur + avg_silent_dur
+        other_sounds_pi = (avg_other_dur - avg_silent_dur) / d if d > 0 else np.nan
 
     # First-minute roaming entropy (from detailed_visits)
     re_first_min = compute_first_minute_re(sess)
@@ -310,7 +312,10 @@ for sess in all_sessions:
         "avg_silent_dur_ms": avg_silent_dur,
         "preference_index": pi,
         "voc_pi": voc_pi,
+        "avg_voc_dur_ms": avg_voc_dur,
         "other_sounds_pi": other_sounds_pi,
+        "avg_other_sounds_dur_ms": avg_other_dur,
+        "avg_silent_dur_ms": avg_silent_dur,
         "hab_time_ms": hab_total,
         "hab_visits": hab_visits,
         "roaming_entropy": roaming_entropy,
@@ -356,8 +361,13 @@ df_stim.to_csv(os.path.join(OUTPUT_DIR, "stimulus_breakdown.csv"), index=False)
 print(f"Saved preference_data.csv ({len(df_pref)} rows)")
 print(f"Saved stimulus_breakdown.csv ({len(df_stim)} rows)")
 
-# Voc PI vs other sounds PI per session
-df_voc_other = df_pref[["mouse_id", "day", "day_label", "voc_pi", "other_sounds_pi"]].copy()
+# Voc PI vs other sounds PI per session (with underlying average durations)
+voc_other_cols = [
+    "mouse_id", "day", "day_label",
+    "avg_voc_dur_ms", "avg_other_sounds_dur_ms", "avg_silent_dur_ms",
+    "voc_pi", "other_sounds_pi",
+]
+df_voc_other = df_pref[[c for c in voc_other_cols if c in df_pref.columns]].copy()
 df_voc_other.to_csv(os.path.join(OUTPUT_DIR, "voc_vs_other_sounds_pi.csv"), index=False)
 print(f"Saved voc_vs_other_sounds_pi.csv ({len(df_voc_other)} rows)")
 
