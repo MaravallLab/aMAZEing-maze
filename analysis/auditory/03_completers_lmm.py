@@ -153,6 +153,29 @@ def variance_components(model) -> dict:
     return {"var_re": var_re, "var_resid": var_resid, "icc": icc}
 
 
+def safe_random_effects(result):
+    """Return result.random_effects as a dict, or {} if the random-effects
+    covariance is singular / cannot be inverted.
+
+    statsmodels.MixedLMResults.random_effects calls np.linalg.inv(self.cov_re),
+    which raises LinAlgError -> ValueError when the between-group variance
+    estimate collapses to (near-)zero. That is common with small completer
+    samples on outcomes where almost all variation is within-mouse.
+    """
+    try:
+        return dict(result.random_effects)
+    except (np.linalg.LinAlgError, ValueError, Exception):
+        return {}
+
+
+def safe_random_effects_cov(result):
+    """Same as above for result.random_effects_cov."""
+    try:
+        return dict(result.random_effects_cov)
+    except (np.linalg.LinAlgError, ValueError, Exception):
+        return {}
+
+
 def nakagawa_r2(model, df, outcome) -> dict:
     """Approximate marginal & conditional R^2 (Nakagawa & Schielzeth, 2013).
     var_f = variance of fitted fixed-effect predictions
@@ -168,8 +191,10 @@ def nakagawa_r2(model, df, outcome) -> dict:
         except Exception:
             fitted_full = np.asarray(model.predict(df))
 
-        # Subtract per-row random intercept to get pure fixed-effect prediction
-        re_dict = model.random_effects
+        # Subtract per-row random intercept to get pure fixed-effect prediction.
+        # If the RE covariance is singular, treat all BLUPs as 0 (collapses to
+        # the fixed-effect-only prediction, which is correct for marginal R^2).
+        re_dict = safe_random_effects(model)
         per_row_re = np.array([
             float(re_dict[g].iloc[0]) if g in re_dict and len(re_dict[g]) > 0 else 0.0
             for g in df["mouse_id"].values
@@ -326,18 +351,32 @@ def plot_caterpillar(model_results: dict, df_completers: pd.DataFrame,
             ax.set_visible(False)
             continue
         result = m1["result"]
-        re_dict = result.random_effects
+        re_dict = safe_random_effects(result)
+        if not re_dict:
+            ax.set_title(f"{label}\n(singular RE covariance)")
+            ax.text(0.5, 0.5,
+                    "Random-intercept variance ~ 0:\nBLUPs not identifiable",
+                    ha="center", va="center", transform=ax.transAxes,
+                    fontsize=9, color="#888888")
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for sp in ax.spines.values():
+                sp.set_visible(False)
+            continue
         items = [(g, float(v.iloc[0])) for g, v in re_dict.items()]
         items.sort(key=lambda kv: kv[1])
         mice = [k for k, _ in items]
         vals = np.array([v for _, v in items])
 
         # SE per group: posterior SD of random intercept
-        try:
-            pcov = result.random_effects_cov
-            ses = np.array([np.sqrt(float(pcov[g].iloc[0, 0]))
-                            for g in mice])
-        except Exception:
+        pcov = safe_random_effects_cov(result)
+        if pcov:
+            try:
+                ses = np.array([np.sqrt(float(pcov[g].iloc[0, 0]))
+                                for g in mice])
+            except Exception:
+                ses = np.full_like(vals, np.nan)
+        else:
             ses = np.full_like(vals, np.nan)
 
         y = np.arange(len(mice))
@@ -682,10 +721,16 @@ def main():
                 log(f"    LRT vs M2: chi2={lr['lrt_chi2']:.3f}, df={lr['lrt_df']}, "
                     f"p={lr['lrt_p']:.4f}", stats_lines)
 
-        # BLUPs from M1 (the user's primary model)
+        # BLUPs from M1 (the user's primary model). When the random-intercept
+        # variance is degenerate, statsmodels cannot invert cov_re and
+        # random_effects raises -- in that case we skip BLUP rows and log it.
         m1 = results.get("M1")
         if m1 is not None:
-            re_dict = m1["result"].random_effects
+            re_dict = safe_random_effects(m1["result"])
+            if not re_dict:
+                log(f"  [{out_col}] M1: random-intercept covariance singular; "
+                    f"BLUPs not identifiable -- skipping per-mouse intercepts.",
+                    stats_lines)
             for g, v in re_dict.items():
                 blup_rows.append({
                     "outcome": out_col, "model": "M1",
