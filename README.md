@@ -422,8 +422,16 @@ cd analysis/auditory
 # Verify session discovery first:
 python preference_analysis_config.py
 
-# Run the full batch analysis (generates all figures + stats):
+# Option A: standalone single-pipeline run (no batch summary CSV):
+python 01_preference_analysis.py
+
+# Option B (recommended): full batch analysis (generates all CSVs + figures + stats,
+# automatically calls 02_within_trial_preference.py at the end):
 python run_batch_preference.py
+
+# Optional: completers-only linear mixed model on the batch CSV
+# (run AFTER run_batch_preference.py so preference_data.csv exists):
+python 03_completers_lmm.py /path/to/8_arms_w_voc
 
 # Optionally check visit-duration outliers:
 python check_visit_outliers.py
@@ -436,9 +444,11 @@ python aesthetic_value_model_4D.py
 
 | Script | Description |
 |--------|-------------|
-| `preference_analysis_config.py` | Shared configuration, session discovery, and data loading with DV-first corruption handling |
-| `run_batch_preference.py` | Main batch pipeline: PI computation, 8 static figures, 6 interactive Plotly figures, enhanced statistics |
+| `preference_analysis_config.py` | Shared configuration, session discovery, data loading with DV-first corruption handling, and `compute_first_minute_re` helper |
+| `01_preference_analysis.py` | Standalone single-pipeline driver for PI + RE + first-minute RE + voc-vs-other-sounds analysis (mirrors `run_batch_preference` outputs without the batch summary CSV) |
+| `run_batch_preference.py` | Main batch pipeline: per-mouse/day PI computation, 8+ static figures, interactive Plotly figures, enhanced statistics; auto-invokes `02_within_trial_preference.py` |
 | `02_within_trial_preference.py` | Within-trial scatter plots: sound vs silent-arm visit duration per mouse per day |
+| `03_completers_lmm.py` | Completers-only linear mixed-model analysis: filters mice present on all required days and fits four nested LMMs (null / day fixed / linear trend / random slopes) on PI, voc PI, other-sounds PI, RE, and first-minute RE |
 | `check_visit_outliers.py` | Diagnostic tool for identifying and reporting visit-duration outliers |
 | `aesthetic_value_model_4D.py` | Brielmann & Dayan (2022) aesthetic value model -- 4D extension for mouse acoustic preference |
 
@@ -446,23 +456,39 @@ python aesthetic_value_model_4D.py
 
 | File | Description |
 |------|-------------|
-| `preference_data.csv` | Per-mouse, per-session PI + visit metrics |
+| `preference_data.csv` | Per-mouse, per-session PI + visit metrics. Includes `preference_index`, `voc_pi`, `other_sounds_pi`, `avg_voc_dur_ms`, `avg_other_sounds_dur_ms`, `roaming_entropy`, and `re_first_min` |
 | `stimulus_breakdown.csv` | Per-stimulus-type visit duration |
 | `within_trial_preference.csv` | Per-mouse, per-day sound vs silent-arm durations |
+| `voc_vs_other_sounds_pi.csv` | Per-session voc PI and other-sounds PI side-by-side, including the average voc / other-sounds / silent durations used to compute each index |
 | `fig1_pi_trajectories.png/pdf` | Individual mouse PI trajectories across days |
 | `fig2_pi_by_day.png/pdf` | Mean PI per day with 95% CI |
 | `fig3_pi_violins.png/pdf` | Violin plots of PI distribution by day |
 | `fig4_complexity_heatmap.png/pdf` | Visit duration by stimulus type per day |
 | `fig5_vocalisation_contrast.png/pdf` | Paired comparison: vocalisation vs other days |
 | `fig6_re_vs_pi.png/pdf` | Roaming entropy vs preference (within & between mouse) |
+| `fig6b_re_firstmin_vs_pi.png/pdf` | First-minute roaming entropy (first 60 s of habituation) vs PI, within- and between-mouse panels |
 | `fig7_icc_summary.png/pdf` | Variance decomposition (ICC) + Kruskal-Wallis |
 | `fig8_*.png/pdf` | Additional analysis panels |
+| `fig_voc_vs_other_sounds_pi.png/pdf` | Per-day scatter of voc PI vs other-sounds PI plus pooled panel |
 | `fig_within_trial_preference.png/pdf/html` | Within-trial preference scatter (interactive Plotly version with hover) |
 | `fig1_*.html`, `fig3_*.html`, etc. | Interactive Plotly versions of main figures (hover to identify mice) |
-| `stats_report.txt` | Full statistical report (descriptive, inferential, enhanced analyses) |
+| `stats_report.txt` | Full statistical report (descriptive, inferential, enhanced analyses, plus sections 12b voc vs other-sounds and 12c first-minute RE) |
 | `aesthetic_value_model_4D.png/pdf` | 6-panel computational model figure |
 | `aesthetic_model_4D_predictions.csv` | Per-stimulus, per-day model predictions |
 | `aesthetic_model_4D_params.csv` | Best-fit model parameters |
+
+**Completers LMM outputs** (produced by `03_completers_lmm.py`, saved to `BATCH_ANALYSIS/completers/` by default):
+
+| File | Description |
+|------|-------------|
+| `completers_summary.csv` | Filtered subset (mice present on all required days) with PI, voc PI, other-sounds PI, RE, and first-minute RE per session |
+| `completers_lmm_fixed_effects.csv` | Fixed-effects estimates (coef, SE, z, p, 95% CI) for every fitted model and outcome |
+| `completers_lmm_variance.csv` | Variance components (between-mouse, residual, ICC, marginal R-squared, conditional R-squared) per model |
+| `completers_lmm_random_intercepts.csv` | Per-mouse BLUPs (random intercepts) with 95% CI from the day-fixed model |
+| `completers_stats_report.txt` | Human-readable summary including LRT comparisons (M0 vs M1, M2 vs M3) and Nakagawa & Schielzeth (2013) R-squared |
+| `fig_completers_caterpillar.png/pdf` | Per-mouse random-intercept caterpillar plot (BLUPs ranked with 95% CI) |
+| `fig_completers_day_estimates.png/pdf` | Estimated marginal means by day from the day-fixed LMM |
+| `fig_completers_spaghetti.png/pdf` | Per-mouse trajectories across sessions (one line per completer) |
 
 #### Key analyses
 
@@ -492,8 +518,32 @@ The pipeline handles a known trial-boundary bug in the experiment control code w
 | Mixed-effects model | LMM with day contrasts + random intercept | `PI ~ day + (1\|mouse)`, reports Nakagawa marginal/conditional R-squared |
 | Model comparison | AIC, BIC, log-likelihood ratio test | Compares null, day-only, and day+RE models |
 | Sensitivity | Beta regression (binomial GLM on scaled PI) | Checks robustness of day effects to distributional assumption |
+| Voc PI vs other-sounds PI | Per-day paired Wilcoxon + rank-biserial (section 12b) | Tests whether vocalisations elicit a different preference than the other-sounds aggregate, per session |
+| First-minute RE | Pearson + Spearman correlation, within- and between-mouse (section 12c) | Tests whether exploration during the first 60 s of habituation predicts subsequent PI |
 
-**4. Computational model (Brielmann & Dayan 2022):**
+**4. Completers LMM (`03_completers_lmm.py`):**
+
+A standalone follow-up that restricts the dataset to mice present on every required experimental day (`PI_DAYS` by default: `w1_d1`, `w1_d2`, `w1_d3`, `w2_sequences`, `w2_vocalisations`) and fits four nested mixed models per outcome (PI, voc PI, other-sounds PI, RE, first-minute RE):
+
+| Model | Formula | Purpose |
+|-------|---------|---------|
+| M0 (null) | `y ~ 1 + (1\|mouse)` | Baseline; quantifies between-mouse variance and ICC |
+| M1 (day fixed) | `y ~ C(day) + (1\|mouse)` | Day differences with random intercepts (the user's primary request) |
+| M2 (linear trend) | `y ~ session_num + (1\|mouse)` | Linear change across sessions |
+| M3 (random slopes) | `y ~ session_num + (1+session_num\|mouse)` | Heterogeneous per-mouse slopes |
+
+The script reports REML estimates for inference and refits with ML for likelihood-ratio tests (M0 vs M1; M2 vs M3). It produces Nakagawa & Schielzeth (2013) marginal/conditional R-squared, ICC, BLUPs (per-mouse random intercepts) with 95% CIs, and three figures (caterpillar plot, day estimated marginal means, per-mouse spaghetti).
+
+CLI:
+
+```bash
+python 03_completers_lmm.py /path/to/8_arms_w_voc \
+    --csv BATCH_ANALYSIS/preference_data.csv \
+    --output-dir BATCH_ANALYSIS/completers \
+    --required-days w1_d1 w1_d2 w1_d3 w2_sequences w2_vocalisations
+```
+
+**5. Computational model (Brielmann & Dayan 2022):**
 
 A 4-dimensional extension of the aesthetic value model, where stimuli are represented as vectors in a feature space of [location_familiarity, spectral_complexity, biological_relevance, temporal_predictability]. The model simulates an agent traversing the full experiment and predicts PI from the difference in aesthetic value between sound and silence. Fitted via 2000 random initialisations of SLSQP. Includes lesioned model comparisons, dimension dropout analysis, and location vs acoustic decomposition. See the [detailed report](analysis/auditory/REPORT_aesthetic_value_model.md) for full documentation.
 
