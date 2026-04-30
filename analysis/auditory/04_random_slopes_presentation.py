@@ -200,6 +200,108 @@ def fit_slope_only(df: pd.DataFrame, outcome: str):
     return _fit_mixed(df, outcome, re_formula="~0 + session_num")
 
 
+def omnibus_re_lrt(df: pd.DataFrame, outcome: str = "preference_index") -> dict:
+    """Omnibus likelihood-ratio test for the entire random-effects structure.
+
+    Compares
+        Full : outcome ~ session_num + (1 + session_num | mouse_id)   [ML]
+        Null : outcome ~ session_num                                  [OLS]
+
+    The full model adds 3 variance parameters (Var(intercept|mouse),
+    Var(slope|mouse), Cov(intercept,slope|mouse)) over the OLS null, so
+    df = 3 under the conventional asymptotic chi-square reference.
+
+    Note: testing variance components against zero is a boundary problem,
+    so the chi-square(3) p-value is conservative. A more accurate
+    reference is a 50:50 mixture of chi-square distributions; we report
+    the standard chi-square here as requested.
+
+    Returns a dict with chi2, df, p, log-likelihoods, variance components,
+    and the conditional / marginal R^2 as defined in the docstring of
+    ``main()`` below.
+    """
+    d = df.dropna(subset=[outcome, "session_num", "mouse_id"]).copy()
+
+    out = {
+        "outcome":      outcome,
+        "n_obs":        int(len(d)),
+        "n_groups":     int(d["mouse_id"].nunique()),
+        "ll_full":      np.nan,
+        "ll_null":      np.nan,
+        "chi2":         np.nan,
+        "df":           3,
+        "p":            np.nan,
+        "var_intercept": np.nan,
+        "var_slope":    np.nan,
+        "cov_int_slope": np.nan,
+        "var_resid":    np.nan,
+        "conditional_r2": np.nan,
+        "marginal_r2":  np.nan,
+        "note":         "",
+    }
+
+    # Full model -- ML for valid LRT
+    try:
+        full = smf.mixedlm(f"{outcome} ~ session_num", d,
+                           groups=d["mouse_id"],
+                           re_formula="~session_num"
+                           ).fit(reml=False, method="lbfgs")
+    except Exception:
+        try:
+            full = smf.mixedlm(f"{outcome} ~ session_num", d,
+                               groups=d["mouse_id"],
+                               re_formula="~session_num").fit(reml=False)
+        except Exception as e:
+            out["note"] = f"full ML fit failed: {e}"
+            return out
+
+    # Null model -- plain OLS (no random effects)
+    try:
+        null = smf.ols(f"{outcome} ~ session_num", d).fit()
+    except Exception as e:
+        out["note"] = f"null OLS fit failed: {e}"
+        return out
+
+    out["ll_full"] = float(full.llf)
+    out["ll_null"] = float(null.llf)
+    chi2_stat = 2.0 * (out["ll_full"] - out["ll_null"])
+    out["chi2"] = float(chi2_stat) if np.isfinite(chi2_stat) else np.nan
+    out["p"] = float(chi2.sf(chi2_stat, out["df"])) \
+        if (np.isfinite(chi2_stat) and chi2_stat > 0) else 1.0
+
+    # Variance components from the FULL model (REML refit gives slightly
+    # different VC estimates; we keep the ML estimates here so they match
+    # the LRT inputs)
+    cov_re = np.asarray(full.cov_re)
+    var_int   = float(cov_re[0, 0]) if cov_re.shape[0] >= 1 else np.nan
+    var_slope = float(cov_re[1, 1]) if cov_re.shape[0] >= 2 else np.nan
+    cov_is    = float(cov_re[0, 1]) if cov_re.shape[0] >= 2 else np.nan
+    var_resid = float(full.scale)
+    out["var_intercept"] = var_int
+    out["var_slope"]     = var_slope
+    out["cov_int_slope"] = cov_is
+    out["var_resid"]     = var_resid
+
+    # Conditional R^2 (as the user defined it):
+    #   (Var(int) + Var(slope)) / (Var(int) + Var(slope) + Var(resid))
+    denom_re = (var_int if np.isfinite(var_int) else 0.0) \
+             + (var_slope if np.isfinite(var_slope) else 0.0) \
+             + (var_resid if np.isfinite(var_resid) else 0.0)
+    if denom_re > 0:
+        out["conditional_r2"] = ((var_int if np.isfinite(var_int) else 0.0)
+                               + (var_slope if np.isfinite(var_slope) else 0.0)
+                               ) / denom_re
+
+    # Marginal R^2 = variance explained by session_num alone, taken
+    # directly from the OLS null fit (this is its standard R^2).
+    try:
+        out["marginal_r2"] = float(null.rsquared)
+    except Exception:
+        pass
+
+    return out
+
+
 def fixed_effect_table(res) -> pd.DataFrame:
     """Estimate, SE, z, p, 95 % CI for each fixed effect."""
     ci = res.conf_int()
@@ -755,6 +857,84 @@ def report_slope_only_sanity(label: str, outcome: str,
     return fe_df, sanity_var
 
 
+def report_omnibus_re_lrt(label: str, lrt_dict: dict,
+                          stats_lines: list[str]) -> None:
+    """Append the omnibus random-effects LRT block to the stats report."""
+    log("=" * 70, stats_lines)
+    log(f"Omnibus random-effects LRT  --  {label}  ({lrt_dict['outcome']})",
+        stats_lines)
+    log("=" * 70, stats_lines)
+    log("  Full : outcome ~ session_num + (1 + session_num | mouse_id)   [ML]",
+        stats_lines)
+    log("  Null : outcome ~ session_num                                  [OLS]",
+        stats_lines)
+    log(f"  n_obs = {lrt_dict['n_obs']}, n_groups = {lrt_dict['n_groups']}",
+        stats_lines)
+    log("", stats_lines)
+
+    if lrt_dict.get("note"):
+        log(f"  WARNING: {lrt_dict['note']}", stats_lines)
+        log("", stats_lines)
+
+    # LRT line
+    if np.isfinite(lrt_dict["chi2"]):
+        log(f"  log-lik (full)  = {lrt_dict['ll_full']:.4f}", stats_lines)
+        log(f"  log-lik (null)  = {lrt_dict['ll_null']:.4f}", stats_lines)
+        log(f"  Chi-square      = {lrt_dict['chi2']:.4f}", stats_lines)
+        log(f"  df              = {lrt_dict['df']}  "
+            f"(Var(int), Var(slope), Cov(int,slope))", stats_lines)
+        log(f"  p-value         = {lrt_dict['p']:.6g}", stats_lines)
+        log("  (Note: testing variance components against zero is a", stats_lines)
+        log("   boundary problem; the chi-square(3) p-value is conservative.", stats_lines)
+        log("   A more accurate reference is a mixture of chi-squares.)",
+            stats_lines)
+    else:
+        log("  LRT statistic could not be computed.", stats_lines)
+    log("", stats_lines)
+
+    # Variance components from the full ML fit
+    log("  Variance components (full ML fit):", stats_lines)
+    log(f"    Var(intercept | mouse) = {lrt_dict['var_intercept']:.5f}",
+        stats_lines)
+    log(f"    Var(slope     | mouse) = {lrt_dict['var_slope']:.5f}",
+        stats_lines)
+    log(f"    Cov(int, slope| mouse) = {lrt_dict['cov_int_slope']:.5f}",
+        stats_lines)
+    log(f"    Var(residual)          = {lrt_dict['var_resid']:.5f}",
+        stats_lines)
+    log("", stats_lines)
+
+    # R^2 -- exactly as defined in the user request
+    log("  R^2 summary (omnibus block):", stats_lines)
+    log("    Conditional R^2 = (Var(int) + Var(slope)) /", stats_lines)
+    log("                      (Var(int) + Var(slope) + Var(resid))",
+        stats_lines)
+    if np.isfinite(lrt_dict["conditional_r2"]):
+        log(f"                    = {lrt_dict['conditional_r2']:.4f}",
+            stats_lines)
+    else:
+        log("                    = NA", stats_lines)
+    log("    Marginal R^2    = variance explained by session_num alone",
+        stats_lines)
+    log("                      (R^2 from the OLS null model)", stats_lines)
+    if np.isfinite(lrt_dict["marginal_r2"]):
+        log(f"                    = {lrt_dict['marginal_r2']:.4f}",
+            stats_lines)
+    else:
+        log("                    = NA", stats_lines)
+    log("", stats_lines)
+    log("  Interpretation:", stats_lines)
+    log("    Conditional R^2 above answers: 'how much of the residual",
+        stats_lines)
+    log("    variance is between-mouse (intercept + slope) vs trial-level",
+        stats_lines)
+    log("    noise?'.  Marginal R^2 above answers: 'how much of the raw",
+        stats_lines)
+    log("    outcome variance does session_num explain on its own?'.",
+        stats_lines)
+    log("", stats_lines)
+
+
 # ─── main ───────────────────────────────────────────────────────────────────
 
 
@@ -885,6 +1065,16 @@ def main():
             all_fe_rows.append(tmp)
         if s_var is not None:
             all_var_rows.append(s_var)
+
+    # ── Omnibus random-effects LRT for Overall PI ──────────────────────────
+    print("=== Omnibus random-effects LRT for preference_index ===")
+    omnibus = omnibus_re_lrt(df_c, outcome="preference_index")
+    report_omnibus_re_lrt("Overall PI", omnibus, stats_lines)
+    pd.DataFrame([omnibus]).to_csv(
+        os.path.join(output_dir,
+                     "completers_random_slopes_omnibus_lrt.csv"),
+        index=False)
+    print("Saved completers_random_slopes_omnibus_lrt.csv")
 
     # Save tables
     if all_fe_rows:
