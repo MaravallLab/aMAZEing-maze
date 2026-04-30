@@ -135,13 +135,14 @@ def find_completers(df: pd.DataFrame, required_days: list[str]) -> list[str]:
     return sorted([m for m, d in counts.items() if needed.issubset(d)])
 
 
-def fit_random_slope(df: pd.DataFrame, outcome: str):
-    """Fit ``outcome ~ session_num + (1 + session_num | mouse_id)`` on the
-    completer subset. Returns (result, info) where ``info`` flags
-    convergence and boundary / singular fits."""
+def _fit_mixed(df: pd.DataFrame, outcome: str, re_formula: str):
+    """Fit a MixedLM with the given random-effects formula. Returns
+    (result, info) where ``info`` flags convergence, optimiser, and
+    boundary / singular fits."""
     d = df.dropna(subset=[outcome, "session_num", "mouse_id"]).copy()
 
     info = {
+        "re_formula": re_formula,
         "n_obs":      int(len(d)),
         "n_groups":   int(d["mouse_id"].nunique()),
         "converged":  None,
@@ -156,7 +157,7 @@ def fit_random_slope(df: pd.DataFrame, outcome: str):
 
     md = smf.mixedlm(f"{outcome} ~ session_num", d,
                      groups=d["mouse_id"],
-                     re_formula="~session_num")
+                     re_formula=re_formula)
     try:
         res = md.fit(reml=True, method="lbfgs")
         info["fit_method"] = "lbfgs"
@@ -182,6 +183,21 @@ def fit_random_slope(df: pd.DataFrame, outcome: str):
     )
 
     return res, info
+
+
+def fit_random_slope(df: pd.DataFrame, outcome: str):
+    """Primary model: ``outcome ~ session_num + (1 + session_num | mouse_id)``."""
+    return _fit_mixed(df, outcome, re_formula="~session_num")
+
+
+def fit_slope_only(df: pd.DataFrame, outcome: str):
+    """Sanity-check model: ``outcome ~ session_num + (0 + session_num | mouse_id)``.
+
+    Drops the random intercept -- forces all mice to share the same baseline
+    and lets only the slope vary. Useful as a sanity check on the primary
+    random-slopes-and-intercepts model: fixed-effect estimates and the slope
+    variance should be similar IF the random intercept was already small."""
+    return _fit_mixed(df, outcome, re_formula="~0 + session_num")
 
 
 def fixed_effect_table(res) -> pd.DataFrame:
@@ -628,6 +644,117 @@ def report_outcome(label: str, outcome: str, res, info: dict,
     return fe_df, blups_df
 
 
+def report_slope_only_sanity(label: str, outcome: str,
+                             primary_res, primary_info: dict,
+                             sanity_res, sanity_info: dict,
+                             stats_lines: list[str]) -> tuple:
+    """Append a sanity-check section comparing the primary
+    (intercept + slope random) model with the slope-only random-effects
+    variant. Returns (sanity_fe_df, sanity_var_dict) for CSV export."""
+    log("-" * 70, stats_lines)
+    log(f"Sanity check (drops random intercept): "
+        f"{outcome} ~ session_num + (0 + session_num | mouse_id)",
+        stats_lines)
+    log("-" * 70, stats_lines)
+    log(f"  n_obs = {sanity_info['n_obs']}, "
+        f"n_groups = {sanity_info['n_groups']}", stats_lines)
+
+    if sanity_res is None:
+        log(f"  MODEL DID NOT FIT  ({sanity_info.get('error', 'unknown')})",
+            stats_lines)
+        log("", stats_lines)
+        return None, None
+
+    log(f"  Converged           : {sanity_info['converged']}", stats_lines)
+    log(f"  Optimiser           : {sanity_info['fit_method']}", stats_lines)
+    if sanity_info.get("singular"):
+        log("  *** SINGULAR FIT *** : random-slope variance ~ 0.",
+            stats_lines)
+    log("", stats_lines)
+
+    # Fixed effects
+    fe_df = fixed_effect_table(sanity_res)
+    log("  Fixed effects (slope-only RE):", stats_lines)
+    log("    {:<14s} {:>10s} {:>10s} {:>9s} {:>9s} {:>10s} {:>10s}".format(
+        "term", "estimate", "std_err", "z", "p", "ci_lo", "ci_hi"),
+        stats_lines)
+    for _, row in fe_df.iterrows():
+        log("    {:<14s} {:>10.4f} {:>10.4f} {:>9.3f} {:>9.4f} {:>10.4f} {:>10.4f}"
+            .format(str(row["term"]), row["estimate"], row["std_err"],
+                    row["z"], row["p"], row["ci_lo"], row["ci_hi"]),
+            stats_lines)
+    log("", stats_lines)
+
+    # Variance components: only Var(slope) and Var(resid) here
+    cov_re = np.asarray(sanity_res.cov_re)
+    var_slope = float(cov_re[0, 0]) if cov_re.size >= 1 else np.nan
+    var_resid = float(sanity_res.scale)
+    log("  Random-effect variance components (slope-only):", stats_lines)
+    log(f"    Var(slope | mouse) = {var_slope:.5f}", stats_lines)
+    log(f"    Var(residual)      = {var_resid:.5f}", stats_lines)
+    log("", stats_lines)
+
+    # Side-by-side comparison with primary fit
+    if primary_res is not None:
+        log("  Side-by-side comparison (primary [int+slope] vs sanity [slope-only]):",
+            stats_lines)
+        try:
+            p_fe = primary_res.fe_params
+            s_fe = sanity_res.fe_params
+            log("    {:<14s} {:>14s} {:>14s} {:>10s}".format(
+                "term", "primary", "sanity", "delta"), stats_lines)
+            for term in p_fe.index:
+                if term in s_fe.index:
+                    pv = float(p_fe[term]); sv = float(s_fe[term])
+                    log("    {:<14s} {:>14.4f} {:>14.4f} {:>10.4f}"
+                        .format(term, pv, sv, sv - pv), stats_lines)
+        except Exception:
+            pass
+
+        # Variance comparison
+        try:
+            p_cov = np.asarray(primary_res.cov_re)
+            p_var_slope = float(p_cov[1, 1]) if p_cov.shape[0] >= 2 else np.nan
+            p_var_int   = float(p_cov[0, 0]) if p_cov.shape[0] >= 1 else np.nan
+            p_var_resid = float(primary_res.scale)
+            log("", stats_lines)
+            log("    {:<22s} {:>14s} {:>14s}".format(
+                "variance", "primary", "sanity"), stats_lines)
+            log("    {:<22s} {:>14.5f} {:>14s}".format(
+                "Var(intercept|mouse)", p_var_int, "(dropped)"),
+                stats_lines)
+            log("    {:<22s} {:>14.5f} {:>14.5f}".format(
+                "Var(slope|mouse)", p_var_slope, var_slope),
+                stats_lines)
+            log("    {:<22s} {:>14.5f} {:>14.5f}".format(
+                "Var(residual)", p_var_resid, var_resid),
+                stats_lines)
+            log("", stats_lines)
+            log("  Interpretation:", stats_lines)
+            log("    If the primary model has a small Var(intercept|mouse), the", stats_lines)
+            log("    sanity fixed effects + Var(slope) should be close to primary.", stats_lines)
+            log("    Large divergence => mice differ in BASELINE as well as slope,", stats_lines)
+            log("    and the slope-only model is misspecified.", stats_lines)
+        except Exception:
+            pass
+    log("", stats_lines)
+
+    sanity_var = {
+        "outcome":      outcome,
+        "model":        "slope_only",
+        "re_formula":   sanity_info["re_formula"],
+        "n_obs":        sanity_info["n_obs"],
+        "n_groups":     sanity_info["n_groups"],
+        "converged":    sanity_info["converged"],
+        "singular":     sanity_info["singular"],
+        "var_intercept": np.nan,    # not estimated
+        "var_slope":     var_slope,
+        "cov_int_slope": np.nan,
+        "var_resid":     var_resid,
+    }
+    return fe_df, sanity_var
+
+
 # ─── main ───────────────────────────────────────────────────────────────────
 
 
@@ -700,8 +827,10 @@ def main():
     log(f"Completer mice (n={len(completers)}): {', '.join(completers)}",
         stats_lines)
     log(f"Total sessions      : {len(df_c)}", stats_lines)
-    log("Model               : outcome ~ session_num + "
+    log("Primary model       : outcome ~ session_num + "
         "(1 + session_num | mouse_id)", stats_lines)
+    log("Sanity check        : outcome ~ session_num + "
+        "(0 + session_num | mouse_id)  [no random intercept]", stats_lines)
     log("Estimation          : REML, statsmodels MixedLM (lbfgs)", stats_lines)
     log("", stats_lines)
 
@@ -712,7 +841,7 @@ def main():
     all_var_rows: list = []
 
     for outcome, label in OUTCOMES:
-        print(f"=== Fitting {label} ({outcome}) ===")
+        print(f"=== Fitting {label} ({outcome}) -- primary ===")
         res, info = fit_random_slope(df_c, outcome)
         fe_df, blups_df = report_outcome(label, outcome, res, info,
                                          stats_lines)
@@ -722,16 +851,20 @@ def main():
         if fe_df is not None:
             tmp = fe_df.copy()
             tmp.insert(0, "outcome", outcome)
+            tmp.insert(1, "model",   "primary")
             all_fe_rows.append(tmp)
         if blups_df is not None and not blups_df.empty:
             tmp = blups_df.copy()
             tmp.insert(0, "outcome", outcome)
+            tmp.insert(1, "model",   "primary")
             all_blup_rows.append(tmp)
         if res is not None:
             vc = variance_components(res)
             vd = variance_decomposition(vc)
             all_var_rows.append({
                 "outcome":         outcome,
+                "model":           "primary",
+                "re_formula":      info["re_formula"],
                 "n_obs":           info["n_obs"],
                 "n_groups":        info["n_groups"],
                 "converged":       info["converged"],
@@ -739,6 +872,19 @@ def main():
                 **vc,
                 **vd,
             })
+
+        # Sanity check: random-slope only (no random intercept)
+        print(f"=== Fitting {label} ({outcome}) -- slope-only sanity ===")
+        s_res, s_info = fit_slope_only(df_c, outcome)
+        s_fe_df, s_var = report_slope_only_sanity(
+            label, outcome, res, info, s_res, s_info, stats_lines)
+        if s_fe_df is not None:
+            tmp = s_fe_df.copy()
+            tmp.insert(0, "outcome", outcome)
+            tmp.insert(1, "model",   "slope_only")
+            all_fe_rows.append(tmp)
+        if s_var is not None:
+            all_var_rows.append(s_var)
 
     # Save tables
     if all_fe_rows:
