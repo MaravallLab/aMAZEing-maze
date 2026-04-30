@@ -55,7 +55,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from scipy.stats import norm
+from scipy.stats import norm, chi2
 
 try:
     import statsmodels.formula.api as smf
@@ -298,6 +298,165 @@ def omnibus_re_lrt(df: pd.DataFrame, outcome: str = "preference_index") -> dict:
         out["marginal_r2"] = float(null.rsquared)
     except Exception:
         pass
+
+    return out
+
+
+def fit_crossed_re(df: pd.DataFrame,
+                   outcome: str = "preference_index",
+                   session_col: str = "day") -> dict:
+    """Fit a crossed random-effects model for variance partitioning:
+
+        outcome ~ 1 + (1 | mouse_id) + (1 | session_id)
+
+    No fixed effects beyond the intercept. The aim is purely to partition
+    variance into between-mouse, between-session, and residual.
+
+    Method preference:
+      1. pymer4 (lme4 wrapper) if installed.
+      2. statsmodels MixedLM with ``vc_formula`` -- the native way to fit
+         crossed random effects in statsmodels (constant top-level group +
+         two variance components).
+      3. Browne & Rasbash (2002) iterated-OLS trick -- mouse as grouping
+         factor + session dummies as fixed effects, then back out
+         Var(session) by hand.
+
+    The chosen method is recorded in the result dict.
+    """
+    out = {
+        "outcome":            outcome,
+        "session_col":        session_col,
+        "method":             None,
+        "converged":          None,
+        "n_obs":              0,
+        "n_mice":             0,
+        "n_sessions":         0,
+        "var_mouse":          np.nan,
+        "var_session":        np.nan,
+        "var_resid":          np.nan,
+        "pct_mouse":          np.nan,
+        "pct_session":        np.nan,
+        "pct_resid":          np.nan,
+        "pct_between_group":  np.nan,
+        "error":              None,
+        "r_formula":          ("library(lme4)\n"
+                               f"m <- lmer({outcome} ~ 1 + (1|mouse_id) "
+                               f"+ (1|{session_col}), data=df)\n"
+                               "summary(m)$varcor"),
+    }
+
+    d = df.dropna(subset=[outcome, "mouse_id", session_col]).copy()
+    out["n_obs"]      = int(len(d))
+    out["n_mice"]     = int(d["mouse_id"].nunique())
+    out["n_sessions"] = int(d[session_col].nunique())
+    if out["n_mice"] < 3 or out["n_sessions"] < 2 or out["n_obs"] < 6:
+        out["error"] = (f"insufficient data (n_obs={out['n_obs']}, "
+                        f"n_mice={out['n_mice']}, "
+                        f"n_sessions={out['n_sessions']})")
+        return out
+
+    # ---- 1. pymer4 (lme4 backend) ----------------------------------------
+    try:
+        from pymer4.models import Lmer  # type: ignore
+        try:
+            m = Lmer(f"{outcome} ~ 1 + (1|mouse_id) + (1|{session_col})",
+                     data=d)
+            m.fit(REML=True, summarize=False)
+            rv = m.ranef_var.copy()
+            # ranef_var is a DataFrame indexed by group name and "Residual"
+            def _get(name):
+                if name in rv.index:
+                    val = rv.loc[name, "Var"]
+                    return float(val.iloc[0] if hasattr(val, "iloc") else val)
+                return np.nan
+            out["method"]      = "pymer4 (lme4)"
+            out["converged"]   = True
+            out["var_mouse"]   = _get("mouse_id")
+            out["var_session"] = _get(session_col)
+            out["var_resid"]   = _get("Residual")
+        except Exception as e:
+            out["error"] = f"pymer4 fit failed: {e}"
+    except ImportError:
+        pass
+
+    # ---- 2. statsmodels vc_formula ---------------------------------------
+    if out["method"] is None:
+        try:
+            d2 = d.copy()
+            d2["_const"] = 1
+            vc = {
+                "mouse":   "0 + C(mouse_id)",
+                "session": f"0 + C({session_col})",
+            }
+            md = smf.mixedlm(f"{outcome} ~ 1", d2,
+                             groups=d2["_const"],
+                             re_formula="0",
+                             vc_formula=vc)
+            try:
+                res = md.fit(reml=True, method="lbfgs")
+                fit_method = "lbfgs"
+            except Exception:
+                res = md.fit(reml=True)
+                fit_method = "default"
+
+            vcomp = np.asarray(res.vcomp, dtype=float)
+            # vc_formula keys are inserted in dict order; statsmodels keeps
+            # that order in vcomp
+            out["method"]      = f"statsmodels vc_formula ({fit_method})"
+            out["converged"]   = (bool(res.converged)
+                                  if hasattr(res, "converged") else None)
+            out["var_mouse"]   = float(vcomp[0]) if vcomp.size > 0 else np.nan
+            out["var_session"] = float(vcomp[1]) if vcomp.size > 1 else np.nan
+            out["var_resid"]   = float(res.scale)
+            out["error"]       = None
+        except Exception as e:
+            out["error"] = f"statsmodels vc_formula failed: {e}"
+
+    # ---- 3. Browne & Rasbash (2002) iterated-OLS fallback ----------------
+    if (out["method"] is None or
+        not all(np.isfinite([out["var_mouse"], out["var_session"],
+                             out["var_resid"]]))):
+        try:
+            # Step 1: include session as fixed dummies, mouse as random
+            # intercept. The residual variance from this fit estimates
+            # (true_resid). The total - between-mouse - residual gives an
+            # estimate of between-session variance.
+            md_a = smf.mixedlm(
+                f"{outcome} ~ C({session_col})", d,
+                groups=d["mouse_id"]).fit(reml=True, method="lbfgs")
+            var_mouse = float(np.asarray(md_a.cov_re)[0, 0])
+            var_resid = float(md_a.scale)
+
+            # Step 2: include mouse as fixed dummies, session as random
+            # intercept.
+            md_b = smf.mixedlm(
+                f"{outcome} ~ C(mouse_id)", d,
+                groups=d[session_col]).fit(reml=True, method="lbfgs")
+            var_session = float(np.asarray(md_b.cov_re)[0, 0])
+
+            out["method"]      = "Browne-Rasbash iterated OLS (statsmodels)"
+            out["converged"]   = (bool(md_a.converged) and bool(md_b.converged)
+                                  if (hasattr(md_a, "converged")
+                                      and hasattr(md_b, "converged"))
+                                  else None)
+            out["var_mouse"]   = var_mouse
+            out["var_session"] = var_session
+            out["var_resid"]   = var_resid
+            out["error"]       = None
+        except Exception as e:
+            prev = out.get("error")
+            out["error"] = (f"{prev}; iterated-OLS fallback failed: {e}"
+                            if prev else
+                            f"iterated-OLS fallback failed: {e}")
+
+    # ---- variance decomposition -----------------------------------------
+    a, b, c = out["var_mouse"], out["var_session"], out["var_resid"]
+    if all(np.isfinite([a, b, c])) and (a + b + c) > 0:
+        total = a + b + c
+        out["pct_mouse"]         = 100.0 * a / total
+        out["pct_session"]       = 100.0 * b / total
+        out["pct_resid"]         = 100.0 * c / total
+        out["pct_between_group"] = 100.0 * (a + b) / total
 
     return out
 
@@ -857,6 +1016,75 @@ def report_slope_only_sanity(label: str, outcome: str,
     return fe_df, sanity_var
 
 
+def report_crossed_re(crossed: dict, stats_lines: list[str],
+                      matlab_target: float = 85.0,
+                      tol_pct: float = 5.0) -> None:
+    """Append the crossed random-effects block to the stats report."""
+    log("=" * 70, stats_lines)
+    log("CROSSED RANDOM EFFECTS MODEL (mouse_id + session_id)",
+        stats_lines)
+    log("=" * 70, stats_lines)
+    log(f"  Formula : {crossed['outcome']} ~ 1 "
+        f"+ (1 | mouse_id) + (1 | {crossed['session_col']})",
+        stats_lines)
+    log("  Purpose : variance partitioning only (no fixed effects beyond "
+        "intercept)", stats_lines)
+    log(f"  Method  : {crossed['method'] or 'NONE -- all fits failed'}",
+        stats_lines)
+    log(f"  Converged: {crossed['converged']}", stats_lines)
+    log(f"  n_obs = {crossed['n_obs']}, "
+        f"n_mice = {crossed['n_mice']}, "
+        f"n_sessions = {crossed['n_sessions']}", stats_lines)
+    if crossed.get("error"):
+        log(f"  WARNING : {crossed['error']}", stats_lines)
+    log("", stats_lines)
+
+    if not all(np.isfinite([crossed["var_mouse"], crossed["var_session"],
+                            crossed["var_resid"]])):
+        log("  Variance components could not be estimated.", stats_lines)
+        log("  Equivalent R / lme4 code (run this for an authoritative fit):",
+            stats_lines)
+        for line in str(crossed["r_formula"]).splitlines():
+            log(f"    {line}", stats_lines)
+        log("", stats_lines)
+        return
+
+    log("  Variance components:", stats_lines)
+    log(f"    Var(mouse_id)   = {crossed['var_mouse']:.5f}",   stats_lines)
+    log(f"    Var(session_id) = {crossed['var_session']:.5f}", stats_lines)
+    log(f"    Var(residual)   = {crossed['var_resid']:.5f}",   stats_lines)
+    log("", stats_lines)
+
+    log("  Variance decomposition (% of total):", stats_lines)
+    log(f"    From mouse ID    : {crossed['pct_mouse']:.1f} %",   stats_lines)
+    log(f"    From session ID  : {crossed['pct_session']:.1f} %", stats_lines)
+    log(f"    Residual         : {crossed['pct_resid']:.1f} %",   stats_lines)
+    log(f"    -> total between-group: {crossed['pct_between_group']:.1f} %",
+        stats_lines)
+    log("", stats_lines)
+
+    # MATLAB fitlme cross-check
+    btw = crossed["pct_between_group"]
+    if np.isfinite(btw):
+        diff = btw - matlab_target
+        if abs(diff) <= tol_pct:
+            log(f"  MATLAB fitlme cross-check: total between-group "
+                f"variance = {btw:.1f} %, within +/-{tol_pct:.0f} pp of "
+                f"the {matlab_target:.0f} % MATLAB figure -- REPRODUCED.",
+                stats_lines)
+        else:
+            log(f"  MATLAB fitlme cross-check: total between-group "
+                f"variance = {btw:.1f} %, differs from the "
+                f"{matlab_target:.0f} % MATLAB figure by {diff:+.1f} pp -- "
+                "NOT reproduced.", stats_lines)
+    log("", stats_lines)
+
+    log("  Equivalent R / lme4 code (for verification):", stats_lines)
+    for line in str(crossed["r_formula"]).splitlines():
+        log(f"    {line}", stats_lines)
+    log("", stats_lines)
+
+
 def report_omnibus_re_lrt(label: str, lrt_dict: dict,
                           stats_lines: list[str]) -> None:
     """Append the omnibus random-effects LRT block to the stats report."""
@@ -1075,6 +1303,21 @@ def main():
                      "completers_random_slopes_omnibus_lrt.csv"),
         index=False)
     print("Saved completers_random_slopes_omnibus_lrt.csv")
+
+    # ── Crossed random-effects model for Overall PI ────────────────────────
+    print("=== Crossed random-effects (mouse_id + session_id) "
+          "for preference_index ===")
+    crossed = fit_crossed_re(df_c, outcome="preference_index",
+                             session_col="day")
+    print(f"  method   : {crossed['method']}")
+    print(f"  converged: {crossed['converged']}")
+    if crossed.get("error"):
+        print(f"  warning  : {crossed['error']}")
+    report_crossed_re(crossed, stats_lines)
+    pd.DataFrame([crossed]).to_csv(
+        os.path.join(output_dir, "completers_crossed_re.csv"),
+        index=False)
+    print("Saved completers_crossed_re.csv")
 
     # Save tables
     if all_fe_rows:
