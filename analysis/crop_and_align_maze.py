@@ -5,44 +5,49 @@ Preprocess ventral video recordings of a mouse maze for SLEAP pose estimation.
 
 The maze is a white cross/T-shaped binary decision tree (4 arms) on a dark
 background, plus an entry corridor at the bottom of the rig, filmed from
-below. The camera also sees room walls, ceiling panels, and other bright
-surfaces around the maze, which a naive "largest bright contour" detector
-will sometimes lock onto instead of the maze itself.
+below. The camera position only shifts slightly between sessions, so we can
+locate each of 24 maze landmarks in a new frame by **template matching**:
+take a small patch from a single calibration frame around each landmark,
+and search for it in a small window centered on the calibration position
+in the new frame.
 
-This script avoids that problem by using a one-time manual calibration to
-define both the canonical layout AND a search ROI that excludes everything
-outside the maze area:
+Workflow:
 
   Stage 1 — Calibration (--calibrate):
       The user clicks all 24 corners of the maze outline (clockwise from
-      the top-left). The bounding box of those 24 points is expanded by
-      150 px on each side and saved as the search ROI. The 24 points,
-      ROI, and frame size are saved to calibration.json.
+      the top-left) on the middle frame of one video. The script saves
+      the 24 points, the chosen patch size, and the unannotated frame to
+      calibration.json + calibration_frame.png. (An annotated copy is
+      also saved as calibration_frame_annotated.png for reference.)
 
   Stage 2 — Batch processing (no --calibrate):
-      For every video, the script crops to the ROI BEFORE thresholding
-      (so room walls don't pollute the binary mask), morphologically
-      closes the mouse-shaped hole, runs cv2.goodFeaturesToTrack on the
-      cropped binary mask to detect maze corners, matches detected
-      corners to the 24 calibration points via the Hungarian algorithm,
-      and computes a RANSAC homography from the matched pairs. Every
-      frame is then warped through that homography and the cropped
-      output is written.
+      For every video the script:
+        - samples the middle frame and converts to grayscale,
+        - for each of the 24 calibration points, extracts the saved
+          patch around that point and runs cv2.matchTemplate
+          (TM_CCOEFF_NORMED) inside a ±--search_radius search window,
+        - keeps the location of the peak correlation as the detected
+          landmark, marking it unmatched if the peak is below
+          --match_threshold,
+        - solves a RANSAC homography (cv2.findHomography) over the
+          matched detected points -> canonical positions, and
+        - warps every frame and writes the cropped/aligned output.
 
 Per-video fallback (--manual_video <path>):
-      For videos where automatic detection fails, the user can re-run
-      the 24-point click UI on the failing video. The clicked points
-      are saved to <stem>_landmarks.json next to the cropped output and
-      the video is processed with those points. On subsequent batch
-      runs, the saved per-video landmarks are picked up automatically
-      (use --redo_video <name> to force re-detection).
+      If automatic template matching fails or looks wrong for a video,
+      run the 24-click UI on that video. The clicked points are saved
+      next to the cropped output as <stem>_landmarks.json. Future batch
+      runs pick those up automatically (use --redo_video <name> to
+      force re-running automatic detection).
 
-Confidence is based on the homography reprojection error AND the number
-of matched corners:
-    high   : reproj < 10 px AND matched >= 20
-    medium : reproj < 25 px AND matched >= 16
-    low    : anything worse with matched >= 16
-    failed : matched < 16, or any earlier step blew up.
+Confidence is based on three signals: reprojection error of the
+homography, the number of matched landmarks, and the mean template
+correlation across all 24 points:
+
+  high   : reproj < 10 px AND matched >= 20 AND mean_score > 0.5
+  medium : reproj < 25 px AND matched >= 16
+  low    : matched >= 12 (anything worse than medium)
+  failed : matched <  12, or any earlier step blew up.
 """
 
 import argparse
@@ -54,7 +59,6 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
-from scipy.optimize import linear_sum_assignment
 
 
 # ---------------------------------------------------------------------------
@@ -71,17 +75,20 @@ DEFAULT_EXCLUDE_DIRS = [
 DEFAULT_INCLUDE_PATTERN = "*.mp4,*.avi"
 DEFAULT_CALIBRATION_FILENAME = "calibration.json"
 DEFAULT_CALIBRATION_FRAME_FILENAME = "calibration_frame.png"
+DEFAULT_CALIBRATION_FRAME_ANNOTATED = "calibration_frame_annotated.png"
 
 NUM_LANDMARKS = 24
-ROI_MARGIN_PX = 150
-MAX_MATCH_DISTANCE_PX = 60
-MIN_MATCHED_POINTS = 16
+MIN_MATCHED_POINTS = 12
+DEFAULT_PATCH_SIZE = 80
+DEFAULT_SEARCH_RADIUS = 150
+DEFAULT_MATCH_THRESHOLD = 0.3
 
 # Confidence thresholds.
 HIGH_REPROJ_PX = 10.0
 HIGH_MIN_MATCHED = 20
+HIGH_MIN_MEAN_SCORE = 0.5
 MEDIUM_REPROJ_PX = 25.0
-MEDIUM_MIN_MATCHED = MIN_MATCHED_POINTS
+MEDIUM_MIN_MATCHED = 16
 
 # Click-order labels (1-based from the user's perspective).
 LANDMARK_LABELS = [
@@ -124,7 +131,7 @@ REFERENCE_CANVAS_SIZE = 240
 
 
 # ---------------------------------------------------------------------------
-# I/O helpers
+# Generic I/O helpers
 # ---------------------------------------------------------------------------
 
 def sample_middle_frame(cap):
@@ -140,8 +147,6 @@ def sample_middle_frame(cap):
 def find_videos(input_dir, include_pattern, exclude_dirs):
     """
     Recursively walk `input_dir` and return matching video paths.
-
-    `include_pattern` is a comma-separated list of fnmatch globs.
     `exclude_dirs` is a list of directory names; any directory whose
     name matches (case-insensitive) is pruned in-place during the walk.
     """
@@ -176,31 +181,31 @@ def warp_video(video_path, H, dst_size, output_path, fps):
         cap.release()
 
 
+def to_gray(frame):
+    """Return frame as 2D uint8 (BGR -> gray, or pass-through if already 2D)."""
+    if frame is None:
+        return None
+    if frame.ndim == 2:
+        return frame
+    return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+
 # ---------------------------------------------------------------------------
 # Reference diagram for the calibration UI
 # ---------------------------------------------------------------------------
 
 def make_reference_diagram(size=REFERENCE_CANVAS_SIZE):
-    """
-    Render a small schematic of the 24-point click order so the user can
-    see which corner is "next" without holding the order in their head.
-    Returns a BGR uint8 image of `size`x`size`.
-    """
+    """Render a small schematic of the 24-point click order."""
     canvas = np.full((size, size, 3), 30, dtype=np.uint8)
-
-    # Outline connecting the 24 points in click order (closes back to 1).
     for i in range(NUM_LANDMARKS):
         p1 = tuple(int(v) for v in REFERENCE_POINTS[i])
         p2 = tuple(int(v) for v in REFERENCE_POINTS[(i + 1) % NUM_LANDMARKS])
         cv2.line(canvas, p1, p2, (90, 90, 90), 1)
-
-    # Numbered dots.
     for i, p in enumerate(REFERENCE_POINTS):
         ix, iy = int(p[0]), int(p[1])
         cv2.circle(canvas, (ix, iy), 3, (220, 220, 220), -1)
         cv2.putText(canvas, str(i + 1), (ix + 4, iy - 4),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.34, (255, 255, 255), 1, cv2.LINE_AA)
-
     cv2.putText(canvas, "click order", (8, size - 8),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 180, 180), 1, cv2.LINE_AA)
     cv2.rectangle(canvas, (0, 0), (size - 1, size - 1), (160, 160, 160), 1)
@@ -212,7 +217,7 @@ def overlay_reference(disp, ref):
     h, w = disp.shape[:2]
     rh, rw = ref.shape[:2]
     if rh + 20 > h or rw + 20 > w:
-        return  # display too small to overlay
+        return
     y0, x0 = 10, w - rw - 10
     disp[y0:y0 + rh, x0:x0 + rw] = ref
 
@@ -222,24 +227,14 @@ def overlay_reference(disp, ref):
 # ---------------------------------------------------------------------------
 
 def click_landmarks_ui(frame, title, num_points=NUM_LANDMARKS, with_reference=True):
-    """
-    Display `frame`, collect `num_points` clicks in click-order, return
-    an Nx2 float32 array of source-image coordinates, or None on cancel.
-
-    Controls:
-      - left click to place the next point
-      - 'r' to reset all clicks (during placement OR confirm phase)
-      - 'y' / 'Y' to confirm once all points are placed
-      - ESC to cancel
-    """
+    """Display `frame`, collect 24 clicks in click-order, return Nx2 float32."""
     h, w = frame.shape[:2]
     max_dim = 1400
     scale = min(1.0, float(max_dim) / float(max(h, w)))
     disp_w, disp_h = int(round(w * scale)), int(round(h * scale))
     base_disp = cv2.resize(frame, (disp_w, disp_h)) if scale < 1.0 else frame.copy()
     if with_reference:
-        ref = make_reference_diagram()
-        overlay_reference(base_disp, ref)
+        overlay_reference(base_disp, make_reference_diagram())
 
     clicks = []
 
@@ -253,7 +248,6 @@ def click_landmarks_ui(frame, title, num_points=NUM_LANDMARKS, with_reference=Tr
 
     def render(stage_msg):
         disp = base_disp.copy()
-        # Outline so far.
         for i in range(len(clicks) - 1):
             p1 = (int(clicks[i][0] * scale), int(clicks[i][1] * scale))
             p2 = (int(clicks[i + 1][0] * scale), int(clicks[i + 1][1] * scale))
@@ -262,12 +256,11 @@ def click_landmarks_ui(frame, title, num_points=NUM_LANDMARKS, with_reference=Tr
             p1 = (int(clicks[-1][0] * scale), int(clicks[-1][1] * scale))
             p2 = (int(clicks[0][0] * scale), int(clicks[0][1] * scale))
             cv2.line(disp, p1, p2, (0, 200, 200), 1)
-        # Numbered dots.
         for i, (cx, cy) in enumerate(clicks):
             color = (
                 int(60 + (i / max(1, num_points - 1)) * 195),
                 int(255 - (i / max(1, num_points - 1)) * 195),
-                int(255),
+                255,
             )
             px, py = int(cx * scale), int(cy * scale)
             cv2.circle(disp, (px, py), 6, color, -1)
@@ -280,7 +273,6 @@ def click_landmarks_ui(frame, title, num_points=NUM_LANDMARKS, with_reference=Tr
         return disp
 
     while True:
-        # Phase 1: collect all clicks.
         while len(clicks) < num_points:
             n = len(clicks)
             label = LANDMARK_LABELS[n] if n < len(LANDMARK_LABELS) else f"point {n + 1}"
@@ -293,7 +285,6 @@ def click_landmarks_ui(frame, title, num_points=NUM_LANDMARKS, with_reference=Tr
             if key == ord('r'):
                 clicks.clear()
 
-        # Phase 2: confirm.
         confirmed = None
         while confirmed is None:
             cv2.imshow(title, render(
@@ -308,7 +299,6 @@ def click_landmarks_ui(frame, title, num_points=NUM_LANDMARKS, with_reference=Tr
             elif key == ord('r'):
                 clicks.clear()
                 confirmed = False
-
         if confirmed:
             break
 
@@ -321,29 +311,15 @@ def click_landmarks_ui(frame, title, num_points=NUM_LANDMARKS, with_reference=Tr
 # Calibration / per-video landmark JSON I/O
 # ---------------------------------------------------------------------------
 
-def compute_search_roi(landmarks, frame_shape, margin=ROI_MARGIN_PX):
-    """
-    Return [x_min, y_min, x_max, y_max] integer ROI clamped to the frame.
-    """
-    pts = np.asarray(landmarks, dtype=np.float32)
-    xmin, ymin = pts.min(axis=0)
-    xmax, ymax = pts.max(axis=0)
-    h, w = int(frame_shape[0]), int(frame_shape[1])
-    return [
-        int(max(0, xmin - margin)),
-        int(max(0, ymin - margin)),
-        int(min(w, xmax + margin)),
-        int(min(h, ymax + margin)),
-    ]
-
-
-def save_calibration(path, calibration_video, frame_shape, landmarks, roi):
+def save_calibration(path, calibration_video, frame_shape, landmarks, patch_size,
+                     calibration_frame_filename):
     payload = {
         "calibration_video": str(calibration_video),
         "frame_shape": [int(frame_shape[0]), int(frame_shape[1])],
         "num_landmarks": NUM_LANDMARKS,
         "landmarks": [[float(p[0]), float(p[1])] for p in landmarks],
-        "search_roi": [int(v) for v in roi],
+        "patch_size": int(patch_size),
+        "calibration_frame_file": str(calibration_frame_filename),
     }
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -351,6 +327,8 @@ def save_calibration(path, calibration_video, frame_shape, landmarks, roi):
 
 
 def load_calibration(path):
+    """Load calibration JSON and the unannotated calibration frame."""
+    path = Path(path)
     with open(path, "r", encoding="utf-8") as f:
         payload = json.load(f)
     landmarks = np.asarray(payload["landmarks"], dtype=np.float32)
@@ -359,13 +337,28 @@ def load_calibration(path):
             f"Calibration must contain {NUM_LANDMARKS}x2 landmarks; "
             f"got {landmarks.shape}."
         )
-    roi = payload.get("search_roi")
-    if roi is None or len(roi) != 4:
-        raise ValueError("Calibration JSON missing 'search_roi'.")
+    patch_size = int(payload.get("patch_size", DEFAULT_PATCH_SIZE))
+
+    frame_filename = payload.get(
+        "calibration_frame_file", DEFAULT_CALIBRATION_FRAME_FILENAME
+    )
+    frame_path = (path.parent / frame_filename).resolve()
+    if not frame_path.exists():
+        raise FileNotFoundError(
+            f"Calibration frame not found at {frame_path}. Re-run --calibrate."
+        )
+    calib_frame = cv2.imread(str(frame_path), cv2.IMREAD_COLOR)
+    if calib_frame is None:
+        raise FileNotFoundError(f"Could not read calibration frame: {frame_path}")
+    calib_gray = to_gray(calib_frame)
+
     return {
         "landmarks": landmarks,
-        "search_roi": [int(v) for v in roi],
+        "patch_size": patch_size,
         "frame_shape": tuple(int(v) for v in payload["frame_shape"]),
+        "calibration_frame_path": frame_path,
+        "calibration_frame": calib_frame,
+        "calibration_frame_gray": calib_gray,
         "raw": payload,
     }
 
@@ -406,11 +399,7 @@ def load_video_landmarks(path):
 def canonical_positions(calibration_landmarks, padding):
     """
     Translate the 24 calibration landmarks so their bounding box sits at
-    (padding, padding). Returns (canonical_pts (24,2), (out_w, out_h)).
-
-    Spacing and proportions are preserved exactly; the warp just centers
-    the maze in a padded canvas of the same size as the calibration bbox
-    plus 2*padding on each side.
+    (padding, padding). Returns (canonical_pts (24, 2), (out_w, out_h)).
     """
     pts = np.asarray(calibration_landmarks, dtype=np.float32).copy()
     xmin, ymin = pts.min(axis=0)
@@ -423,90 +412,102 @@ def canonical_positions(calibration_landmarks, padding):
 
 
 # ---------------------------------------------------------------------------
-# ROI-constrained mask + corner detection
+# Template-matching landmark detection
 # ---------------------------------------------------------------------------
 
-def crop_roi(frame, roi):
-    """Slice the frame to [x_min, y_min, x_max, y_max]."""
-    x0, y0, x1, y1 = roi
-    return frame[y0:y1, x0:x1]
+def extract_patches(calib_gray, landmarks, patch_size):
+    """
+    Extract a `patch_size`x`patch_size` patch from `calib_gray` centered
+    on each landmark. Returns a list of length 24; entries are uint8
+    arrays of shape (patch_size, patch_size) or None if the patch would
+    extend outside the calibration frame.
+    """
+    h, w = calib_gray.shape[:2]
+    patch_size = int(patch_size)
+    half = patch_size // 2
+    patches = []
+    for pt in landmarks:
+        cx, cy = float(pt[0]), float(pt[1])
+        x0 = int(round(cx)) - half
+        y0 = int(round(cy)) - half
+        x1 = x0 + patch_size
+        y1 = y0 + patch_size
+        if x0 < 0 or y0 < 0 or x1 > w or y1 > h:
+            patches.append(None)
+        else:
+            patches.append(calib_gray[y0:y1, x0:x1].copy())
+    return patches
 
 
-def closed_binary_in_roi(frame, roi, kernel_size):
+def match_one_landmark(new_gray, patch, calib_pt, search_radius):
     """
-    Crop to ROI, threshold (Otsu), then morphologically close. Returns
-    (binary_roi, contour_roi_or_None) where contour_roi is the largest
-    contour found in the closed ROI mask, in ROI-local coordinates.
+    Run cv2.matchTemplate (TM_CCOEFF_NORMED) on a region around
+    `calib_pt`. Returns (detected_pt or None, score).
+
+    The search region is sized so the *center* of the patch can land
+    anywhere within ±search_radius of calib_pt. detected_pt is the
+    full-frame position of that center.
     """
-    sub = crop_roi(frame, roi)
-    if sub.size == 0:
-        return None, None
-    gray = cv2.cvtColor(sub, cv2.COLOR_BGR2GRAY)
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    k = max(1, int(kernel_size))
-    if k > 1:
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (k, k))
-        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    largest = max(contours, key=cv2.contourArea) if contours else None
-    return binary, largest
+    if patch is None:
+        return None, 0.0
+    ph, pw = patch.shape[:2]
+    half_w = pw // 2
+    half_h = ph // 2
+    h, w = new_gray.shape[:2]
+    cx, cy = float(calib_pt[0]), float(calib_pt[1])
+
+    sx0 = max(0, int(round(cx - search_radius - half_w)))
+    sy0 = max(0, int(round(cy - search_radius - half_h)))
+    sx1 = min(w, int(round(cx + search_radius + half_w)))
+    sy1 = min(h, int(round(cy + search_radius + half_h)))
+
+    if sx1 - sx0 < pw or sy1 - sy0 < ph:
+        return None, 0.0
+    region = new_gray[sy0:sy1, sx0:sx1]
+
+    result = cv2.matchTemplate(region, patch, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, max_loc = cv2.minMaxLoc(result)
+    detected = np.array([
+        float(sx0 + max_loc[0] + half_w),
+        float(sy0 + max_loc[1] + half_h),
+    ], dtype=np.float32)
+    return detected, float(max_val)
 
 
-def detect_corners_in_roi(binary_roi, roi, max_corners=60, quality=0.01, min_distance=20):
+def detect_via_template(new_frame, calibration, patches, search_radius, match_threshold):
     """
-    Run cv2.goodFeaturesToTrack on the ROI binary mask. Returns an Nx2
-    float32 array of corner coordinates in **full-frame** pixel space
-    (ROI offset already added back).
+    Match all 24 landmarks. Returns:
+        detected_pts  (24, 2) float32 — NaN for points where no patch
+                                        was extractable
+        scores        (24,)   float32 — peak correlation per point (0
+                                        if patch missing or region too
+                                        small)
+        matched_mask  (24,)   bool    — score >= match_threshold AND
+                                        patch was extractable
     """
-    if binary_roi is None:
-        return np.zeros((0, 2), dtype=np.float32)
-    corners = cv2.goodFeaturesToTrack(
-        binary_roi, maxCorners=int(max_corners),
-        qualityLevel=float(quality), minDistance=int(min_distance),
-    )
-    if corners is None:
-        return np.zeros((0, 2), dtype=np.float32)
-    pts = corners.reshape(-1, 2).astype(np.float32)
-    pts[:, 0] += roi[0]
-    pts[:, 1] += roi[1]
-    return pts
+    new_gray = to_gray(new_frame)
+    detected = np.full((NUM_LANDMARKS, 2), np.nan, dtype=np.float32)
+    scores = np.zeros(NUM_LANDMARKS, dtype=np.float32)
+    matched = np.zeros(NUM_LANDMARKS, dtype=bool)
+    landmarks = calibration["landmarks"]
+    for i in range(NUM_LANDMARKS):
+        det_pt, score = match_one_landmark(
+            new_gray, patches[i], landmarks[i], search_radius
+        )
+        scores[i] = score
+        if det_pt is not None:
+            detected[i] = det_pt
+            if score >= match_threshold:
+                matched[i] = True
+    return detected, scores, matched
 
 
 # ---------------------------------------------------------------------------
-# Hungarian matching + homography + scoring
+# Homography + scoring
 # ---------------------------------------------------------------------------
-
-def hungarian_match(detected_pts, calibration_pts, max_distance=MAX_MATCH_DISTANCE_PX):
-    """
-    Match detected corners to the 24 calibration points.
-
-    Builds a (num_calib, num_detected) Euclidean distance matrix and
-    solves the assignment via scipy.optimize.linear_sum_assignment.
-    Returns:
-        matched_calib_idx  (M,)  : indices into calibration_pts (0..23)
-        matched_det_idx    (M,)  : corresponding indices into detected_pts
-        matched_distance   (M,)  : per-pair distances
-    Pairs whose distance exceeds `max_distance` are dropped.
-    """
-    if len(detected_pts) == 0:
-        return (np.zeros(0, dtype=int), np.zeros(0, dtype=int), np.zeros(0, dtype=float))
-    cal = np.asarray(calibration_pts, dtype=np.float32)
-    det = np.asarray(detected_pts, dtype=np.float32)
-    # Distance matrix (num_calib, num_detected).
-    diff = cal[:, None, :] - det[None, :, :]
-    dist = np.sqrt((diff ** 2).sum(axis=-1))
-    # Hungarian. linear_sum_assignment minimizes total cost.
-    row_idx, col_idx = linear_sum_assignment(dist)
-    pair_dists = dist[row_idx, col_idx]
-    keep = pair_dists <= float(max_distance)
-    return row_idx[keep], col_idx[keep], pair_dists[keep]
-
 
 def compute_homography_ransac(src_pts, dst_pts, ransac_threshold=5.0):
-    """
-    findHomography with RANSAC over `src_pts` -> `dst_pts`. Returns the
-    3x3 H or None on failure.
-    """
+    """findHomography with RANSAC over corresponding point arrays."""
     if len(src_pts) < 4 or len(src_pts) != len(dst_pts):
         return None
     src = np.asarray(src_pts, dtype=np.float32).reshape(-1, 1, 2)
@@ -527,16 +528,25 @@ def reprojection_error(src_pts, dst_pts, H):
     return float(np.sqrt((diffs ** 2).sum(axis=1)).mean())
 
 
-def classify_confidence(reproj_px, num_matched):
+def classify_confidence(reproj_px, num_matched, mean_match_score, source="auto"):
     """
-    Confidence label from reprojection error and the number of matched
-    landmarks. `failed` is signalled by num_matched < MIN_MATCHED_POINTS.
+    Confidence from reprojection error, matched count, and mean template
+    correlation. Manual-source videos are scored without the mean-score
+    requirement (the user has visually verified the points).
     """
-    if not np.isfinite(reproj_px):
-        return "failed"
     if num_matched < MIN_MATCHED_POINTS:
         return "failed"
-    if reproj_px < HIGH_REPROJ_PX and num_matched >= HIGH_MIN_MATCHED:
+    if reproj_px is None or not np.isfinite(reproj_px):
+        return "failed"
+    if source == "manual":
+        if reproj_px < HIGH_REPROJ_PX and num_matched >= HIGH_MIN_MATCHED:
+            return "high"
+        if reproj_px < MEDIUM_REPROJ_PX and num_matched >= MEDIUM_MIN_MATCHED:
+            return "medium"
+        return "low"
+    if (reproj_px < HIGH_REPROJ_PX
+            and num_matched >= HIGH_MIN_MATCHED
+            and mean_match_score > HIGH_MIN_MEAN_SCORE):
         return "high"
     if reproj_px < MEDIUM_REPROJ_PX and num_matched >= MEDIUM_MIN_MATCHED:
         return "medium"
@@ -555,16 +565,14 @@ def empty_detection_record(video_path, rel, dst_size):
         "status": "failed",
         "frame": None,
         "fps": None,
-        "contour_roi": None,
-        "binary_roi": None,
-        "detected_corners": None,
-        "matched_calib_idx": None,
-        "matched_detected_pts": None,
-        "matched_canonical_pts": None,
+        "detected_pts": None,    # (24, 2) NaN-filled for unmatched
+        "match_scores": None,    # (24,)
+        "matched_mask": None,    # (24,) bool
         "calibration_landmarks": None,
         "H": None,
         "dst_size": dst_size,
         "num_matched": 0,
+        "mean_match_score": np.nan,
         "reprojection_error": np.nan,
         "source": "auto",
         "confidence": "failed",
@@ -572,17 +580,12 @@ def empty_detection_record(video_path, rel, dst_size):
     }
 
 
-def detect_one(video_path, input_dir, calibration, canonical_pts, dst_size, args,
-               manual_landmarks=None):
+def detect_one(video_path, input_dir, calibration, patches, canonical_pts, dst_size,
+               args, manual_landmarks=None):
     """
-    Per-video detection. Samples the middle frame, then either:
-      - if `manual_landmarks` was supplied (24x2 in source coords), uses
-        those directly (all 24 matched, no auto-detection); or
-      - crops to the calibration ROI, thresholds + closes, runs
-        goodFeaturesToTrack, Hungarian-matches detected corners to the
-        calibration's 24 points, and computes a RANSAC homography.
-
-    Returns a dict consumed by pass 2 and the CSV writer.
+    Per-video detection. Either uses pre-saved manual landmarks (skip
+    template matching, all 24 matched) or runs template matching against
+    the calibration patches.
     """
     rel = video_path.relative_to(input_dir)
     rec = empty_detection_record(video_path, rel, dst_size)
@@ -602,15 +605,14 @@ def detect_one(video_path, input_dir, calibration, canonical_pts, dst_size, args
     rec["frame"] = frame
     rec["fps"] = fps
 
-    calib_pts = calibration["landmarks"]
-
     # Path A: per-video manual landmarks override automatic detection.
     if manual_landmarks is not None:
         rec["source"] = "manual"
-        rec["matched_calib_idx"] = np.arange(NUM_LANDMARKS, dtype=int)
-        rec["matched_detected_pts"] = np.asarray(manual_landmarks, dtype=np.float32)
-        rec["matched_canonical_pts"] = canonical_pts
+        rec["detected_pts"] = np.asarray(manual_landmarks, dtype=np.float32)
+        rec["match_scores"] = np.full(NUM_LANDMARKS, np.nan, dtype=np.float32)
+        rec["matched_mask"] = np.ones(NUM_LANDMARKS, dtype=bool)
         rec["num_matched"] = NUM_LANDMARKS
+        rec["mean_match_score"] = np.nan
         H = compute_homography_ransac(manual_landmarks, canonical_pts)
         if H is None:
             rec["error"] = "homography solve failed (manual)"
@@ -621,53 +623,41 @@ def detect_one(video_path, input_dir, calibration, canonical_pts, dst_size, args
         )
         rec["status"] = "ok"
         rec["confidence"] = classify_confidence(
-            rec["reprojection_error"], rec["num_matched"]
+            rec["reprojection_error"], rec["num_matched"],
+            rec["mean_match_score"], source="manual",
         )
         return rec
 
-    # Path B: automatic detection within the calibration ROI.
-    roi = calibration["search_roi"]
-    binary_roi, contour_roi = closed_binary_in_roi(frame, roi, args.morph_kernel_size)
-    if binary_roi is None:
-        rec["error"] = "could not crop to ROI"
-        return rec
-    rec["binary_roi"] = binary_roi
-    rec["contour_roi"] = contour_roi
+    # Path B: automatic template matching.
+    detected, scores, matched = detect_via_template(
+        frame, calibration, patches,
+        search_radius=args.search_radius,
+        match_threshold=args.match_threshold,
+    )
+    rec["detected_pts"] = detected
+    rec["match_scores"] = scores
+    rec["matched_mask"] = matched
+    rec["num_matched"] = int(matched.sum())
+    rec["mean_match_score"] = float(np.mean(scores))
 
-    detected = detect_corners_in_roi(binary_roi, roi)
-    rec["detected_corners"] = detected
-    if len(detected) < MIN_MATCHED_POINTS:
-        rec["error"] = f"only {len(detected)} corners detected in ROI"
-        return rec
-
-    calib_idx, det_idx, pair_dists = hungarian_match(detected, calib_pts)
-    if len(calib_idx) < MIN_MATCHED_POINTS:
-        rec["num_matched"] = int(len(calib_idx))
-        rec["error"] = f"only {len(calib_idx)} of {NUM_LANDMARKS} landmarks matched"
+    if rec["num_matched"] < MIN_MATCHED_POINTS:
+        rec["error"] = f"only {rec['num_matched']} of {NUM_LANDMARKS} landmarks matched"
         return rec
 
-    src_pts = detected[det_idx]
-    dst_pts = canonical_pts[calib_idx]
+    src_pts = detected[matched]
+    dst_pts = canonical_pts[matched]
     H = compute_homography_ransac(src_pts, dst_pts)
     if H is None:
         rec["error"] = "homography solve failed"
-        rec["num_matched"] = int(len(calib_idx))
-        rec["matched_calib_idx"] = calib_idx
-        rec["matched_detected_pts"] = src_pts
-        rec["matched_canonical_pts"] = dst_pts
         return rec
-
     rep_err = reprojection_error(src_pts, dst_pts, H)
     rec.update({
         "status": "ok",
-        "matched_calib_idx": calib_idx,
-        "matched_detected_pts": src_pts,
-        "matched_canonical_pts": dst_pts,
-        "num_matched": int(len(calib_idx)),
-        "reprojection_error": rep_err,
         "H": H,
-        "source": "auto",
-        "confidence": classify_confidence(rep_err, int(len(calib_idx))),
+        "reprojection_error": rep_err,
+        "confidence": classify_confidence(
+            rep_err, rec["num_matched"], rec["mean_match_score"], source="auto"
+        ),
     })
     return rec
 
@@ -678,61 +668,57 @@ def detect_one(video_path, input_dir, calibration, canonical_pts, dst_size, args
 
 def save_review_image(rec, review_path):
     """
-    Save a debug PNG showing detected corners (green), all 24 calibration
-    points (red), and lines connecting matched pairs. Detected corners
-    that didn't match a calibration point are drawn as dim green.
+    Save a debug PNG showing template-matching results:
+    - Green filled circles + numbers at *detected* positions for matched landmarks.
+    - Red hollow circles at *calibration* positions for unmatched landmarks.
+    - Yellow lines from each calibration position to its detected position
+      (the per-landmark shift) for matched points.
     """
     frame = rec["frame"]
     if frame is None:
         return
     img = frame.copy()
 
-    # Search ROI rectangle.
     calib = rec.get("calibration_landmarks")
+    detected = rec.get("detected_pts")
+    matched = rec.get("matched_mask")
+    scores = rec.get("match_scores")
     if calib is None:
         return
-    # Draw the ROI for context if available on the record.
-    # (It's stored on calibration via the caller; included via rec not strictly
-    # required since we don't carry it here. Skip if absent.)
 
-    # All calibration points in red.
-    for p in calib:
-        cv2.circle(img, (int(p[0]), int(p[1])), 6, (0, 0, 255), 2)
+    if matched is not None and detected is not None:
+        for i in range(NUM_LANDMARKS):
+            cp = calib[i]
+            cpx, cpy = int(cp[0]), int(cp[1])
+            if not bool(matched[i]):
+                # Unmatched: red hollow circle at the expected (calibration) spot.
+                cv2.circle(img, (cpx, cpy), 8, (0, 0, 255), 2)
+                cv2.putText(img, str(i + 1), (cpx + 9, cpy - 9),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255),
+                            1, cv2.LINE_AA)
+                continue
+            dp = detected[i]
+            dpx, dpy = int(dp[0]), int(dp[1])
+            # Line from expected -> detected (showing the per-point shift).
+            cv2.line(img, (cpx, cpy), (dpx, dpy), (0, 255, 255), 1)
+            # Detected position: green filled with the landmark number.
+            cv2.circle(img, (dpx, dpy), 6, (0, 255, 0), -1)
+            cv2.putText(img, str(i + 1), (dpx + 8, dpy - 8),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),
+                        2, cv2.LINE_AA)
+    else:
+        # No detection at all — just show the calibration positions in red.
+        for i, p in enumerate(calib):
+            cv2.circle(img, (int(p[0]), int(p[1])), 8, (0, 0, 255), 2)
 
-    # Detected corners in green (dim by default; bright if matched).
-    detected = rec.get("detected_corners")
-    matched_det_pts = rec.get("matched_detected_pts")
-    matched_set = set()
-    if detected is not None and matched_det_pts is not None:
-        for mp in matched_det_pts:
-            # Find the row in detected closest to this matched point.
-            d = np.sqrt(((detected - mp) ** 2).sum(axis=1))
-            matched_set.add(int(np.argmin(d)))
-    if detected is not None:
-        for i, p in enumerate(detected):
-            if i in matched_set:
-                cv2.circle(img, (int(p[0]), int(p[1])), 5, (0, 255, 0), -1)
-            else:
-                cv2.circle(img, (int(p[0]), int(p[1])), 4, (60, 160, 60), 1)
-
-    # Lines between matched pairs.
-    calib_idx = rec.get("matched_calib_idx")
-    if (calib_idx is not None and matched_det_pts is not None
-            and len(calib_idx) == len(matched_det_pts)):
-        for ci, det_pt in zip(calib_idx, matched_det_pts):
-            cp = calib[int(ci)]
-            cv2.line(img,
-                     (int(det_pt[0]), int(det_pt[1])),
-                     (int(cp[0]), int(cp[1])),
-                     (0, 255, 255), 1)
-
-    # Header text.
     src_label = rec.get("source", "auto")
-    matched = rec.get("num_matched", 0)
+    matched_n = rec.get("num_matched", 0)
     rep = rec.get("reprojection_error", float("nan"))
+    mean_s = rec.get("mean_match_score", float("nan"))
     conf = rec.get("confidence", "?")
     err = rec.get("error", "")
-    msg = f"{src_label} | matched {matched}/{NUM_LANDMARKS} | reproj {rep:.2f} | {conf}"
+    msg = (f"{src_label} | matched {matched_n}/{NUM_LANDMARKS} | "
+           f"mean_score {mean_s:.2f} | reproj {rep:.2f} | {conf}")
     if err:
         msg += f" | {err}"
     cv2.putText(img, msg, (10, 30),
@@ -755,13 +741,19 @@ def parse_args():
                    help="Directory of input videos (searched recursively). "
                         "Required for batch mode.")
     p.add_argument("--output_dir", required=True, type=Path,
-                   help="Directory for cropped videos, calibration file (default), "
+                   help="Directory for cropped videos, calibration files, "
                         "per-video manual landmarks, review/, and the summary CSV.")
     p.add_argument("--padding", type=int, default=50,
                    help="Padding (px) added around the bounding box of the canonical landmarks.")
-    p.add_argument("--morph_kernel_size", type=int, default=50,
-                   help="Square kernel size (px) for MORPH_CLOSE on the ROI threshold "
-                        "to fill the mouse-shaped hole.")
+    p.add_argument("--patch_size", type=int, default=DEFAULT_PATCH_SIZE,
+                   help="Square template patch size in pixels (default %(default)s). "
+                        "Used during --calibrate; the saved value is read back at batch time.")
+    p.add_argument("--search_radius", type=int, default=DEFAULT_SEARCH_RADIUS,
+                   help="How far (px) from each calibration landmark to search for "
+                        "the template in a new frame. Default %(default)s.")
+    p.add_argument("--match_threshold", type=float, default=DEFAULT_MATCH_THRESHOLD,
+                   help="Minimum normalized cross-correlation score for a template "
+                        "match to count as 'matched'. Default %(default)s.")
     p.add_argument("--exclude_dirs", nargs="*", default=DEFAULT_EXCLUDE_DIRS,
                    help="Directory names to skip when walking input_dir (case-insensitive). "
                         f"Default: {' '.join(DEFAULT_EXCLUDE_DIRS)}.")
@@ -780,12 +772,12 @@ def parse_args():
     p.add_argument("--manual_video", type=Path, default=None,
                    help="Run the 24-click UI on this specific video, save the clicked "
                         "landmarks next to the cropped output as <stem>_landmarks.json, "
-                        "and process that one video. Future batch runs will pick up the "
-                        "saved landmarks automatically.")
+                        "and process that one video. Future batch runs pick up the saved "
+                        "landmarks automatically.")
     p.add_argument("--redo_video", type=str, default=None,
-                   help="In batch mode, force automatic re-detection for the named video "
-                        "(matched against the relative path or filename). Saved manual "
-                        "landmarks for that video are ignored.")
+                   help="In batch mode, force template-matching re-detection for the "
+                        "named video (matched against the bare filename or the relative "
+                        "path). Saved manual landmarks for that video are ignored.")
     return p.parse_args()
 
 
@@ -826,21 +818,51 @@ def run_calibration(args, calibration_path):
         return 1
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    roi = compute_search_roi(landmarks, frame.shape[:2])
-    save_calibration(calibration_path, video_path, frame.shape[:2], landmarks, roi)
 
+    # Save the unannotated frame (this is what batch matching reads).
+    clean_path = args.output_dir / DEFAULT_CALIBRATION_FRAME_FILENAME
+    cv2.imwrite(str(clean_path), frame)
+
+    # Save the calibration JSON.
+    save_calibration(
+        calibration_path, video_path, frame.shape[:2],
+        landmarks, args.patch_size, DEFAULT_CALIBRATION_FRAME_FILENAME,
+    )
+
+    # Save an annotated copy with patch boxes + numbers, for human reference.
     annotated = frame.copy()
-    cv2.rectangle(annotated, (roi[0], roi[1]), (roi[2], roi[3]), (255, 255, 0), 2)
+    half = int(args.patch_size) // 2
     for i, p in enumerate(landmarks):
-        cv2.circle(annotated, (int(p[0]), int(p[1])), 7, (0, 255, 0), -1)
-        cv2.putText(annotated, str(i + 1), (int(p[0]) + 8, int(p[1]) - 8),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255), 2, cv2.LINE_AA)
-    frame_out = args.output_dir / DEFAULT_CALIBRATION_FRAME_FILENAME
-    cv2.imwrite(str(frame_out), annotated)
+        x, y = int(p[0]), int(p[1])
+        cv2.rectangle(annotated, (x - half, y - half),
+                      (x + half, y + half), (255, 255, 0), 1)
+        cv2.circle(annotated, (x, y), 6, (0, 255, 0), -1)
+        cv2.putText(annotated, str(i + 1), (x + 8, y - 8),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 255),
+                    2, cv2.LINE_AA)
+    annotated_path = args.output_dir / DEFAULT_CALIBRATION_FRAME_ANNOTATED
+    cv2.imwrite(str(annotated_path), annotated)
+
+    # Warn about any landmark whose patch falls outside the frame.
+    h, w = frame.shape[:2]
+    edge_warnings = []
+    for i, p in enumerate(landmarks):
+        cx, cy = float(p[0]), float(p[1])
+        if (cx - half < 0 or cy - half < 0 or
+                cx + half > w or cy + half > h):
+            edge_warnings.append(i + 1)
+    if edge_warnings:
+        print(
+            f"Warning: patch_size={args.patch_size} is too large for landmarks "
+            f"{edge_warnings} (patch falls outside the frame). Those landmarks "
+            f"will be unmatched in batch mode unless you re-calibrate with a "
+            f"smaller --patch_size."
+        )
 
     print(f"Saved calibration: {calibration_path}")
-    print(f"Search ROI: {roi}")
-    print(f"Saved annotated calibration frame: {frame_out}")
+    print(f"Saved clean calibration frame: {clean_path}")
+    print(f"Saved annotated calibration frame: {annotated_path}")
+    print(f"Patch size: {args.patch_size} px")
     return 0
 
 
@@ -849,19 +871,14 @@ def run_calibration(args, calibration_path):
 # ---------------------------------------------------------------------------
 
 def run_manual_video(args, calibration_path):
-    """
-    Click 24 landmarks for a specific video, save the per-video JSON,
-    then process that one video using those landmarks.
-    """
+    """Click 24 landmarks for a specific video and process that one video."""
     video_path = args.manual_video
     if not video_path.exists():
         print(f"Error: --manual_video does not exist: {video_path}")
         return 1
     if not calibration_path.exists():
-        print(
-            f"Error: calibration file not found at {calibration_path}.\n"
-            f"Run --calibrate first."
-        )
+        print(f"Error: calibration file not found at {calibration_path}.\n"
+              f"Run --calibrate first.")
         return 2
 
     calibration = load_calibration(calibration_path)
@@ -883,9 +900,6 @@ def run_manual_video(args, calibration_path):
         print("Manual landmark entry cancelled.")
         return 1
 
-    # Decide where to save the per-video JSON. If we can resolve the video
-    # under --input_dir, mirror that relative path under --output_dir;
-    # otherwise drop it next to the cropped output by basename.
     if args.input_dir is not None:
         try:
             rel = video_path.relative_to(args.input_dir)
@@ -899,13 +913,11 @@ def run_manual_video(args, calibration_path):
     save_video_landmarks(landmarks_json, video_path, frame.shape[:2], landmarks)
     print(f"Saved per-video landmarks: {landmarks_json}")
 
-    # Process this one video with those landmarks.
     H = compute_homography_ransac(landmarks, canonical_pts)
     if H is None:
         print("Error: homography solve failed for the manual landmarks.")
         return 1
     rep_err = reprojection_error(landmarks, canonical_pts, H)
-
     output_path = args.output_dir / rel.parent / (video_path.stem + "_cropped.mp4")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"Warping: {video_path.name} -> {output_path}")
@@ -918,10 +930,11 @@ def run_manual_video(args, calibration_path):
 # Batch entry point
 # ---------------------------------------------------------------------------
 
-def make_failed_row(rel, num_matched=0, error=None):
+def make_failed_row(rel, num_matched=0, mean_score=np.nan, error=None):
     return {
         "filename": str(rel).replace("\\", "/"),
         "num_matched_points": int(num_matched),
+        "mean_match_score": float(mean_score) if np.isfinite(mean_score) else np.nan,
         "reprojection_error": np.nan,
         "confidence": "failed",
         "output_path": f"error: {error}" if error else "",
@@ -929,7 +942,6 @@ def make_failed_row(rel, num_matched=0, error=None):
 
 
 def matches_redo_target(rel_path, target):
-    """True if target matches either the filename or the relative path."""
     if target is None:
         return False
     target_norm = str(target).replace("\\", "/").strip().strip("/")
@@ -952,10 +964,27 @@ def run_batch(args, calibration_path):
 
     calibration = load_calibration(calibration_path)
     canonical_pts, dst_size = canonical_positions(calibration["landmarks"], args.padding)
+
+    # Pre-extract the 24 patches once from the calibration frame.
+    patches = extract_patches(
+        calibration["calibration_frame_gray"],
+        calibration["landmarks"],
+        calibration["patch_size"],
+    )
+    n_valid_patches = sum(1 for p in patches if p is not None)
+    if n_valid_patches < MIN_MATCHED_POINTS:
+        print(
+            f"Error: only {n_valid_patches} of {NUM_LANDMARKS} calibration patches "
+            f"could be extracted (the rest fall outside the calibration frame). "
+            f"Re-run --calibrate with a smaller --patch_size."
+        )
+        return 1
+
     print(
         f"Loaded calibration from {calibration_path}; "
         f"canonical output size = {dst_size[0]}x{dst_size[1]} px; "
-        f"search ROI = {calibration['search_roi']}."
+        f"patch_size = {calibration['patch_size']} px; "
+        f"valid patches = {n_valid_patches}/{NUM_LANDMARKS}."
     )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -972,17 +1001,17 @@ def run_batch(args, calibration_path):
     total = len(videos)
     print(
         f"Found {total} video(s). Excluding dirs: {args.exclude_dirs}. "
-        f"Pattern: {args.include_pattern}."
+        f"Pattern: {args.include_pattern}.  "
+        f"search_radius={args.search_radius}, match_threshold={args.match_threshold}."
     )
 
     # ----------------------------------------------------------------------
-    # Pass 1: per-video detection (auto or manual-landmarks-override).
+    # Pass 1: per-video detection (auto template-match, or manual override).
     # ----------------------------------------------------------------------
-    print("Pass 1/2: detecting landmarks per video...")
+    print("Pass 1/2: locating landmarks per video...")
     detections = []
     for i, video_path in enumerate(videos, start=1):
         rel = video_path.relative_to(args.input_dir)
-        # Look up saved manual landmarks (unless --redo_video targets this one).
         manual_path = manual_landmarks_path(args.output_dir, rel)
         manual_landmarks = None
         if manual_path.exists() and not matches_redo_target(rel, args.redo_video):
@@ -997,7 +1026,7 @@ def run_batch(args, calibration_path):
 
         try:
             d = detect_one(
-                video_path, args.input_dir, calibration,
+                video_path, args.input_dir, calibration, patches,
                 canonical_pts, dst_size, args,
                 manual_landmarks=manual_landmarks,
             )
@@ -1007,8 +1036,11 @@ def run_batch(args, calibration_path):
         detections.append(d)
 
         if d["status"] == "ok":
+            mean_s = d["mean_match_score"]
+            mean_str = "n/a" if not np.isfinite(mean_s) else f"{mean_s:.2f}"
             print(f"  [{i}/{total}] {video_path.name} — {d['source']}: "
                   f"matched {d['num_matched']}/{NUM_LANDMARKS}, "
+                  f"mean_score {mean_str}, "
                   f"reproj {d['reprojection_error']:.2f} px, {d['confidence']}")
         else:
             print(f"  [{i}/{total}] {video_path.name} — failed: {d['error']}")
@@ -1024,7 +1056,10 @@ def run_batch(args, calibration_path):
             if d["frame"] is not None:
                 review_path = review_dir / rel.parent / (d["video_path"].stem + "_review.png")
                 save_review_image(d, review_path)
-            rows.append(make_failed_row(rel, d.get("num_matched", 0), d.get("error")))
+            rows.append(make_failed_row(
+                rel, d.get("num_matched", 0),
+                d.get("mean_match_score", np.nan), d.get("error")
+            ))
             print(f"  [{i}/{total}] {d['filename']} — confidence: failed")
             continue
 
@@ -1040,20 +1075,30 @@ def run_batch(args, calibration_path):
             rows.append({
                 "filename": d["filename"],
                 "num_matched_points": int(d["num_matched"]),
+                "mean_match_score": (
+                    float(d["mean_match_score"])
+                    if np.isfinite(d["mean_match_score"]) else np.nan
+                ),
                 "reprojection_error": float(d["reprojection_error"]),
                 "confidence": d["confidence"],
                 "output_path": str(output_path),
             })
+            mean_s = d["mean_match_score"]
+            mean_str = "n/a" if not np.isfinite(mean_s) else f"{mean_s:.2f}"
             print(f"  [{i}/{total}] {d['filename']} — confidence: {d['confidence']} "
                   f"(matched {d['num_matched']}/{NUM_LANDMARKS}, "
+                  f"mean_score {mean_str}, "
                   f"reproj {d['reprojection_error']:.2f} px)")
         except Exception as e:
-            rows.append(make_failed_row(rel, d.get("num_matched", 0), str(e)))
+            rows.append(make_failed_row(
+                rel, d.get("num_matched", 0),
+                d.get("mean_match_score", np.nan), str(e)
+            ))
             print(f"  [{i}/{total}] {d['filename']} — confidence: failed ({e})")
 
     summary = pd.DataFrame(rows, columns=[
-        "filename", "num_matched_points", "reprojection_error",
-        "confidence", "output_path",
+        "filename", "num_matched_points", "mean_match_score",
+        "reprojection_error", "confidence", "output_path",
     ])
     summary_path = args.output_dir / "alignment_summary.csv"
     summary.to_csv(summary_path, index=False)
