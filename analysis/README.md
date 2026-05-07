@@ -57,6 +57,26 @@ looks like in canonical coordinates.
 The template is saved as `consensus_template.png` in the output
 directory so you can sanity-check it visually.
 
+#### Why morphological closing is applied to the IoU mask
+
+The mouse's dark body would otherwise punch a mouse-shaped hole into the
+thresholded maze mask. Because the mouse is in a different position in
+every video, those holes disagree with the consensus template in a
+different spot every time and systematically pull the IoU score down —
+to the point where the script was returning **zero** `high`-confidence
+videos across a full batch.
+
+To fix that, after the contour-filled mask is built (and before it is
+warped and used for IoU), `cv2.morphologyEx(..., cv2.MORPH_CLOSE)` is
+applied with a square kernel of size `--morph_kernel_size` (default 50
+px). The kernel is large enough to swallow the mouse but small relative
+to the maze, so the hole gets filled but the maze outline doesn't bloat.
+
+The closing **only affects the mask used for IoU comparison**. Contour
+detection, the `cv2.minAreaRect` bounding rectangle, and the perspective
+transform itself all still use the original (unclosed) threshold output,
+so cropping geometry is unchanged.
+
 ### Pass 2 — IoU comparison and video writing
 
 For every video that passed pass 1:
@@ -70,7 +90,9 @@ For every video that passed pass 1:
   the detected contour drawn on it under `review/`.
 
 A summary CSV (`alignment_summary.csv`) is written with one row per
-input video.
+input video. After it's saved, the script also prints a confidence
+breakdown to the console (counts of `high` / `medium` / `low` /
+`manual` / `failed`) so you don't have to count rows by hand.
 
 ## Confidence scoring
 
@@ -81,7 +103,7 @@ checks determines the confidence label.
 | ------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------ |
 | Contour area ratio  | Detected contour area as a fraction of total frame area.       | Outside `[0.05, 0.5]` (maze fills <5% or >50% of frame).           |
 | Aspect ratio        | Long/short side ratio of the rotated bounding rectangle.       | Deviates more than 20% from the reference (first successful video).|
-| Mask IoU            | Overlap of the warped mask with the consensus template.        | IoU below `--iou_threshold` (default 0.85).                        |
+| Mask IoU            | Overlap of the (closed) warped mask with the consensus template. | IoU below `--iou_threshold` (default 0.80).                        |
 | Rotation magnitude  | Signed deviation (in degrees) from axis-aligned, in [-45, 45]. | `abs(angle)` greater than `--rotation_threshold` (default 15°).    |
 
 Confidence buckets:
@@ -101,24 +123,34 @@ python crop_and_align_maze.py \
     --input_dir <path> \
     --output_dir <path> \
     [--padding 50] \
-    [--iou_threshold 0.85] \
+    [--iou_threshold 0.80] \
     [--rotation_threshold 15] \
+    [--morph_kernel_size 50] \
+    [--exclude_dirs segments new_segments segments_detected deeplabcut habituation] \
+    [--include_pattern "*.mp4,*.avi"] \
     [--manual]
 ```
 
 | Argument              | Default | Meaning                                                                                |
 | --------------------- | ------- | -------------------------------------------------------------------------------------- |
-| `--input_dir`         | —       | Folder to search recursively for `.mp4` and `.avi` videos. Subfolders preserved in output. |
+| `--input_dir`         | —       | Folder to search recursively. Subfolders preserved in output.                          |
 | `--output_dir`        | —       | Where cropped videos, the consensus template, the review folder, and the CSV are written. |
 | `--padding`           | 50      | Pixels of padding added around the canonical maze rectangle on every side.             |
-| `--iou_threshold`     | 0.85    | Minimum mask IoU vs. consensus template to count as a passing check.                   |
+| `--iou_threshold`     | 0.80    | Minimum mask IoU vs. consensus template to count as a passing check.                   |
 | `--rotation_threshold`| 15      | Maximum allowed `abs(rotation)` in degrees before the rotation check is flagged.       |
+| `--morph_kernel_size` | 50      | Square kernel size (px) for the `MORPH_CLOSE` step that fills the mouse-shaped hole in the IoU mask. Make it comfortably larger than the mouse but smaller than the maze. |
+| `--exclude_dirs`      | `segments new_segments segments_detected deeplabcut habituation` | Directory names to skip when walking `input_dir` (case-insensitive). Pruned in-place during the walk so the script never even descends into them — useful for skipping per-trial segment copies, DLC outputs, and habituation videos. Pass space-separated names to override. |
+| `--include_pattern`   | `*.mp4,*.avi` | Comma-separated `fnmatch` globs used to pick which filenames count as videos. |
 | `--manual`            | off     | After automatic scoring, open a window for each `medium` / `low` / `failed` video so you can click the 4 maze corners by hand. |
 
 `input_dir` is searched recursively, so you can point it at the top-level
 `simplermaze/` folder and it will pick up videos in
 `mouse<id>/<session>/<file>.mp4` automatically. The output mirrors the
-relative path to keep filenames from colliding across sessions.
+relative path to keep filenames from colliding across sessions. Use
+`--exclude_dirs` and `--include_pattern` to control what counts as a
+"main session" video — the defaults skip per-trial segment folders, DLC
+output trees, and habituation recordings so only the raw session videos
+are processed.
 
 ## Dependencies
 

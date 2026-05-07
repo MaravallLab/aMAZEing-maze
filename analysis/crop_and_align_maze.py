@@ -21,17 +21,32 @@ Two-pass design:
            override the automatic transform.
   Pass 2 — warp every frame and write the cropped/aligned output video.
 
+A morphological closing step is applied to the binary maze mask before it
+is used for IoU comparison. The mouse's dark body would otherwise punch a
+mouse-shaped hole into the thresholded mask, and because the mouse is in a
+different position in every video, those holes disagree with the consensus
+template in a different spot every time and systematically drag the IoU
+score down. Closing with a kernel large enough to swallow the mouse but
+small relative to the maze fills those holes. The closing only affects the
+mask used for IoU; contour detection and the transform itself still use
+the original threshold.
+
 Usage:
     python crop_and_align_maze.py \
         --input_dir <path> \
         --output_dir <path> \
         [--padding 50] \
-        [--iou_threshold 0.85] \
+        [--iou_threshold 0.80] \
         [--rotation_threshold 15] \
+        [--morph_kernel_size 50] \
+        [--exclude_dirs segments new_segments segments_detected deeplabcut habituation] \
+        [--include_pattern "*.mp4,*.avi"] \
         [--manual]
 """
 
 import argparse
+import fnmatch
+import os
 from pathlib import Path
 
 import cv2
@@ -39,7 +54,14 @@ import numpy as np
 import pandas as pd
 
 
-VIDEO_EXTENSIONS = (".mp4", ".avi")
+DEFAULT_EXCLUDE_DIRS = [
+    "segments",
+    "new_segments",
+    "segments_detected",
+    "deeplabcut",
+    "habituation",
+]
+DEFAULT_INCLUDE_PATTERN = "*.mp4,*.avi"
 
 
 def sample_middle_frame(cap):
@@ -132,6 +154,47 @@ def warped_mask_from_corners(corners, frame_shape, H, dst_size):
     poly = np.asarray(corners, dtype=np.int32).reshape(-1, 1, 2)
     cv2.fillPoly(mask, [poly], 255)
     return cv2.warpPerspective(mask, H, dst_size)
+
+
+def close_mask(mask, kernel_size):
+    """
+    Morphological closing with a square kernel.
+
+    Used to fill the mouse-shaped hole that the mouse's dark body punches
+    into the thresholded maze mask. Only applied to the IoU-comparison
+    mask — contour detection and the transform use the unclosed threshold.
+    """
+    k = int(kernel_size)
+    if k <= 1:
+        return mask
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (k, k))
+    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+
+def find_videos(input_dir, include_pattern, exclude_dirs):
+    """
+    Recursively walk `input_dir` and return matching video paths.
+
+    `include_pattern` is a comma-separated list of fnmatch globs (e.g.
+    "*.mp4,*.avi"). `exclude_dirs` is a list of directory names (any
+    component matching is pruned, case-insensitive). Excluded directories
+    are pruned from os.walk in-place so the script doesn't even descend
+    into them — useful for skipping `segments/`, `deeplabcut/`, etc.
+    """
+    patterns = [p.strip() for p in str(include_pattern).split(",") if p.strip()]
+    excluded = {name.strip().lower() for name in exclude_dirs if name.strip()}
+
+    matches = []
+    for root, dirs, files in os.walk(input_dir):
+        # In-place prune of excluded directory names.
+        dirs[:] = [d for d in dirs if d.lower() not in excluded]
+        for fname in files:
+            lower = fname.lower()
+            for pat in patterns:
+                if fnmatch.fnmatch(lower, pat.lower()):
+                    matches.append(Path(root) / fname)
+                    break
+    return sorted(matches)
 
 
 def compute_iou(mask_a, mask_b):
@@ -329,8 +392,13 @@ def detect_one(video_path, input_dir, state):
         contour, state["canonical_size"], state["padding"]
     )
 
+    # Build the IoU-comparison mask. Morphological closing fills the
+    # mouse-shaped hole the mouse's dark body punches into the threshold
+    # so the IoU score isn't dragged down by per-video mouse position.
+    # Detection and the transform above use the unclosed contour.
     mask = np.zeros((frame_h, frame_w), dtype=np.uint8)
     cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
+    mask = close_mask(mask, state["morph_kernel_size"])
     warped_mask = cv2.warpPerspective(mask, H, dst_size)
 
     ref_ar = state["reference_aspect_ratio"]
@@ -425,6 +493,9 @@ def run_manual_pass(detections, state, consensus, args):
 
         H, dst_size = transform_from_clicks(corners, state["canonical_size"], args.padding)
         warped_mask = warped_mask_from_corners(corners, d["frame"].shape, H, dst_size)
+        # Match the closing applied in detect_one so manual masks live in the
+        # same morphological space as automatic masks (no-op for clean quads).
+        warped_mask = close_mask(warped_mask, state["morph_kernel_size"])
 
         d["H"] = H
         d["dst_size"] = dst_size
@@ -460,10 +531,20 @@ def parse_args():
                    help="Directory to write cropped videos and the summary CSV.")
     p.add_argument("--padding", type=int, default=50,
                    help="Pixels of padding around the canonical maze rectangle.")
-    p.add_argument("--iou_threshold", type=float, default=0.85,
-                   help="Mask IoU below this value is flagged for review.")
+    p.add_argument("--iou_threshold", type=float, default=0.80,
+                   help="Mask IoU below this value is flagged for review (default 0.80).")
     p.add_argument("--rotation_threshold", type=float, default=15.0,
                    help="abs(rotation angle) above this (deg) is flagged.")
+    p.add_argument("--morph_kernel_size", type=int, default=50,
+                   help="Square kernel size (px) for the MORPH_CLOSE operation that "
+                        "fills the mouse-shaped hole in the IoU mask. Should be "
+                        "comfortably larger than the mouse but smaller than the maze.")
+    p.add_argument("--exclude_dirs", nargs="*", default=DEFAULT_EXCLUDE_DIRS,
+                   help="Directory names to skip when walking input_dir (case-insensitive). "
+                        f"Default: {' '.join(DEFAULT_EXCLUDE_DIRS)}.")
+    p.add_argument("--include_pattern", type=str, default=DEFAULT_INCLUDE_PATTERN,
+                   help="Comma-separated fnmatch globs for video filenames "
+                        f"(default: \"{DEFAULT_INCLUDE_PATTERN}\").")
     p.add_argument("--manual", action="store_true",
                    help="After automatic scoring, interactively click 4 corners "
                         "for any medium/low/failed video to override the transform.")
@@ -489,20 +570,21 @@ def main():
     review_dir = args.output_dir / "review"
     review_dir.mkdir(parents=True, exist_ok=True)
 
-    videos = sorted(
-        p for p in args.input_dir.rglob("*")
-        if p.is_file() and p.suffix.lower() in VIDEO_EXTENSIONS
-    )
+    videos = find_videos(args.input_dir, args.include_pattern, args.exclude_dirs)
     if not videos:
-        print(f"No videos with extensions {VIDEO_EXTENSIONS} found under {args.input_dir}.")
+        print(f"No videos matching '{args.include_pattern}' found under {args.input_dir} "
+              f"(excluded dirs: {args.exclude_dirs}).")
         return
 
     total = len(videos)
+    print(f"Found {total} video(s). Excluding dirs: {args.exclude_dirs}. "
+          f"Pattern: {args.include_pattern}.")
     state = {
         "canonical_size": None,
         "reference_aspect_ratio": None,
         "padding": args.padding,
         "rotation_threshold": args.rotation_threshold,
+        "morph_kernel_size": args.morph_kernel_size,
     }
 
     # ------------------------------------------------------------------
@@ -617,6 +699,18 @@ def main():
     summary_path = args.output_dir / "alignment_summary.csv"
     summary.to_csv(summary_path, index=False)
     print(f"Wrote summary: {summary_path}")
+
+    # End-of-run confidence breakdown so the user doesn't have to count the CSV.
+    counts = summary["confidence"].value_counts().to_dict()
+    print(
+        "\nConfidence summary: "
+        f"high={counts.get('high', 0)}, "
+        f"medium={counts.get('medium', 0)}, "
+        f"low={counts.get('low', 0)}, "
+        f"manual={counts.get('manual', 0)}, "
+        f"failed={counts.get('failed', 0)} "
+        f"(total {len(summary)})"
+    )
 
 
 if __name__ == "__main__":
