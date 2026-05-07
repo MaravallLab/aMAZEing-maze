@@ -4,48 +4,53 @@ crop_and_align_maze.py
 Preprocess ventral video recordings of a mouse maze for SLEAP pose estimation.
 
 The maze is a white cross/T-shaped binary decision tree (4 arms) on a dark
-background, filmed from below. This script detects the maze in a sampled
-frame from each video, computes a homography to a canonical axis-aligned
-rectangle, and warps every frame so the maze appears identically positioned
-across recordings (and the mouse appears larger).
+background, plus an entry corridor at the bottom of the rig, filmed from
+below. This script detects 6 anatomical landmarks on the maze in a sampled
+frame from each video, computes a homography that maps those landmarks to a
+canonical layout learned from a one-time manual calibration, and warps every
+frame so the maze appears identically positioned across recordings.
 
-Two-pass design:
-  Pass 1 — detect the maze in every video and record the warped binary mask
-           plus contour-level sanity checks. No output videos written yet.
-  Build  — average all successful warped masks and threshold at 0.5 to make
-           a consensus template that doesn't depend on any single recording.
-  Score  — compare each warped mask to the consensus and assign a
-           high/medium/low/failed confidence label.
-  Manual — (optional, --manual) for any flagged or failed video, pop up the
-           sampled frame and let the user click the 4 maze corners to
-           override the automatic transform.
-  Pass 2 — warp every frame and write the cropped/aligned output video.
+Workflow:
 
-A morphological closing step is applied to the binary maze mask before it
-is used for IoU comparison. The mouse's dark body would otherwise punch a
-mouse-shaped hole into the thresholded mask, and because the mouse is in a
-different position in every video, those holes disagree with the consensus
-template in a different spot every time and systematically drag the IoU
-score down. Closing with a kernel large enough to swallow the mouse but
-small relative to the maze fills those holes. The closing only affects the
-mask used for IoU; contour detection and the transform itself still use
-the original threshold.
+  1. Calibration (run once, --calibrate):
+        python crop_and_align_maze.py --calibrate \
+            --input_dir <path> --output_dir <path>
+     A window opens on the middle frame of one video and you click 6
+     landmarks in this order:
+        1. tip of top-left arm
+        2. tip of top-right arm
+        3. tip of bottom-left arm
+        4. tip of bottom-right arm
+        5. bottom-left corner of the entry corridor
+        6. bottom-right corner of the entry corridor
+     The clicked points + frame size are saved to calibration.json (or
+     --calibration_file). The script then exits.
 
-Usage:
-    python crop_and_align_maze.py \
-        --input_dir <path> \
-        --output_dir <path> \
-        [--padding 50] \
-        [--iou_threshold 0.80] \
-        [--rotation_threshold 15] \
-        [--morph_kernel_size 50] \
-        [--exclude_dirs segments new_segments segments_detected deeplabcut habituation] \
-        [--include_pattern "*.mp4,*.avi"] \
-        [--manual]
+  2. Batch processing (no --calibrate):
+        python crop_and_align_maze.py \
+            --input_dir <path> --output_dir <path>
+     For every video the script:
+       - thresholds the frame and finds the largest contour,
+       - applies morphological closing to fill the mouse-shaped hole,
+       - detects the same 6 landmarks automatically from contour geometry,
+       - computes a homography (cv2.findHomography, least-squares over 6
+         points) from detected landmarks to the canonical layout derived
+         from the calibration,
+       - warps every frame and writes the cropped/aligned output video.
+
+Confidence per video is based on the homography's reprojection error
+(mean Euclidean distance between detected landmarks projected through H
+and the canonical targets):
+    < 5 px       -> high
+    5 - 15 px    -> medium
+    > 15 px      -> low
+A contour-area sanity check downgrades the label by one tier when the
+detected contour is implausibly small or large.
 """
 
 import argparse
 import fnmatch
+import json
 import os
 from pathlib import Path
 
@@ -53,6 +58,10 @@ import cv2
 import numpy as np
 import pandas as pd
 
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
 
 DEFAULT_EXCLUDE_DIRS = [
     "segments",
@@ -62,7 +71,43 @@ DEFAULT_EXCLUDE_DIRS = [
     "habituation",
 ]
 DEFAULT_INCLUDE_PATTERN = "*.mp4,*.avi"
+DEFAULT_CALIBRATION_FILENAME = "calibration.json"
+DEFAULT_CALIBRATION_FRAME_FILENAME = "calibration_frame.png"
 
+LANDMARK_NAMES = [
+    "top_left_arm",
+    "top_right_arm",
+    "bottom_left_arm",
+    "bottom_right_arm",
+    "corridor_base_left",
+    "corridor_base_right",
+]
+LANDMARK_LABELS = [
+    "tip of top-left arm",
+    "tip of top-right arm",
+    "tip of bottom-left arm",
+    "tip of bottom-right arm",
+    "bottom-left corner of entry corridor",
+    "bottom-right corner of entry corridor",
+]
+# Distinct BGR colors so each landmark is visually identifiable.
+LANDMARK_COLORS = [
+    (0, 0, 255),     # top_left_arm        - red
+    (0, 165, 255),   # top_right_arm       - orange
+    (0, 255, 255),   # bottom_left_arm     - yellow
+    (0, 255, 0),     # bottom_right_arm    - green
+    (255, 0, 255),   # corridor_base_left  - magenta
+    (255, 255, 0),   # corridor_base_right - cyan
+]
+
+# Confidence thresholds (mean reprojection error in pixels).
+HIGH_REPROJ_PX = 5.0
+MEDIUM_REPROJ_PX = 15.0
+
+
+# ---------------------------------------------------------------------------
+# I/O helpers
+# ---------------------------------------------------------------------------
 
 def sample_middle_frame(cap):
     """Read the frame at 50% of the video's total frame count."""
@@ -75,102 +120,6 @@ def sample_middle_frame(cap):
     return frame if ok else None
 
 
-def detect_maze_contour(frame):
-    """Binarize the frame and return the largest contour (the bright maze)."""
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    # Otsu picks a sensible split between bright maze and dark background.
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        return None, binary
-    largest = max(contours, key=cv2.contourArea)
-    return largest, binary
-
-
-def order_corners(pts):
-    """Order 4 points as [top-left, top-right, bottom-right, bottom-left]."""
-    pts = pts.astype(np.float32)
-    s = pts.sum(axis=1)
-    diff = np.diff(pts, axis=1).flatten()
-    ordered = np.zeros((4, 2), dtype=np.float32)
-    ordered[0] = pts[np.argmin(s)]      # top-left: smallest x+y
-    ordered[2] = pts[np.argmax(s)]      # bottom-right: largest x+y
-    ordered[1] = pts[np.argmin(diff)]   # top-right: smallest y-x
-    ordered[3] = pts[np.argmax(diff)]   # bottom-left: largest y-x
-    return ordered
-
-
-def canonical_dst(canonical_size, padding):
-    """Return the canonical destination rectangle (4x2) and the output size."""
-    cw, ch = canonical_size
-    out_w = cw + 2 * padding
-    out_h = ch + 2 * padding
-    dst = np.array([
-        [padding,         padding],
-        [padding + cw,    padding],
-        [padding + cw,    padding + ch],
-        [padding,         padding + ch],
-    ], dtype=np.float32)
-    return dst, (out_w, out_h)
-
-
-def compute_transform(contour, canonical_size, padding):
-    """
-    Compute a perspective transform mapping the contour's rotated bounding
-    rectangle to a canonical axis-aligned rectangle with padding.
-
-    Returns (H, dst_size, rotation_angle).
-    """
-    rect = cv2.minAreaRect(contour)  # ((cx, cy), (w, h), angle)
-    box = cv2.boxPoints(rect)
-    src = order_corners(box)
-
-    dst, dst_size = canonical_dst(canonical_size, padding)
-    H = cv2.getPerspectiveTransform(src, dst)
-
-    # Normalize OpenCV's minAreaRect angle to a signed deviation from
-    # axis-aligned in [-45, 45]; a perfectly aligned maze yields ~0.
-    angle = rect[2]
-    if angle < -45:
-        angle = 90 + angle
-    elif angle > 45:
-        angle = angle - 90
-
-    return H, dst_size, angle
-
-
-def transform_from_clicks(corners, canonical_size, padding):
-    """Build a transform from user-clicked corners (already ordered TL,TR,BR,BL)."""
-    dst, dst_size = canonical_dst(canonical_size, padding)
-    src = np.asarray(corners, dtype=np.float32)
-    H = cv2.getPerspectiveTransform(src, dst)
-    return H, dst_size
-
-
-def warped_mask_from_corners(corners, frame_shape, H, dst_size):
-    """Render a filled quad mask of the corners and warp it to canonical coords."""
-    h, w = frame_shape[:2]
-    mask = np.zeros((h, w), dtype=np.uint8)
-    poly = np.asarray(corners, dtype=np.int32).reshape(-1, 1, 2)
-    cv2.fillPoly(mask, [poly], 255)
-    return cv2.warpPerspective(mask, H, dst_size)
-
-
-def close_mask(mask, kernel_size):
-    """
-    Morphological closing with a square kernel.
-
-    Used to fill the mouse-shaped hole that the mouse's dark body punches
-    into the thresholded maze mask. Only applied to the IoU-comparison
-    mask — contour detection and the transform use the unclosed threshold.
-    """
-    k = int(kernel_size)
-    if k <= 1:
-        return mask
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (k, k))
-    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-
-
 def find_videos(input_dir, include_pattern, exclude_dirs):
     """
     Recursively walk `input_dir` and return matching video paths.
@@ -179,14 +128,13 @@ def find_videos(input_dir, include_pattern, exclude_dirs):
     "*.mp4,*.avi"). `exclude_dirs` is a list of directory names (any
     component matching is pruned, case-insensitive). Excluded directories
     are pruned from os.walk in-place so the script doesn't even descend
-    into them — useful for skipping `segments/`, `deeplabcut/`, etc.
+    into them.
     """
     patterns = [p.strip() for p in str(include_pattern).split(",") if p.strip()]
     excluded = {name.strip().lower() for name in exclude_dirs if name.strip()}
 
     matches = []
     for root, dirs, files in os.walk(input_dir):
-        # In-place prune of excluded directory names.
         dirs[:] = [d for d in dirs if d.lower() not in excluded]
         for fname in files:
             lower = fname.lower()
@@ -195,25 +143,6 @@ def find_videos(input_dir, include_pattern, exclude_dirs):
                     matches.append(Path(root) / fname)
                     break
     return sorted(matches)
-
-
-def compute_iou(mask_a, mask_b):
-    """Intersection-over-union for two binary uint8 masks."""
-    a = mask_a > 0
-    b = mask_b > 0
-    inter = np.logical_and(a, b).sum()
-    union = np.logical_or(a, b).sum()
-    return float(inter) / float(union) if union > 0 else 0.0
-
-
-def classify_confidence(flags):
-    """Combine boolean flag list into 'high' / 'medium' / 'low'."""
-    n = sum(flags)
-    if n == 0:
-        return "high"
-    if n == 1:
-        return "medium"
-    return "low"
 
 
 def warp_video(video_path, H, dst_size, output_path, fps):
@@ -233,102 +162,342 @@ def warp_video(video_path, H, dst_size, output_path, fps):
         cap.release()
 
 
-def save_review_image(frame, contour, review_path):
-    """Save the sampled frame with the detected contour overlaid."""
-    annotated = frame.copy()
-    if contour is not None:
-        cv2.drawContours(annotated, [contour], -1, (0, 255, 0), 3)
-    cv2.imwrite(str(review_path), annotated)
+# ---------------------------------------------------------------------------
+# Maze detection / mask cleanup
+# ---------------------------------------------------------------------------
+
+def detect_maze_contour(frame):
+    """Binarize the frame and return (largest_contour, binary)."""
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        return None, binary
+    largest = max(contours, key=cv2.contourArea)
+    return largest, binary
 
 
-def manual_correct_corners(frame, title="Click maze corners"):
+def close_mask(mask, kernel_size):
+    """Morphological closing with a square kernel; no-op for size <= 1."""
+    k = int(kernel_size)
+    if k <= 1:
+        return mask
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (k, k))
+    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+
+def closed_maze_contour(frame, kernel_size):
     """
-    Interactively collect 4 maze corner clicks from the user.
+    Threshold + close + re-extract the largest contour.
 
-    Order required: top-left, top-right, bottom-right, bottom-left
-    (clockwise from TL). Keys: 'r' resets, ESC skips, ENTER confirms.
+    Closing is applied to the threshold *before* re-extracting the contour
+    so the mouse-shaped hole / mouse-induced gap in the maze outline gets
+    filled before any landmark detection sees the shape.
+    """
+    contour, binary = detect_maze_contour(frame)
+    if contour is None:
+        return None
+    closed = close_mask(binary, kernel_size)
+    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        return None
+    return max(contours, key=cv2.contourArea)
 
-    Returns 4x2 float32 array of corners in original-image pixel
-    coordinates, or None if the user skipped (ESC) or closed the window.
 
-    Large frames are downscaled for display; clicks are scaled back to the
-    original image so the resulting transform is in source-pixel space.
+# ---------------------------------------------------------------------------
+# Calibration UI
+# ---------------------------------------------------------------------------
+
+def calibrate_landmarks(frame, title="Maze calibration"):
+    """
+    Show `frame` and collect 6 landmark clicks in LANDMARK_NAMES order.
+
+    Returns a (6, 2) float32 array in source-image coordinates, or None
+    if the user pressed ESC. Provides:
+      - 'r' to reset clicks during placement
+      - 'y' / 'Y' to confirm once 6 clicks are placed
+      - 'r' to redo from confirmation step
+
+    Large frames are downscaled for display; clicks are scaled back to
+    the original resolution.
     """
     h, w = frame.shape[:2]
     max_dim = 1200
     scale = min(1.0, float(max_dim) / float(max(h, w)))
     disp_w, disp_h = int(round(w * scale)), int(round(h * scale))
+    base_disp = cv2.resize(frame, (disp_w, disp_h)) if scale < 1.0 else frame.copy()
 
-    state = {"clicks": [], "skip": False, "done": False}
+    clicks = []
 
     def on_mouse(event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN and len(state["clicks"]) < 4:
-            # Convert click back to original-image coordinates.
-            state["clicks"].append((x / scale, y / scale))
+        if event == cv2.EVENT_LBUTTONDOWN and len(clicks) < 6:
+            clicks.append((x / scale, y / scale))
 
     cv2.namedWindow(title, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(title, disp_w, disp_h)
     cv2.setMouseCallback(title, on_mouse)
 
-    labels = ["TL (1)", "TR (2)", "BR (3)", "BL (4)"]
-    base_disp = cv2.resize(frame, (disp_w, disp_h)) if scale < 1.0 else frame.copy()
-
-    while True:
+    def render(stage_msg):
         disp = base_disp.copy()
-        # Draw existing clicks and connecting lines for visual feedback.
-        for i, (cx, cy) in enumerate(state["clicks"]):
+        for i, (cx, cy) in enumerate(clicks):
             px, py = int(cx * scale), int(cy * scale)
-            cv2.circle(disp, (px, py), 6, (0, 255, 0), -1)
-            cv2.putText(disp, labels[i], (px + 8, py - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        if len(state["clicks"]) >= 2:
-            for i in range(len(state["clicks"]) - 1):
-                p1 = (int(state["clicks"][i][0] * scale), int(state["clicks"][i][1] * scale))
-                p2 = (int(state["clicks"][i + 1][0] * scale), int(state["clicks"][i + 1][1] * scale))
-                cv2.line(disp, p1, p2, (0, 255, 0), 2)
-            if len(state["clicks"]) == 4:
-                p1 = (int(state["clicks"][3][0] * scale), int(state["clicks"][3][1] * scale))
-                p2 = (int(state["clicks"][0][0] * scale), int(state["clicks"][0][1] * scale))
-                cv2.line(disp, p1, p2, (0, 255, 0), 2)
-
-        n = len(state["clicks"])
-        if n < 4:
-            msg = f"Click corner {n + 1}/4 ({labels[n]}). 'r' reset, ESC skip."
-        else:
-            msg = "ENTER confirm, 'r' reset, ESC skip."
-        cv2.putText(disp, msg, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+            cv2.circle(disp, (px, py), 8, LANDMARK_COLORS[i], -1)
+            cv2.putText(disp, f"{i + 1}", (px + 10, py - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, LANDMARK_COLORS[i], 2)
+        # Connect arm tips into a quad if all 4 are placed.
+        if len(clicks) >= 4:
+            for i in range(4):
+                p1 = (int(clicks[i][0] * scale), int(clicks[i][1] * scale))
+                p2 = (int(clicks[(i + 1) % 4][0] * scale),
+                      int(clicks[(i + 1) % 4][1] * scale))
+                cv2.line(disp, p1, p2, (0, 255, 0), 1)
+        if len(clicks) >= 6:
+            p1 = (int(clicks[4][0] * scale), int(clicks[4][1] * scale))
+            p2 = (int(clicks[5][0] * scale), int(clicks[5][1] * scale))
+            cv2.line(disp, p1, p2, (255, 0, 255), 2)
+        cv2.putText(disp, stage_msg, (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
         cv2.putText(disp, title, (10, disp.shape[0] - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        return disp
 
-        cv2.imshow(title, disp)
-        key = cv2.waitKey(20) & 0xFF
-        if key == 27:                         # ESC -> skip this video
-            state["skip"] = True
-            break
-        if key == ord('r'):                   # reset clicks
-            state["clicks"] = []
-        if key in (13, 10) and len(state["clicks"]) == 4:  # ENTER -> confirm
-            state["done"] = True
+    while True:
+        # Phase 1: collect 6 clicks.
+        while len(clicks) < 6:
+            n = len(clicks)
+            msg = f"Click point {n + 1}/6: {LANDMARK_LABELS[n]}.  'r' reset, ESC quit."
+            cv2.imshow(title, render(msg))
+            key = cv2.waitKey(20) & 0xFF
+            if key == 27:
+                cv2.destroyWindow(title); cv2.waitKey(1)
+                return None
+            if key == ord('r'):
+                clicks.clear()
+
+        # Phase 2: confirm.
+        confirmed = None
+        while confirmed is None:
+            cv2.imshow(title, render("All 6 placed.  'y' confirm, 'r' redo, ESC quit."))
+            key = cv2.waitKey(20) & 0xFF
+            if key == 27:
+                cv2.destroyWindow(title); cv2.waitKey(1)
+                return None
+            if key in (ord('y'), ord('Y')):
+                confirmed = True
+            elif key == ord('r'):
+                clicks.clear()
+                confirmed = False  # falls back to phase 1 loop
+
+        if confirmed:
             break
 
     cv2.destroyWindow(title)
-    cv2.waitKey(1)  # let the window actually close on some platforms
-    if state["skip"] or not state["done"]:
-        return None
-    return np.asarray(state["clicks"], dtype=np.float32)
+    cv2.waitKey(1)
+    return np.asarray(clicks, dtype=np.float32)
 
 
-def detect_one(video_path, input_dir, state):
+def save_calibration(path, calibration_video, frame_shape, landmarks):
+    """Write calibration JSON. landmarks is a (6, 2) array in source pixels."""
+    payload = {
+        "calibration_video": str(calibration_video),
+        "frame_shape": [int(frame_shape[0]), int(frame_shape[1])],  # [h, w]
+        "landmark_names": LANDMARK_NAMES,
+        "landmarks": [[float(p[0]), float(p[1])] for p in landmarks],
+    }
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+
+def load_calibration(path):
+    """Load calibration JSON, returning the (6, 2) landmark array."""
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+    if payload.get("landmark_names") and payload["landmark_names"] != LANDMARK_NAMES:
+        raise ValueError(
+            f"Calibration file landmark_names {payload['landmark_names']} "
+            f"do not match expected {LANDMARK_NAMES}."
+        )
+    landmarks = np.asarray(payload["landmarks"], dtype=np.float32)
+    if landmarks.shape != (6, 2):
+        raise ValueError(f"Calibration must contain 6x2 landmarks; got {landmarks.shape}.")
+    return landmarks, payload
+
+
+def canonical_positions(calibration_landmarks, padding):
     """
-    Pass 1 worker. Detect the maze in `video_path` and return a dict with
-    everything needed by pass 2 (transform, warped mask, sampled frame,
-    contour-level metrics, contour-level flags). Returns a dict whose
-    `status` is either "ok" or "failed". Even on `failed`, the sampled
-    frame and FPS are kept when available so manual mode can use them.
+    Translate the calibration landmarks so the bounding box sits at
+    (padding, padding). Returns (canonical_pts (6,2), (out_w, out_h)).
 
-    The first successful detection populates `state["canonical_size"]` and
-    `state["reference_aspect_ratio"]`, which are reused for all subsequent
-    videos so every warped mask lives in the same coordinate system.
+    The calibration's relative spacing and proportions are preserved
+    exactly — the warp just centers the maze in a padded canvas.
+    """
+    pts = np.asarray(calibration_landmarks, dtype=np.float32).copy()
+    xmin, ymin = pts.min(axis=0)
+    xmax, ymax = pts.max(axis=0)
+    pts[:, 0] -= xmin - padding
+    pts[:, 1] -= ymin - padding
+    out_w = int(round(xmax - xmin + 2 * padding))
+    out_h = int(round(ymax - ymin + 2 * padding))
+    return pts, (out_w, out_h)
+
+
+# ---------------------------------------------------------------------------
+# Automatic landmark detection
+# ---------------------------------------------------------------------------
+
+def _approx_hull(contour, target_min=8, target_max=12):
+    """
+    cv2.approxPolyDP on the convex hull, decreasing epsilon until the
+    vertex count lands in [target_min, target_max]. Returns an Nx2 array.
+    Falls back to the full hull if no epsilon produces a count in range.
+    """
+    hull = cv2.convexHull(contour)
+    perimeter = cv2.arcLength(hull, True)
+    best = hull.reshape(-1, 2)
+    for eps_frac in (0.05, 0.04, 0.03, 0.025, 0.02, 0.015, 0.01, 0.008, 0.006, 0.004, 0.002):
+        approx = cv2.approxPolyDP(hull, eps_frac * perimeter, True).reshape(-1, 2)
+        n = len(approx)
+        if target_min <= n <= target_max:
+            return approx
+        if n > target_max:
+            best = approx  # remember the densest candidate before overshooting
+            break
+    return best
+
+
+def _contour_centroid(contour):
+    """(cx, cy) from image moments, or None if degenerate."""
+    M = cv2.moments(contour)
+    if M["m00"] == 0:
+        return None
+    return float(M["m10"] / M["m00"]), float(M["m01"] / M["m00"])
+
+
+def detect_landmarks(contour):
+    """
+    Detect the 6 maze landmarks from a (closed) maze contour.
+
+    Returns (landmarks_or_none, debug). landmarks is a (6, 2) float32 in
+    LANDMARK_NAMES order on success, None on failure. `debug` carries
+    intermediate detection results (per-quadrant arm tip candidates and
+    the corridor near-bottom strip) so failed cases can still draw what
+    was found.
+    """
+    debug = {"arm_tips": {}, "near_bottom": None, "approx_hull": None}
+    if contour is None or len(contour) < 6:
+        return None, debug
+
+    pts = contour.reshape(-1, 2).astype(np.float32)
+    centroid = _contour_centroid(contour)
+    if centroid is None:
+        return None, debug
+    cx, cy = centroid
+
+    xmin, ymin = pts.min(axis=0)
+    xmax, ymax = pts.max(axis=0)
+    mid_x = float((xmin + xmax) / 2.0)
+    mid_y = float((ymin + ymax) / 2.0)
+
+    # --- 4 arm tips: cluster approx-hull vertices by bbox quadrant, then
+    #     pick the vertex farthest from the contour centroid in each.
+    approx = _approx_hull(contour)
+    debug["approx_hull"] = approx
+    quads = {"tl": [], "tr": [], "bl": [], "br": []}
+    for p in approx:
+        x, y = float(p[0]), float(p[1])
+        if x < mid_x and y < mid_y:
+            quads["tl"].append((x, y))
+        elif x >= mid_x and y < mid_y:
+            quads["tr"].append((x, y))
+        elif x < mid_x and y >= mid_y:
+            quads["bl"].append((x, y))
+        else:
+            quads["br"].append((x, y))
+
+    arm_tips = {}
+    for q in ("tl", "tr", "bl", "br"):
+        if not quads[q]:
+            return None, debug  # missing a quadrant -> can't form 4 tips
+        farthest = max(quads[q], key=lambda p: (p[0] - cx) ** 2 + (p[1] - cy) ** 2)
+        arm_tips[q] = farthest
+    debug["arm_tips"] = arm_tips
+
+    # --- 2 corridor base points: leftmost & rightmost contour points
+    #     within 10 px of the maximum y (the very bottom of the maze).
+    near_bottom = pts[pts[:, 1] >= ymax - 10.0]
+    debug["near_bottom"] = near_bottom
+    if len(near_bottom) < 2:
+        return None, debug
+    leftmost = near_bottom[near_bottom[:, 0].argmin()]
+    rightmost = near_bottom[near_bottom[:, 0].argmax()]
+
+    landmarks = np.array([
+        arm_tips["tl"],
+        arm_tips["tr"],
+        arm_tips["bl"],
+        arm_tips["br"],
+        (float(leftmost[0]), float(leftmost[1])),
+        (float(rightmost[0]), float(rightmost[1])),
+    ], dtype=np.float32)
+    return landmarks, debug
+
+
+# ---------------------------------------------------------------------------
+# Homography + scoring
+# ---------------------------------------------------------------------------
+
+def compute_homography(detected_pts, canonical_pts):
+    """
+    Least-squares homography mapping `detected_pts` -> `canonical_pts`.
+    Returns the 3x3 H or None if the solve fails.
+    """
+    src = np.asarray(detected_pts, dtype=np.float32).reshape(-1, 1, 2)
+    dst = np.asarray(canonical_pts, dtype=np.float32).reshape(-1, 1, 2)
+    H, _ = cv2.findHomography(src, dst, method=0)
+    return H
+
+
+def reprojection_error(detected_pts, canonical_pts, H):
+    """Mean Euclidean distance between H(detected_pts) and canonical_pts."""
+    src = np.asarray(detected_pts, dtype=np.float32).reshape(-1, 1, 2)
+    projected = cv2.perspectiveTransform(src, H).reshape(-1, 2)
+    dst = np.asarray(canonical_pts, dtype=np.float32)
+    diffs = projected - dst
+    return float(np.sqrt((diffs ** 2).sum(axis=1)).mean())
+
+
+def classify_confidence(reproj_px, area_flag):
+    """
+    Confidence label from reprojection error (px) and area sanity flag.
+    Reprojection error is the primary signal; an area flag downgrades
+    one tier (high -> medium, medium -> low).
+    """
+    if not np.isfinite(reproj_px):
+        return "failed"
+    if reproj_px < HIGH_REPROJ_PX:
+        base = "high"
+    elif reproj_px <= MEDIUM_REPROJ_PX:
+        base = "medium"
+    else:
+        base = "low"
+    if area_flag:
+        if base == "high":
+            return "medium"
+        if base == "medium":
+            return "low"
+    return base
+
+
+# ---------------------------------------------------------------------------
+# Pass 1: per-video detection
+# ---------------------------------------------------------------------------
+
+def detect_one(video_path, input_dir, canonical_pts, dst_size, args):
+    """
+    Sample the middle frame, detect the closed maze contour, detect 6
+    landmarks, compute the homography to the canonical layout, and score.
+    Returns a dict consumed by pass 2 and the CSV writer.
     """
     rel = video_path.relative_to(input_dir)
     base = {
@@ -339,232 +508,235 @@ def detect_one(video_path, input_dir, state):
         "frame": None,
         "fps": None,
         "contour": None,
+        "detected_landmarks": None,
+        "debug": {"arm_tips": {}, "near_bottom": None, "approx_hull": None},
         "H": None,
-        "dst_size": None,
-        "warped_mask": None,
+        "dst_size": dst_size,
         "contour_area": np.nan,
-        "aspect_ratio": np.nan,
-        "rotation_angle": np.nan,
+        "reprojection_error": np.nan,
         "area_flag": False,
-        "aspect_flag": False,
-        "rotation_flag": False,
-        "manual": False,
+        "confidence": "failed",
+        "error": "",
     }
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         cap.release()
+        base["error"] = "could not open video"
         return base
 
     frame = sample_middle_frame(cap)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     cap.release()
     if frame is None:
+        base["error"] = "could not sample frame"
         return base
     base["frame"] = frame
     base["fps"] = fps
 
-    frame_h, frame_w = frame.shape[:2]
-    contour, _ = detect_maze_contour(frame)
+    contour = closed_maze_contour(frame, args.morph_kernel_size)
     if contour is None:
+        base["error"] = "no contour found"
         return base
+    base["contour"] = contour
 
     contour_area = float(cv2.contourArea(contour))
+    frame_h, frame_w = frame.shape[:2]
     area_ratio = contour_area / float(frame_h * frame_w)
-    if area_ratio <= 0:
+    base["contour_area"] = contour_area
+    base["area_flag"] = not (0.05 <= area_ratio <= 0.5)
+
+    detected, debug = detect_landmarks(contour)
+    base["debug"] = debug
+    if detected is None:
+        base["error"] = "could not detect 6 landmarks"
         return base
+    base["detected_landmarks"] = detected
 
-    rect = cv2.minAreaRect(contour)
-    w_rect, h_rect = rect[1]
-    if w_rect <= 0 or h_rect <= 0:
+    H = compute_homography(detected, canonical_pts)
+    if H is None:
+        base["error"] = "homography solve failed"
         return base
-
-    longer, shorter = max(w_rect, h_rect), min(w_rect, h_rect)
-    aspect_ratio = longer / shorter
-
-    # First successful video sets the canonical rectangle size and the
-    # reference aspect ratio for the aspect_flag check.
-    if state.get("canonical_size") is None:
-        state["canonical_size"] = (int(round(longer)), int(round(shorter)))
-        state["reference_aspect_ratio"] = aspect_ratio
-
-    H, dst_size, rotation_angle = compute_transform(
-        contour, state["canonical_size"], state["padding"]
-    )
-
-    # Build the IoU-comparison mask. Morphological closing fills the
-    # mouse-shaped hole the mouse's dark body punches into the threshold
-    # so the IoU score isn't dragged down by per-video mouse position.
-    # Detection and the transform above use the unclosed contour.
-    mask = np.zeros((frame_h, frame_w), dtype=np.uint8)
-    cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
-    mask = close_mask(mask, state["morph_kernel_size"])
-    warped_mask = cv2.warpPerspective(mask, H, dst_size)
-
-    ref_ar = state["reference_aspect_ratio"]
+    rep_err = reprojection_error(detected, canonical_pts, H)
     base.update({
         "status": "ok",
-        "contour": contour,
         "H": H,
-        "dst_size": dst_size,
-        "warped_mask": warped_mask,
-        "contour_area": contour_area,
-        "aspect_ratio": aspect_ratio,
-        "rotation_angle": rotation_angle,
-        # Contour-level sanity flags computed in pass 1.
-        "area_flag": not (0.05 <= area_ratio <= 0.5),
-        "aspect_flag": abs(aspect_ratio - ref_ar) / ref_ar > 0.20,
-        "rotation_flag": abs(rotation_angle) > state["rotation_threshold"],
+        "reprojection_error": rep_err,
+        "confidence": classify_confidence(rep_err, base["area_flag"]),
     })
     return base
 
 
-def build_consensus_template(detections, dst_size):
+# ---------------------------------------------------------------------------
+# Review image rendering
+# ---------------------------------------------------------------------------
+
+def save_review_image(frame, contour, landmarks, debug, review_path):
     """
-    Average all successful warped masks pixel-wise and threshold at 0.5
-    to produce a single consensus template mask (uint8, 0/255).
+    Save a debug PNG of the sampled frame with detection overlays:
+    contour outline (cyan), the approx-hull vertices (small white dots),
+    near-bottom strip (thin green line), and the 6 landmarks colored by
+    LANDMARK_COLORS. Whatever fields are present in `debug` are drawn so
+    failed detections can still be inspected.
     """
-    out_w, out_h = dst_size
-    accumulator = np.zeros((out_h, out_w), dtype=np.float32)
-    count = 0
-    for d in detections:
-        if d["status"] != "ok" or d["warped_mask"] is None:
+    img = frame.copy()
+    if contour is not None:
+        cv2.drawContours(img, [contour], -1, (255, 255, 0), 2)
+
+    approx = debug.get("approx_hull")
+    if approx is not None:
+        for p in approx:
+            cv2.circle(img, (int(p[0]), int(p[1])), 3, (255, 255, 255), -1)
+
+    near_bottom = debug.get("near_bottom")
+    if near_bottom is not None and len(near_bottom) > 0:
+        ys = near_bottom[:, 1]
+        y = int(np.median(ys))
+        cv2.line(img, (0, y), (img.shape[1], y), (0, 255, 0), 1)
+
+    # Per-quadrant arm tips (drawn even on failure with smaller markers).
+    for q, p in (debug.get("arm_tips") or {}).items():
+        if p is None:
             continue
-        accumulator += (d["warped_mask"] > 0).astype(np.float32)
-        count += 1
-    if count == 0:
-        return None
-    averaged = accumulator / float(count)
-    return (averaged >= 0.5).astype(np.uint8) * 255
+        cv2.circle(img, (int(p[0]), int(p[1])), 6, (0, 200, 200), 2)
+
+    if landmarks is not None:
+        for i, p in enumerate(landmarks):
+            cv2.circle(img, (int(p[0]), int(p[1])), 9, LANDMARK_COLORS[i], -1)
+            cv2.putText(img, f"{i + 1}", (int(p[0]) + 10, int(p[1]) - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, LANDMARK_COLORS[i], 2)
+
+    cv2.imwrite(str(review_path), img)
 
 
-def score_detection(d, consensus, args):
-    """
-    Compute IoU vs the consensus template and assign a confidence label.
-    Updates `d` in place with `mask_iou`, `iou_flag`, and `confidence`.
-    No-op for failed detections.
-    """
-    if d["status"] != "ok":
-        d["mask_iou"] = np.nan
-        d["iou_flag"] = False
-        d["confidence"] = "failed"
-        return
-    iou = compute_iou(d["warped_mask"], consensus)
-    d["mask_iou"] = iou
-    d["iou_flag"] = iou < args.iou_threshold
-    d["confidence"] = classify_confidence([
-        d["area_flag"], d["aspect_flag"], d["iou_flag"], d["rotation_flag"],
-    ])
-
-
-def run_manual_pass(detections, state, consensus, args):
-    """
-    For each medium / low / failed detection, prompt the user to click 4
-    maze corners on the sampled frame. On confirmation: rebuild H,
-    warped_mask, mask_iou and mark the detection's confidence as 'manual'.
-    On skip: leave the detection unchanged. If no automatic detection ever
-    succeeded, the first manual rectangle defines the canonical size.
-    """
-    candidates = [d for d in detections
-                  if d["confidence"] in ("medium", "low", "failed")
-                  and d["frame"] is not None]
-    if not candidates:
-        print("Manual pass: no flagged or failed videos with sampled frames.")
-        return consensus
-
-    print(f"Manual pass: {len(candidates)} video(s) need review. "
-          f"Click 4 corners (TL, TR, BR, BL). 'r' reset, ESC skip, ENTER confirm.")
-
-    updated_any = False
-    for i, d in enumerate(candidates, start=1):
-        title = f"[{i}/{len(candidates)}] {d['filename']} (auto: {d['confidence']})"
-        corners = manual_correct_corners(d["frame"], title=title)
-        if corners is None:
-            print(f"  skipped: {d['filename']}")
-            continue
-
-        # If we never had an automatic canonical size, infer from this rect.
-        if state.get("canonical_size") is None:
-            side1 = np.linalg.norm(corners[0] - corners[1])
-            side2 = np.linalg.norm(corners[1] - corners[2])
-            longer, shorter = max(side1, side2), min(side1, side2)
-            state["canonical_size"] = (int(round(longer)), int(round(shorter)))
-            state["reference_aspect_ratio"] = float(longer / shorter)
-
-        H, dst_size = transform_from_clicks(corners, state["canonical_size"], args.padding)
-        warped_mask = warped_mask_from_corners(corners, d["frame"].shape, H, dst_size)
-        # Match the closing applied in detect_one so manual masks live in the
-        # same morphological space as automatic masks (no-op for clean quads).
-        warped_mask = close_mask(warped_mask, state["morph_kernel_size"])
-
-        d["H"] = H
-        d["dst_size"] = dst_size
-        d["warped_mask"] = warped_mask
-        d["status"] = "ok"
-        d["manual"] = True
-        # Replace the automatic contour with the user's quad for the review image.
-        d["contour"] = np.asarray(corners, dtype=np.int32).reshape(-1, 1, 2)
-        # IoU vs the existing consensus is informational; confidence is forced
-        # to "manual" because the user has visually verified the corners.
-        if consensus is not None and consensus.shape[:2] == warped_mask.shape[:2]:
-            d["mask_iou"] = compute_iou(warped_mask, consensus)
-        d["confidence"] = "manual"
-        updated_any = True
-        print(f"  corrected: {d['filename']}")
-
-    # If we got our first canonical size from manual mode, build a consensus now
-    # so subsequent runs (and the saved PNG) reflect those corrections.
-    if updated_any and consensus is None:
-        any_size = next((d["dst_size"] for d in detections
-                         if d["status"] == "ok" and d["dst_size"] is not None), None)
-        if any_size is not None:
-            consensus = build_consensus_template(detections, any_size)
-    return consensus
-
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--input_dir", required=True, type=Path,
-                   help="Directory containing .mp4/.avi videos (searched recursively).")
+    p.add_argument("--input_dir", type=Path,
+                   help="Directory containing .mp4/.avi videos (searched recursively). "
+                        "Required for batch mode; in --calibrate mode, used to find a "
+                        "video if --calibrate_video is not given.")
     p.add_argument("--output_dir", required=True, type=Path,
-                   help="Directory to write cropped videos and the summary CSV.")
+                   help="Directory to write cropped videos, the calibration file (default), "
+                        "the review folder, and the summary CSV.")
     p.add_argument("--padding", type=int, default=50,
-                   help="Pixels of padding around the canonical maze rectangle.")
-    p.add_argument("--iou_threshold", type=float, default=0.80,
-                   help="Mask IoU below this value is flagged for review (default 0.80).")
-    p.add_argument("--rotation_threshold", type=float, default=15.0,
-                   help="abs(rotation angle) above this (deg) is flagged.")
+                   help="Pixels of padding around the bounding box of the canonical landmarks.")
     p.add_argument("--morph_kernel_size", type=int, default=50,
-                   help="Square kernel size (px) for the MORPH_CLOSE operation that "
-                        "fills the mouse-shaped hole in the IoU mask. Should be "
-                        "comfortably larger than the mouse but smaller than the maze.")
+                   help="Square kernel size (px) for MORPH_CLOSE on the threshold mask. "
+                        "Should be comfortably larger than the mouse but smaller than the maze.")
     p.add_argument("--exclude_dirs", nargs="*", default=DEFAULT_EXCLUDE_DIRS,
                    help="Directory names to skip when walking input_dir (case-insensitive). "
                         f"Default: {' '.join(DEFAULT_EXCLUDE_DIRS)}.")
     p.add_argument("--include_pattern", type=str, default=DEFAULT_INCLUDE_PATTERN,
                    help="Comma-separated fnmatch globs for video filenames "
                         f"(default: \"{DEFAULT_INCLUDE_PATTERN}\").")
-    p.add_argument("--manual", action="store_true",
-                   help="After automatic scoring, interactively click 4 corners "
-                        "for any medium/low/failed video to override the transform.")
+    p.add_argument("--calibrate", action="store_true",
+                   help="Enter calibration mode: click 6 maze landmarks on a sampled "
+                        "frame and save them to the calibration file. Exits without "
+                        "processing any videos.")
+    p.add_argument("--calibrate_video", type=Path, default=None,
+                   help="In --calibrate mode, the specific video to calibrate on. "
+                        "If omitted, the first video found under --input_dir is used.")
+    p.add_argument("--calibration_file", type=Path, default=None,
+                   help="Path to the calibration JSON. Defaults to "
+                        "<output_dir>/calibration.json.")
     return p.parse_args()
 
+
+# ---------------------------------------------------------------------------
+# Calibration entry point
+# ---------------------------------------------------------------------------
+
+def run_calibration(args, calibration_path):
+    """
+    Pick a video, sample its middle frame, run the 6-click UI, and save
+    the calibration JSON + a calibration_frame.png next to it.
+    """
+    if args.calibrate_video is not None:
+        video_path = args.calibrate_video
+        if not video_path.exists():
+            print(f"Error: --calibrate_video does not exist: {video_path}")
+            return 1
+    else:
+        if args.input_dir is None:
+            print("Error: --calibrate needs either --calibrate_video or --input_dir.")
+            return 1
+        videos = find_videos(args.input_dir, args.include_pattern, args.exclude_dirs)
+        if not videos:
+            print(f"Error: no videos found under {args.input_dir} for calibration.")
+            return 1
+        video_path = videos[0]
+
+    print(f"Calibrating on: {video_path}")
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        print(f"Error: could not open calibration video: {video_path}")
+        return 1
+    frame = sample_middle_frame(cap)
+    cap.release()
+    if frame is None:
+        print(f"Error: could not sample a frame from: {video_path}")
+        return 1
+
+    landmarks = calibrate_landmarks(frame, title=f"Calibration: {video_path.name}")
+    if landmarks is None:
+        print("Calibration cancelled.")
+        return 1
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    save_calibration(calibration_path, video_path, frame.shape[:2], landmarks)
+
+    frame_out = args.output_dir / DEFAULT_CALIBRATION_FRAME_FILENAME
+    annotated = frame.copy()
+    for i, p in enumerate(landmarks):
+        cv2.circle(annotated, (int(p[0]), int(p[1])), 8, LANDMARK_COLORS[i], -1)
+        cv2.putText(annotated, f"{i + 1}", (int(p[0]) + 10, int(p[1]) - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, LANDMARK_COLORS[i], 2)
+    cv2.imwrite(str(frame_out), annotated)
+
+    print(f"Saved calibration: {calibration_path}")
+    print(f"Saved annotated calibration frame: {frame_out}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Batch entry point
+# ---------------------------------------------------------------------------
 
 def make_failed_row(rel, error=None):
     return {
         "filename": str(rel).replace("\\", "/"),
         "contour_area": np.nan,
-        "aspect_ratio": np.nan,
-        "rotation_angle": np.nan,
-        "mask_iou": np.nan,
+        "reprojection_error": np.nan,
         "confidence": "failed",
         "output_path": f"error: {error}" if error else "",
     }
 
 
-def main():
-    args = parse_args()
+def run_batch(args, calibration_path):
+    """Run the two-pass batch pipeline. Returns a process exit code."""
+    if not calibration_path.exists():
+        print(
+            f"Error: calibration file not found at {calibration_path}.\n"
+            f"Run calibration first, e.g.:\n"
+            f"    python crop_and_align_maze.py --calibrate "
+            f"--input_dir <path> --output_dir <path>"
+        )
+        return 2
+    if args.input_dir is None:
+        print("Error: --input_dir is required for batch processing.")
+        return 1
+
+    calibration_landmarks, _ = load_calibration(calibration_path)
+    canonical_pts, dst_size = canonical_positions(calibration_landmarks, args.padding)
+    print(
+        f"Loaded calibration from {calibration_path}; "
+        f"canonical output size = {dst_size[0]}x{dst_size[1]} px."
+    )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     review_dir = args.output_dir / "review"
@@ -572,146 +744,127 @@ def main():
 
     videos = find_videos(args.input_dir, args.include_pattern, args.exclude_dirs)
     if not videos:
-        print(f"No videos matching '{args.include_pattern}' found under {args.input_dir} "
-              f"(excluded dirs: {args.exclude_dirs}).")
-        return
-
+        print(
+            f"No videos matching '{args.include_pattern}' found under "
+            f"{args.input_dir} (excluded dirs: {args.exclude_dirs})."
+        )
+        return 0
     total = len(videos)
-    print(f"Found {total} video(s). Excluding dirs: {args.exclude_dirs}. "
-          f"Pattern: {args.include_pattern}.")
-    state = {
-        "canonical_size": None,
-        "reference_aspect_ratio": None,
-        "padding": args.padding,
-        "rotation_threshold": args.rotation_threshold,
-        "morph_kernel_size": args.morph_kernel_size,
-    }
+    print(
+        f"Found {total} video(s). Excluding dirs: {args.exclude_dirs}. "
+        f"Pattern: {args.include_pattern}."
+    )
 
-    # ------------------------------------------------------------------
-    # Pass 1: detection only.
-    # ------------------------------------------------------------------
-    print(f"Pass 1/2: detecting maze in {total} video(s)...")
+    # ----------------------------------------------------------------------
+    # Pass 1: detect landmarks for every video.
+    # ----------------------------------------------------------------------
+    print("Pass 1/2: detecting landmarks...")
     detections = []
     for i, video_path in enumerate(videos, start=1):
         rel = video_path.relative_to(args.input_dir)
         try:
-            d = detect_one(video_path, args.input_dir, state)
+            d = detect_one(video_path, args.input_dir, canonical_pts, dst_size, args)
         except Exception as e:
             d = {
                 "video_path": video_path,
                 "rel": rel,
                 "filename": str(rel).replace("\\", "/"),
                 "status": "failed",
-                "error": str(e),
                 "frame": None,
                 "fps": None,
                 "contour": None,
+                "detected_landmarks": None,
+                "debug": {"arm_tips": {}, "near_bottom": None, "approx_hull": None},
                 "H": None,
-                "dst_size": None,
-                "warped_mask": None,
+                "dst_size": dst_size,
                 "contour_area": np.nan,
-                "aspect_ratio": np.nan,
-                "rotation_angle": np.nan,
+                "reprojection_error": np.nan,
                 "area_flag": False,
-                "aspect_flag": False,
-                "rotation_flag": False,
-                "manual": False,
+                "confidence": "failed",
+                "error": f"exception: {e}",
             }
         detections.append(d)
-        print(f"  [{i}/{total}] {video_path.name} — detection: {d['status']}")
+        if d["status"] == "ok":
+            print(f"  [{i}/{total}] {video_path.name} — detection ok "
+                  f"(reproj {d['reprojection_error']:.2f} px, {d['confidence']})")
+        else:
+            print(f"  [{i}/{total}] {video_path.name} — detection failed: {d['error']}")
 
-    n_ok = sum(1 for d in detections if d["status"] == "ok")
-
-    # ------------------------------------------------------------------
-    # Build consensus + initial scoring (only if any auto-detect succeeded).
-    # ------------------------------------------------------------------
-    consensus = None
-    if n_ok > 0:
-        dst_size = next(d["dst_size"] for d in detections if d["status"] == "ok")
-        consensus = build_consensus_template(detections, dst_size)
-        template_path = args.output_dir / "consensus_template.png"
-        cv2.imwrite(str(template_path), consensus)
-        print(f"Built consensus template from {n_ok} mask(s) -> {template_path}")
-        for d in detections:
-            score_detection(d, consensus, args)
-    else:
-        # Nothing detected automatically; everyone starts as 'failed'.
-        for d in detections:
-            d["mask_iou"] = np.nan
-            d["confidence"] = "failed"
-        if not args.manual:
-            print("No videos passed detection. Writing failed-only summary and exiting.")
-            rows = [make_failed_row(d["rel"], d.get("error")) for d in detections]
-            pd.DataFrame(rows).to_csv(args.output_dir / "alignment_summary.csv", index=False)
-            return
-        print("No videos passed automatic detection; falling through to --manual mode.")
-
-    # ------------------------------------------------------------------
-    # Optional manual correction pass.
-    # ------------------------------------------------------------------
-    if args.manual:
-        consensus = run_manual_pass(detections, state, consensus, args)
-        # Save (or re-save) the consensus template now that manual entries exist.
-        if consensus is not None:
-            template_path = args.output_dir / "consensus_template.png"
-            cv2.imwrite(str(template_path), consensus)
-
-    # ------------------------------------------------------------------
+    # ----------------------------------------------------------------------
     # Pass 2: write cropped videos and review images.
-    # ------------------------------------------------------------------
-    print(f"Pass 2/2: writing cropped videos...")
+    # ----------------------------------------------------------------------
+    print("Pass 2/2: writing cropped videos...")
     rows = []
     for i, d in enumerate(detections, start=1):
         rel = d["rel"]
         if d["status"] != "ok" or d["H"] is None:
+            # Save a debug review image for failed detections (showing
+            # whatever partial landmarks were found).
+            if d["frame"] is not None:
+                review_path = review_dir / rel.parent / (d["video_path"].stem + "_review.png")
+                review_path.parent.mkdir(parents=True, exist_ok=True)
+                save_review_image(d["frame"], d["contour"], d["detected_landmarks"],
+                                  d["debug"], review_path)
             rows.append(make_failed_row(rel, d.get("error")))
             print(f"  [{i}/{total}] {d['filename']} — confidence: failed")
             continue
+
         try:
             output_path = args.output_dir / rel.parent / (d["video_path"].stem + "_cropped.mp4")
             output_path.parent.mkdir(parents=True, exist_ok=True)
             warp_video(d["video_path"], d["H"], d["dst_size"], output_path, d["fps"])
 
-            # Save a review PNG for anything that wasn't a clean automatic 'high'.
-            if d["confidence"] in ("medium", "low", "manual"):
+            if d["confidence"] in ("medium", "low"):
                 review_path = review_dir / rel.parent / (d["video_path"].stem + "_review.png")
                 review_path.parent.mkdir(parents=True, exist_ok=True)
-                save_review_image(d["frame"], d["contour"], review_path)
+                save_review_image(d["frame"], d["contour"], d["detected_landmarks"],
+                                  d["debug"], review_path)
 
             rows.append({
                 "filename": d["filename"],
                 "contour_area": d["contour_area"],
-                "aspect_ratio": d["aspect_ratio"],
-                "rotation_angle": d["rotation_angle"],
-                "mask_iou": d.get("mask_iou", np.nan),
+                "reprojection_error": d["reprojection_error"],
                 "confidence": d["confidence"],
                 "output_path": str(output_path),
             })
-            print(f"  [{i}/{total}] {d['filename']} — confidence: {d['confidence']}")
+            print(f"  [{i}/{total}] {d['filename']} — confidence: {d['confidence']} "
+                  f"(reproj {d['reprojection_error']:.2f} px)")
         except Exception as e:
             rows.append(make_failed_row(rel, str(e)))
             print(f"  [{i}/{total}] {d['filename']} — confidence: failed ({e})")
 
     summary = pd.DataFrame(rows, columns=[
-        "filename", "contour_area", "aspect_ratio",
-        "rotation_angle", "mask_iou", "confidence", "output_path",
+        "filename", "contour_area", "reprojection_error", "confidence", "output_path",
     ])
     summary_path = args.output_dir / "alignment_summary.csv"
     summary.to_csv(summary_path, index=False)
     print(f"Wrote summary: {summary_path}")
 
-    # End-of-run confidence breakdown so the user doesn't have to count the CSV.
     counts = summary["confidence"].value_counts().to_dict()
     print(
         "\nConfidence summary: "
         f"high={counts.get('high', 0)}, "
         f"medium={counts.get('medium', 0)}, "
         f"low={counts.get('low', 0)}, "
-        f"manual={counts.get('manual', 0)}, "
         f"failed={counts.get('failed', 0)} "
         f"(total {len(summary)})"
     )
+    return 0
+
+
+def main():
+    args = parse_args()
+
+    calibration_path = (
+        args.calibration_file
+        if args.calibration_file is not None
+        else args.output_dir / DEFAULT_CALIBRATION_FILENAME
+    )
+
+    if args.calibrate:
+        return run_calibration(args, calibration_path)
+    return run_batch(args, calibration_path)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main() or 0)

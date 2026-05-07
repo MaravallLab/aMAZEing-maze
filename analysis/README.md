@@ -1,120 +1,170 @@
 # crop_and_align_maze.py
 
 Preprocess ventral video recordings of a mouse maze for SLEAP pose
-estimation. The maze is a white cross/T-shaped binary decision tree (4
-arms) on a dark background, filmed from below. Each session can have a
-slightly different camera position, framing, and rotation, which makes
-pose estimation harder and lets the mouse occupy fewer pixels than it
-needs to.
+estimation. The maze is a white cross/T-shaped binary decision tree
+(4 arms) on a dark background, plus an entry corridor at the bottom of
+the rig, filmed from below. Each session can have a slightly different
+camera position, framing, and rotation, which makes pose estimation
+harder and lets the mouse occupy fewer pixels than it should.
 
-This script detects the maze in every video, computes a perspective
-transform that warps it into a canonical axis-aligned rectangle (with a
-fixed amount of padding around the edges), and writes a cropped/aligned
-copy of every input video. After this step, every recording has the maze
-in the same place, the mouse appears larger, and SLEAP doesn't need to
-learn through that variability.
+This script detects 6 anatomical landmarks on the maze in every video,
+computes a homography that maps those landmarks to a canonical layout
+defined by a one-time manual calibration, and writes a cropped/aligned
+copy of every input video. After this step, every recording has the
+maze in the same place, the mouse appears larger, and SLEAP doesn't
+have to learn through that variability.
 
-## Two-pass pipeline
+## Workflow
 
-The camera position can shift between sessions (e.g. after the rig is
-cleaned), so picking any one video as the "reference" is unfair: every
-later recording would be measured against a single arbitrary frame. The
-script therefore runs in two passes and builds a consensus template from
-the whole dataset.
+The pipeline runs in two stages: a one-time **calibration** that you
+run once per camera setup, then a **batch** run that processes every
+video.
 
-### Pass 1 — Detection only
+### Stage 1 — Calibration (`--calibrate`)
 
-For every video:
-- Sample the frame at 50% of the total frame count.
-- Convert to grayscale and binarize with Otsu's threshold (the maze is
-  bright, the background is dark).
-- Find the largest external contour — that is the maze.
-- Compute the rotated bounding rectangle (`cv2.minAreaRect`) and the
-  perspective transform that maps its 4 corners to a canonical
-  axis-aligned rectangle plus padding.
-- Run the contour-level sanity checks (area ratio, aspect ratio,
-  rotation magnitude) and remember which ones failed.
-- Warp the binary maze mask using that transform and keep it in memory.
+```
+python crop_and_align_maze.py --calibrate \
+    --input_dir  <path> \
+    --output_dir <path>
+```
 
-The canonical rectangle size and the reference aspect ratio are taken
-from the first successfully detected video, so every warped mask lives
-in the same pixel grid and can be compared like-for-like.
+The script picks one video (the first one it finds under `--input_dir`,
+or the file you pass via `--calibrate_video`), opens its middle frame in
+an OpenCV window, and asks you to click 6 landmarks **in this exact
+order**:
 
-If a video can't be opened, has no frames, has no detectable contour,
-or yields a degenerate bounding rectangle, it is marked `failed` and
-skipped from then on.
+| # | Landmark                                       | Color    |
+| - | ---------------------------------------------- | -------- |
+| 1 | Tip of top-left arm                            | red      |
+| 2 | Tip of top-right arm                           | orange   |
+| 3 | Tip of bottom-left arm                         | yellow   |
+| 4 | Tip of bottom-right arm                        | green    |
+| 5 | Bottom-left corner of the entry corridor       | magenta  |
+| 6 | Bottom-right corner of the entry corridor      | cyan     |
 
-### Build the consensus template
+Controls inside the calibration window:
+- Left-click to place the next landmark.
+- **r** resets the click set so you can start over.
+- After all 6 are placed, **y** confirms; **r** redoes from scratch.
+- **ESC** quits without saving.
 
-All successful warped masks are averaged pixel-wise (each mask is 0/1,
-so the average is a value in [0, 1] expressing how many recordings agree
-that this pixel is "inside" the maze). The result is thresholded at 0.5
-to produce a single binary template. Because the average is taken across
-the whole dataset, a few unusual recordings can't drag the template
-toward themselves — the template represents what the maze typically
-looks like in canonical coordinates.
+On confirm, the script writes:
+- `calibration.json` (or whatever you pass via `--calibration_file`) —
+  the 6 landmark positions and the calibration frame's dimensions.
+- `calibration_frame.png` — the calibration frame with the 6 landmarks
+  drawn on it, for your records.
 
-The template is saved as `consensus_template.png` in the output
-directory so you can sanity-check it visually.
+The script then exits. Calibration mode does not process any videos.
 
-#### Why morphological closing is applied to the IoU mask
+### Stage 2 — Batch processing
 
-The mouse's dark body would otherwise punch a mouse-shaped hole into the
-thresholded maze mask. Because the mouse is in a different position in
-every video, those holes disagree with the consensus template in a
-different spot every time and systematically pull the IoU score down —
-to the point where the script was returning **zero** `high`-confidence
-videos across a full batch.
+```
+python crop_and_align_maze.py \
+    --input_dir  <path> \
+    --output_dir <path>
+```
 
-To fix that, after the contour-filled mask is built (and before it is
-warped and used for IoU), `cv2.morphologyEx(..., cv2.MORPH_CLOSE)` is
-applied with a square kernel of size `--morph_kernel_size` (default 50
-px). The kernel is large enough to swallow the mouse but small relative
-to the maze, so the hole gets filled but the maze outline doesn't bloat.
+For every video under `--input_dir`, the script:
 
-The closing **only affects the mask used for IoU comparison**. Contour
-detection, the `cv2.minAreaRect` bounding rectangle, and the perspective
-transform itself all still use the original (unclosed) threshold output,
-so cropping geometry is unchanged.
+1. **Samples the middle frame** (50% of total frame count).
+2. **Thresholds with Otsu** to separate the bright maze from the dark
+   background.
+3. **Applies morphological closing** with a square kernel of size
+   `--morph_kernel_size` (default 50 px) to fill the mouse-shaped hole
+   the mouse's dark body would otherwise punch into the threshold.
+   The closing happens on the binary mask before the contour is
+   re-extracted, so the mouse can't drag landmark detection off course.
+4. **Re-extracts the largest contour** from the closed binary — that is
+   the maze.
+5. **Detects the same 6 landmarks** automatically (see "Automatic
+   landmark detection" below).
+6. **Solves a homography** from the detected landmarks to the canonical
+   layout derived from the calibration, using `cv2.findHomography`'s
+   least-squares fit over 6 correspondences.
+7. **Warps every frame** of the original video with that homography and
+   writes the cropped output to
+   `<output_dir>/<relative session path>/<name>_cropped.mp4` at the
+   source FPS using the `mp4v` codec.
+8. **Scores confidence** from the reprojection error (see "Confidence
+   scoring") and saves a review PNG for any flagged or failed video.
+9. **Writes `alignment_summary.csv`** in the output directory with one
+   row per input video and prints a confidence breakdown to the console.
 
-### Pass 2 — IoU comparison and video writing
+The pipeline is two-pass internally: pass 1 detects landmarks for every
+video, pass 2 writes the cropped videos. Output mirrors the input
+directory structure so filenames don't collide across sessions.
 
-For every video that passed pass 1:
-- Compute the IoU between its warped mask and the consensus template.
-- Combine all four checks (area, aspect, IoU, rotation) into an overall
-  `high` / `medium` / `low` confidence label.
-- Warp every frame of the original video with the same transform and
-  write the cropped video to `output_dir/<relative session path>/
-  <name>_cropped.mp4` at the source FPS using the `mp4v` codec.
-- For `medium` / `low` confidence videos, save the sampled frame with
-  the detected contour drawn on it under `review/`.
+## Automatic landmark detection
 
-A summary CSV (`alignment_summary.csv`) is written with one row per
-input video. After it's saved, the script also prints a confidence
-breakdown to the console (counts of `high` / `medium` / `low` /
-`manual` / `failed`) so you don't have to count rows by hand.
+The 6 landmarks are extracted from the closed maze contour as follows.
+
+### 4 arm tips
+
+1. Compute the convex hull of the maze contour.
+2. Apply `cv2.approxPolyDP` to the hull with decreasing epsilon until
+   the vertex count is in the range `[8, 12]` (the convex hull of a
+   cross typically has ~8 corners — roughly two per arm tip region).
+3. Cluster the resulting hull vertices into 4 groups by which quadrant
+   of the contour's axis-aligned bounding box they fall in (top-left,
+   top-right, bottom-left, bottom-right).
+4. Within each quadrant, pick the vertex furthest from the contour's
+   centroid as that arm's tip. The arm tips reach further out than any
+   other hull vertex, so this consistently picks the tip even though
+   the corridor base may also live in the bottom quadrants.
+
+### 2 corridor base points
+
+1. Take all contour points whose `y` coordinate is within 10 px of the
+   maximum `y` (i.e. the very bottom strip of the maze contour).
+2. The leftmost and rightmost points of that strip are the bottom-left
+   and bottom-right corridor base corners respectively.
+
+The 6 detected landmarks are then placed in the same order as the
+calibration (`top_left_arm`, `top_right_arm`, `bottom_left_arm`,
+`bottom_right_arm`, `corridor_base_left`, `corridor_base_right`) so the
+homography solve has a consistent point-to-point correspondence.
+
+If a quadrant contains no hull vertex, or the bottom strip has fewer
+than 2 contour points, detection fails for that video.
+
+## Canonical layout
+
+The canonical positions of the 6 landmarks are derived from the
+calibration: each calibration point is translated so the bounding box
+of all 6 sits at `(--padding, --padding)`, and the output canvas size is
+`(bbox_width + 2*padding, bbox_height + 2*padding)`. The relative
+spacing and proportions of the calibration are preserved exactly — the
+warp simply centers the maze in a padded canvas.
+
+This is what gives every cropped video the same maze pose: every video
+is warped onto the same target landmarks.
 
 ## Confidence scoring
 
-Each video is checked against four conditions. The number of failing
-checks determines the confidence label.
+Confidence is based on **reprojection error**: for each video, after
+solving the homography, the 6 detected landmarks are projected through
+H and compared to the 6 canonical targets. The mean Euclidean distance
+(in pixels) is the reprojection error.
 
-| Metric              | What it measures                                               | Flag condition                                                     |
-| ------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Contour area ratio  | Detected contour area as a fraction of total frame area.       | Outside `[0.05, 0.5]` (maze fills <5% or >50% of frame).           |
-| Aspect ratio        | Long/short side ratio of the rotated bounding rectangle.       | Deviates more than 20% from the reference (first successful video).|
-| Mask IoU            | Overlap of the (closed) warped mask with the consensus template. | IoU below `--iou_threshold` (default 0.80).                        |
-| Rotation magnitude  | Signed deviation (in degrees) from axis-aligned, in [-45, 45]. | `abs(angle)` greater than `--rotation_threshold` (default 15°).    |
+| Reprojection error | Base confidence |
+| ------------------ | --------------- |
+| < 5 px             | high            |
+| 5 – 15 px          | medium          |
+| > 15 px            | low             |
 
-Confidence buckets:
-- **high** — all four checks pass. Auto-accept.
-- **medium** — exactly one check fails. Worth a quick look in `review/`.
-- **low** — two or more checks fail. Inspect carefully before using.
-- **manual** — you accepted the alignment by clicking the 4 corners in
-  `--manual` mode. The cropped video is written and a review PNG is
-  saved (showing your clicked quad) for the record.
-- **failed** — detection itself failed (bad file, no contour, etc.) and
-  you didn't override it in `--manual` mode. No output video is written.
+A **contour-area sanity check** runs alongside: if the detected contour
+covers less than 5% or more than 50% of the frame, an area flag is
+raised. An area flag downgrades the base label by one tier (high →
+medium, medium → low). The label `failed` is reserved for videos where
+the file couldn't be opened, no contour could be found, or fewer than 6
+landmarks could be detected.
+
+| Label    | What it means                                                     |
+| -------- | ----------------------------------------------------------------- |
+| high     | Reprojection error < 5 px and the contour size is sensible.       |
+| medium   | Reprojection error in [5, 15] px, or area-flag downgrade from high. |
+| low      | Reprojection error > 15 px, or area-flag downgrade from medium.   |
+| failed   | File couldn't be processed; no cropped video is written.          |
 
 ## CLI
 
@@ -123,34 +173,61 @@ python crop_and_align_maze.py \
     --input_dir <path> \
     --output_dir <path> \
     [--padding 50] \
-    [--iou_threshold 0.80] \
-    [--rotation_threshold 15] \
     [--morph_kernel_size 50] \
     [--exclude_dirs segments new_segments segments_detected deeplabcut habituation] \
     [--include_pattern "*.mp4,*.avi"] \
-    [--manual]
+    [--calibrate] \
+    [--calibrate_video <path>] \
+    [--calibration_file <path>]
 ```
 
-| Argument              | Default | Meaning                                                                                |
-| --------------------- | ------- | -------------------------------------------------------------------------------------- |
-| `--input_dir`         | —       | Folder to search recursively. Subfolders preserved in output.                          |
-| `--output_dir`        | —       | Where cropped videos, the consensus template, the review folder, and the CSV are written. |
-| `--padding`           | 50      | Pixels of padding added around the canonical maze rectangle on every side.             |
-| `--iou_threshold`     | 0.80    | Minimum mask IoU vs. consensus template to count as a passing check.                   |
-| `--rotation_threshold`| 15      | Maximum allowed `abs(rotation)` in degrees before the rotation check is flagged.       |
-| `--morph_kernel_size` | 50      | Square kernel size (px) for the `MORPH_CLOSE` step that fills the mouse-shaped hole in the IoU mask. Make it comfortably larger than the mouse but smaller than the maze. |
-| `--exclude_dirs`      | `segments new_segments segments_detected deeplabcut habituation` | Directory names to skip when walking `input_dir` (case-insensitive). Pruned in-place during the walk so the script never even descends into them — useful for skipping per-trial segment copies, DLC outputs, and habituation videos. Pass space-separated names to override. |
-| `--include_pattern`   | `*.mp4,*.avi` | Comma-separated `fnmatch` globs used to pick which filenames count as videos. |
-| `--manual`            | off     | After automatic scoring, open a window for each `medium` / `low` / `failed` video so you can click the 4 maze corners by hand. |
+| Argument              | Default                                 | Meaning                                                                                |
+| --------------------- | --------------------------------------- | -------------------------------------------------------------------------------------- |
+| `--input_dir`         | —                                       | Folder to search recursively for videos. Required for batch mode; in `--calibrate` mode it's used to find a video if `--calibrate_video` isn't given. |
+| `--output_dir`        | —                                       | Where cropped videos, the calibration file (default), the review folder, and the CSV are written. |
+| `--padding`           | 50                                      | Pixels of padding added around the bounding box of the canonical landmarks.            |
+| `--morph_kernel_size` | 50                                      | Square kernel size (px) for `MORPH_CLOSE` on the threshold. Should be comfortably larger than the mouse but smaller than the maze. |
+| `--exclude_dirs`      | `segments new_segments segments_detected deeplabcut habituation` | Directory names to skip when walking `input_dir` (case-insensitive). Pruned in-place during the walk so the script never even descends into them. |
+| `--include_pattern`   | `*.mp4,*.avi`                           | Comma-separated `fnmatch` globs used to pick which filenames count as videos.          |
+| `--calibrate`         | off                                     | Enter calibration mode: click 6 landmarks on a sampled frame and save them. Exits without processing any videos. |
+| `--calibrate_video`   | — (uses first video in `--input_dir`)   | In `--calibrate` mode, the specific video to calibrate on.                             |
+| `--calibration_file`  | `<output_dir>/calibration.json`         | Path to the calibration JSON file. Read in batch mode, written in calibrate mode.      |
 
-`input_dir` is searched recursively, so you can point it at the top-level
-`simplermaze/` folder and it will pick up videos in
-`mouse<id>/<session>/<file>.mp4` automatically. The output mirrors the
-relative path to keep filenames from colliding across sessions. Use
-`--exclude_dirs` and `--include_pattern` to control what counts as a
-"main session" video — the defaults skip per-trial segment folders, DLC
-output trees, and habituation recordings so only the raw session videos
-are processed.
+`input_dir` is searched recursively, so you can point it at the top
+`simplermaze/` folder and it will pick up `mouse<id>/<session>/<file>.mp4`
+automatically. The defaults for `--exclude_dirs` skip per-trial segment
+folders, DLC outputs, and habituation videos so only the raw session
+videos are processed.
+
+If you run batch mode without a calibration file, the script will print
+a clear error pointing you to `--calibrate`.
+
+## Outputs
+
+```
+<output_dir>/
+├── calibration.json                   # 6 landmarks + frame size
+├── calibration_frame.png              # frame with calibration landmarks drawn
+├── alignment_summary.csv              # one row per input video
+├── <mouse>/<session>/<name>_cropped.mp4
+├── ...
+└── review/
+    └── <mouse>/<session>/<name>_review.png   # for medium/low/failed
+```
+
+`alignment_summary.csv` columns:
+
+| Column              | Meaning                                                       |
+| ------------------- | ------------------------------------------------------------- |
+| `filename`          | Path of the input video, relative to `--input_dir`.           |
+| `contour_area`      | Area of the detected maze contour (px²).                      |
+| `reprojection_error`| Mean reprojection error of the 6 landmarks (px).              |
+| `confidence`        | `high` / `medium` / `low` / `failed`.                         |
+| `output_path`       | Path of the cropped video, or an `error: ...` string on failure. |
+
+After it's saved, the script also prints a confidence breakdown to the
+console (counts of `high` / `medium` / `low` / `failed`) so you don't
+have to count rows by hand.
 
 ## Dependencies
 
@@ -162,63 +239,37 @@ are processed.
 ## Reviewing flagged videos
 
 Anything labeled `medium`, `low`, or `failed` in `alignment_summary.csv`
-deserves a look:
+gets a debug PNG under `review/`. The PNG shows:
 
-1. Open the corresponding image in `output_dir/review/<session>/
-   <name>_review.png`. The detected maze contour is drawn in green over
-   the sampled frame. If the contour looks right (it traces the outline
-   of the maze), the alignment is probably fine and the flag came from
-   the IoU drifting against the consensus — usually a real but tolerable
-   camera shift.
-2. If the contour is clearly wrong (it includes reflections, room
-   features, the mouse's home cage, etc.), discard the cropped video
-   and either re-record or pre-mask the frame before re-running this
-   script.
-3. Open the cropped video in `output_dir/<session>/<name>_cropped.mp4`
-   and confirm the maze is centered and the mouse stays inside the
-   frame for the whole recording.
-4. `consensus_template.png` shows the canonical maze shape used for the
-   IoU check. If it looks like a cross/T with crisp arms, the dataset
-   is internally consistent. If it looks blurry or has multiple ghost
-   outlines, the camera moved a lot across sessions and the IoU check
-   will be conservative — consider raising `--iou_threshold` or
-   inspecting more videos by hand.
-5. `failed` rows mean detection itself didn't run; check whether the
-   file opens, whether it has frames, and whether the maze is visibly
-   bright against the background in a sampled frame.
+- the closed maze contour outline in **cyan**,
+- the convex-hull approximation vertices as small **white dots**,
+- the bottom strip used for corridor detection as a thin **green line**,
+- per-quadrant arm-tip candidates as hollow **teal circles**, and
+- the 6 final landmarks in their per-landmark colors (red / orange /
+  yellow / green / magenta / cyan, numbered 1–6).
 
-## Manual correction (`--manual`)
+How to triage:
 
-When you re-run the script with `--manual`, after the automatic scoring
-step the script opens an OpenCV window for every `medium`, `low`, or
-`failed` video and asks you to click the 4 maze corners.
+1. Open the review PNG for the flagged video. If all 6 colored markers
+   are sitting on the right anatomical points, the alignment is fine
+   and the flag came from a slightly noisy reprojection — usually
+   tolerable for downstream pose estimation.
+2. If the markers are clearly off (e.g. an arm tip landed on the
+   contour where the mouse broke the maze outline), inspect the white
+   hull-approximation dots and the teal candidates. They tell you
+   whether the convex-hull approximation degenerated or whether the
+   mouse was too close to a tip when the frame was sampled.
+3. Open the corresponding cropped video and confirm the maze ends up in
+   the expected canonical pose. The cropped video is written even for
+   `low` confidence — it's still usable in many cases.
+4. `failed` rows have no cropped output. Re-check `--morph_kernel_size`
+   if the mouse was breaking the maze outline; raise it until the
+   closing fully repairs the cross.
+5. `calibration_frame.png` is your reference for what the canonical
+   layout should look like. If the canonical pose looks wrong, re-run
+   `--calibrate` and click more carefully.
 
-Workflow per video:
-
-1. A window pops up showing the sampled middle frame, with the filename
-   and current confidence label in the title.
-2. Click the corners **in this order**: top-left, top-right,
-   bottom-right, bottom-left (clockwise from TL). Markers and connecting
-   lines are drawn as you click so you can see the quad form.
-3. Press **ENTER** to confirm — the script rebuilds the perspective
-   transform from your clicks, recomputes the warped mask, marks the
-   confidence as `manual`, and moves on to the next video.
-4. Press **r** at any time to reset the 4 clicks and start over for the
-   current video.
-5. Press **ESC** to skip the current video without correcting it
-   (its row stays `medium` / `low` / `failed`).
-
-Notes:
-- The corners you click define the perspective transform; you don't need
-  to match the automatic detection. If you'd rather crop tighter or
-  looser than the auto detection did, click accordingly.
-- Manually corrected videos are written to the same output path as
-  automatic ones (`<output_dir>/<session>/<name>_cropped.mp4`) and a
-  review PNG with your clicked quad is saved under `review/`.
-- The consensus template is built from the automatic detections only
-  (manual entries don't fold back in), so the IoU printed for manual
-  rows is informational. The `manual` label means "the user has visually
-  verified the corners" and overrides the IoU check.
-- If literally no video passed automatic detection, manual mode still
-  works: the first manual rectangle defines the canonical size, and
-  every subsequent click is fit into that same coordinate system.
+If a particular video keeps failing automatic detection no matter what,
+you can re-run calibration on that video specifically (via
+`--calibrate_video`) and use a separate output directory to crop just
+that file under its own calibration.
