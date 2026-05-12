@@ -12,10 +12,16 @@ All commands are run from `src/auditory/`.
 
 Decide once per mouse, then never change it. Write it down somewhere.
 
-- **Group 1** mice: EE-day will play Grammar A, SC-day will play Grammar B.
-- **Group 2** mice: EE-day will play Grammar B, SC-day will play Grammar A.
+- **Group 1** mice: hear Grammar A when in the EE cage; Grammar B when in the SC cage.
+- **Group 2** mice: hear Grammar B when in the EE cage; Grammar A when in the SC cage.
 
 Split your mice ~half-and-half across the two groups.
+
+You won't pass the group to `run.py` (the script only needs to know
+which grammar to play today). The group assignment is what tells *you*
+which cage-type each mouse should be in on a given day so that the
+grammar coming out of the speaker is correctly paired with its
+environment.
 
 ### Step 2. Verify the matrices look right
 
@@ -31,7 +37,7 @@ If yes, the grammar is correctly encoded. You can delete `grammars.txt`.
 
 ```bash
 python -m grammar_stimuli.run --mode training \
-    --group 1 --condition EE \
+    --grammar A \
     --duration-seconds 60 \
     --output-dir ./_test_audio
 ```
@@ -43,19 +49,20 @@ Listen for 60 s. If you hear melodies, the speaker is wired up. Delete
 
 ## Each training day
 
-### Step 1. Decide which cage each mouse is in today
+### Step 1. Decide today's grammar, then place each mouse accordingly
 
-Alternate daily. For example:
+You play **one grammar per day**, alternating A and B. Each mouse goes
+into either its EE cage or its SC cage today, depending on its group
+and what today's grammar is:
 
-| Day | Mouse Alpha (group 1) | Mouse Beta (group 2) |
+| Today's grammar | Group 1 mice are in... | Group 2 mice are in... |
 |---|---|---|
-| Mon | EE cage | EE cage |
-| Tue | SC cage | SC cage |
-| Wed | EE cage | EE cage |
-| ... | ... | ... |
+| **A** | EE cages | SC cages |
+| **B** | SC cages | EE cages |
 
-(Mice in the same cage today share the same audio stream — only one
-`run.py` process is needed per cage per day.)
+(That's how each mouse ends up hearing its group's correct
+grammar-environment pairing.) All cages can sit in the same room
+sharing one speaker.
 
 ### Step 2. Start one training process for the room
 
@@ -68,7 +75,6 @@ python -m grammar_stimuli.run --mode training \
     --grammar A \
     --cage-ids "6224_EE,6225_SC" \
     --duration-seconds 14400 \
-    --seed 12345 \
     --output-dir ./sessions/<date>_grammarA
 ```
 
@@ -79,7 +85,6 @@ python -m grammar_stimuli.run --mode training \
     --grammar B \
     --cage-ids "6224_SC,6225_EE" \
     --duration-seconds 14400 \
-    --seed 12346 \
     --output-dir ./sessions/<date>_grammarB
 ```
 
@@ -97,10 +102,12 @@ stores them as strings.
 The console prints melody progress. The output folder fills with one
 CSV per session. Leave it alone for 4 hours.
 
-### Step 4. Tomorrow, swap the cages and repeat
+### Step 4. Tomorrow, flip the grammar and reshuffle the cages
 
-Mouse Alpha (group 1) who was in EE today goes to SC tomorrow, and
-hears Grammar B. And so on.
+If today was Grammar A, tomorrow is Grammar B. Each mouse moves to the
+*other* cage-type tomorrow (group 1: EE → SC; group 2: SC → EE). Same
+single command structure, just with `--grammar B` and updated
+`--cage-ids` tags.
 
 ---
 
@@ -123,7 +130,8 @@ record_video: bool = True
 # path_to_vocalisation_control: str = "/path/to/voc.wav"
 ```
 
-`grammar_condition` is ignored for test day — leave whatever's there.
+There's no `grammar_condition` to set — the mouse has been in both
+cage-types during training, so the maze just plays both grammars.
 
 ### Step 3. Start the maze session
 
@@ -160,4 +168,4 @@ different group, then `python main.py` again.
 | `main.py` errors complain about rois_number | Set `rois_number: int = 8` in `src/auditory/config.py` |
 | No audio | Use `--device-id N` to pick a different sounddevice output |
 | Audio plays but I want to verify | Open the session CSV and inspect the `symbols` column |
-| Want to re-derive what was played | Re-run with the same `--seed` and you get the same melodies |
+| Want to re-derive what was played | Re-run with the same `--seed N` and you get the same melodies (otherwise just look at the CSV) |

@@ -376,19 +376,19 @@ class ExperimentFactory:
         blocks shuffle the stimulus-to-ROI mapping.
 
         Requires rois_number == 8. For training day playback (no video,
-        ROI gating) use the standalone runner instead:
+        no ROI gating) use the standalone runner instead:
 
             cd src/auditory
             python -m grammar_stimuli.run --mode training \\
-                --group 1 --condition EE --duration-seconds 14400
+                --grammar A --cage-ids "6224_EE,6225_SC" \\
+                --duration-seconds 14400
         """
         if cfg.grammar_mode == "training":
             raise NotImplementedError(
                 "main.py is ROI-gated and records video; it is not the right driver "
                 "for continuous training playback. Run:\n"
-                "    python -m grammar_stimuli.run --mode training --group "
-                f"{cfg.grammar_group} --condition <EE-or-SC-for-today> "
-                "--duration-seconds 14400\n"
+                "    python -m grammar_stimuli.run --mode training "
+                "--grammar <A or B> --cage-ids '...' --duration-seconds 14400\n"
                 "from src/auditory/ instead."
             )
         if cfg.grammar_mode != "test":

@@ -111,23 +111,29 @@ grammar paired with the day's environment):
 
 ## 4. Counterbalancing and the alternate-day training design
 
-Each mouse spends **alternating training days in the two cage
-environments**:
+Each mouse alternates daily between an enriched (EE) cage and a
+standard (SC) cage, while **one grammar plays per day from one speaker**
+to the whole room. Mice from different counterbalance groups occupy
+different cage-types each day so that, from each mouse's perspective,
+each grammar gets paired with one specific environment.
 
-- **EE-day**: mouse is in the enriched cage; system plays the grammar paired with EE.
-- **SC-day**: mouse is in the standard cage; system plays the grammar paired with SC.
-
-After several alternating days, the mouse has formed an
-**auditory-structure ↔ environment association**: grammar X "belongs to"
-the EE cage, grammar Y "belongs to" the SC cage.
-
-Counterbalancing flips the pairing across mice so that any preference at
-test cannot be attributed to grammar-specific properties:
-
-| Group | EE-day grammar | SC-day grammar |
+| Group | When in EE cage hears... | When in SC cage hears... |
 |:---:|:---:|:---:|
 | 1 | Grammar A | Grammar B |
 | 2 | Grammar B | Grammar A |
+
+So on any single training day:
+
+| Today's grammar | Group 1 mice are in... | Group 2 mice are in... |
+|:---:|:---:|:---:|
+| **A** | EE cage | SC cage |
+| **B** | SC cage | EE cage |
+
+After several alternating days, each mouse has formed an
+**auditory-structure ↔ environment association**: one grammar "belongs"
+to the EE cage, the other to the SC cage. Counterbalancing flips which
+grammar plays this role across groups so any preference at test cannot
+be attributed to grammar-specific properties.
 
 Both grammars have identical row mixtures and identical entropy rates;
 only the dominant-cycle structure differs.
@@ -185,41 +191,44 @@ for baseline acoustic preference.
 ### 7a. Training day (no video, just continuous melody playback)
 
 Standalone runner — uses `sounddevice` directly, no camera, no Arduino,
-no ROI gating. Run it **once per mouse per day**, with `--condition`
-set to whichever cage the mouse is in today.
+no ROI gating. Run it **once per day**: one grammar plays from one
+speaker; every cage in the room (EE-type and SC-type alike) hears the
+same audio stream.
 
 ```bash
 cd src/auditory
 
-# Mouse in counterbalance group 1, today housed in EE cage:
-# plays Grammar A (the EE-grammar for group 1) for 4 h.
+# Day 1 (Grammar A): cage 6224 is in its EE-type cage,
+# cage 6225 is in its SC-type cage; both in the same room.
 python -m grammar_stimuli.run --mode training \
-    --group 1 --condition EE \
+    --grammar A \
+    --cage-ids "6224_EE,6225_SC" \
     --duration-seconds 14400 \
-    --seed 12345 \
-    --output-dir ./sessions/2026-05-12_g1_EE
+    --output-dir ./sessions/2026-05-12_grammarA
 
-# The next day the same mouse is in the SC cage:
-# plays Grammar B (the SC-grammar for group 1).
+# Day 2 (Grammar B): cages swap status.
 python -m grammar_stimuli.run --mode training \
-    --group 1 --condition SC \
+    --grammar B \
+    --cage-ids "6224_SC,6225_EE" \
     --duration-seconds 14400 \
-    --seed 12346 \
-    --output-dir ./sessions/2026-05-13_g1_SC
+    --output-dir ./sessions/2026-05-13_grammarB
 ```
 
-If multiple mice in the same group share a speaker, you only need one
-process for that environment-day; the same audio stream reaches them all.
+`--cage-ids` is bookkeeping only — it tags the output filename and the
+JSON summary; it does not affect the audio.
 
 Optional flags:
-- `--seed N` — reproducible RNG
+- `--seed N` — reproducible RNG (omit for a random seed each run)
 - `--dry-run` — no audio output, but still generates and logs symbols
 - `--device-id N` — choose sounddevice output (default 3)
-- `--training-grammar A` — override the group/condition lookup
+- `--group N --condition X` — alternate way to pick the grammar (looks up
+  from counterbalance table). Useful when one room contains only cages
+  from a single group; less useful in the same-room mixed setup.
 - `--duration-seconds 60` — short sanity check
 
 Output (per session): one CSV with melody index, symbols played, per-step
-surprise bits, onset/offset times; plus a JSON summary.
+surprise bits, onset/offset times; plus a JSON summary including the
+cage-ids list.
 
 ### 7b. Experiment day (video + ROI tracking + visitation log)
 
@@ -231,8 +240,6 @@ monitor, video writer, and trial CSV.
    experiment_mode: str = "grammar"
    grammar_mode: str = "test"
    grammar_group: int = 1          # this mouse's counterbalance group (1 or 2)
-   # grammar_condition is IGNORED on test day — the mouse has been in
-   # both environments during training and hears both grammars in the maze.
    rois_number: int = 8            # required: 6 grammar arms + voc + silent
    record_video: bool = True
    # optional:
@@ -314,6 +321,6 @@ harness produces.
 python -m grammar_stimuli.dump_matrices
 
 # Quick dry-run of 60 s of training (no audio device needed)
-python -m grammar_stimuli.run --mode training --group 1 --condition EE \
+python -m grammar_stimuli.run --mode training --grammar A \
     --duration-seconds 60 --dry-run --output-dir ./_check
 ```

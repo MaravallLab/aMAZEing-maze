@@ -12,14 +12,14 @@ from config import ExperimentConfig
 from modules.hardware import ArduinoController, Camera
 from modules.vision import ROIMonitor
 from modules.audio import Audio
-from modules.experiments import ExperimentFactory
+from modules.experiments import ExperimentFactory, GrammarStimulus
 from modules.data_manager import DataManager
 #from modules.analysis import SessionAnalyzer
 
 def main():
-    
+    # ==========================================
     # 1. SETUP & INITIALIZATION
-    
+    # ==========================================
     cfg = ExperimentConfig()
     
     # Initialize Data Manager
@@ -36,21 +36,15 @@ def main():
     # Initialize the detailed CSV log for individual visits
     visit_log_path = data_mgr.init_visit_log(cfg.experiment_mode)
     
-    print(f"Session Ready: {new_dir_path}")
+    print(f"📂 Session Ready: {new_dir_path}")
 
-    
+    # ==========================================
     # 2. HARDWARE SETUP
+    # ==========================================
+    print("\n--- 🔌 Hardware Setup ---")
     
-    print("\n 🔌 Hardware Setup ")
-    
-    # Initialize Audio
-    # We pass the defaults here so they are set globally
-    audio = Audio(
-        samplerate=cfg.samplerate, 
-        device_id=cfg.audio_device_id,
-        default_duration=10.0,
-        default_ramp=0.02
-    )
+    # Initialize Audio — pulls samplerate/device/defaults from cfg.
+    audio = Audio(cfg)
     
     # Initialize Arduino (if enabled in config)
     arduino = ArduinoController(
@@ -71,10 +65,10 @@ def main():
         video_writer = cv.VideoWriter(rec_path, fourcc, camera.fps, (camera.width, camera.height))
         print(f"📹 Recording started: {rec_name}")
 
-    
+    # ==========================================
     # 3. GENERATE TRIALS
-    
-    print("\n 🧪 Generating Trials ")
+    # ==========================================
+    print("\n--- 🧪 Generating Trials ---")
     
     # We pass 'audio' so the factory can generate the correct waveforms
     trials_df, sound_array = ExperimentFactory.generate_trials(cfg, audio)
@@ -89,9 +83,9 @@ def main():
     unique_trials = trials_df['trial_ID'].unique()
     trial_lengths = cfg.get_trial_lengths()
 
-    
+    # ==========================================
     # 4. VISION CALIBRATION
-    
+    # ==========================================
     # Construct the full list of ROIs (Entrances + numbered arms)
     generic_rois = [str(i+1) for i in range(cfg.rois_number)]
     full_rois_list = cfg.entrance_rois + generic_rois
@@ -120,9 +114,9 @@ def main():
     else:
         raise RuntimeError("Failed to capture frame for calibration.")
 
-    
+    # ==========================================
     # 5. MAIN EXPERIMENT LOOP
-    
+    # ==========================================
     # Create window
     cv.namedWindow("Experiment View", cv.WINDOW_NORMAL)
     cv.resizeWindow("Experiment View", 1024, 768)
@@ -143,16 +137,16 @@ def main():
         
         trial_running = True
         while trial_running:
-            #  A. Capture 
+            # --- A. Capture ---
             valid, raw_frame = camera.get_frame()
             if not valid:
-                print("Camera stream ended unexpectedly.")
+                print("❌ Camera stream ended unexpectedly.")
                 break
                 
             if video_writer:
                 video_writer.write(raw_frame)
 
-            #  B. Image Processing 
+            # --- B. Image Processing ---
             if raw_frame.ndim == 3:
                 gray = cv.cvtColor(raw_frame, cv.COLOR_BGR2GRAY)
                 display_frame = raw_frame.copy()
@@ -163,11 +157,11 @@ def main():
 
             ret, binary = cv.threshold(gray, 160, 255, cv.THRESH_BINARY)
             
-            #  C. Tracking 
+            # --- C. Tracking ---
             # 'entered_rois' is a list of ROIs entered *this frame*
             entered_rois = tracker.update(binary)
             
-            #  D. Handle Entries 
+            # --- D. Handle Entries ---
             for roi in entered_rois:
                 visit_start_times[roi] = time.time()
                 
@@ -186,7 +180,9 @@ def main():
                 
                 # Check if we should play (ignore silence/control)
                 should_play = True
-                if isinstance(sound_clip, (int, float)) and sound_clip == 0:
+                if isinstance(sound_clip, GrammarStimulus):
+                    pass  # always play — rendered live below
+                elif isinstance(sound_clip, (int, float)) and sound_clip == 0:
                     should_play = False
                 elif isinstance(sound_clip, (list, np.ndarray, tuple)):
                      # If it's a tuple (interval), check if both are zero
@@ -198,10 +194,15 @@ def main():
                         should_play = False
 
                 if should_play:
-                    print(f"    Playing sound for {roi}")
-                    
+                    print(f"   🔊 Playing sound for {roi}")
+
+                    # Grammar arm: sample a fresh melody on every entry
+                    if isinstance(sound_clip, GrammarStimulus):
+                         wave = sound_clip.render(audio, roi=roi, trial_id=trial_idx)
+                         audio.play(wave)
+                         duration = len(wave) / cfg.samplerate
                     # Handle Tuple (Intervals) vs Single Sound
-                    if isinstance(sound_clip, tuple):
+                    elif isinstance(sound_clip, tuple):
                          # Mix the two channels/sounds
                          mixed = audio.mix_sounds(sound_clip[0], sound_clip[1])
                          audio.play(mixed)
@@ -215,7 +216,7 @@ def main():
                     ttl_active = True
                     ttl_scheduled_off = time.time() + duration
 
-            #  E. Handle Exits & Logging 
+            # --- E. Handle Exits & Logging ---
             for roi in full_rois_list:
                 # If mouse WAS in ROI (start_time set) but is NOT there now:
                 if not tracker.is_occupied[roi] and visit_start_times[roi] is not None:
@@ -227,7 +228,7 @@ def main():
                     stim_info = DataManager.get_stimulus_string(trials_df, trial_idx, roi)
                     data_mgr.log_visit(visit_log_path, trial_idx, roi, stim_info, start_t, end_t, visit_dur)
                     
-                    print(f"   Visit Logged: {roi} ({visit_dur:.2f}s)")
+                    print(f"   📝 Visit Logged: {roi} ({visit_dur:.2f}s)")
                     
                     # Reset timer
                     visit_start_times[roi] = None
@@ -238,7 +239,7 @@ def main():
                     new_time = visit_dur if pd.isna(current_time) else current_time + visit_dur
                     trials_df.loc[mask, 'time_spent'] = new_time
 
-            #  F. Hardware Logic (Stop Sound/TTL) 
+            # --- F. Hardware Logic (Stop Sound/TTL) ---
             # Stop sound if mouse leaves ALL ROIs
             if not any(tracker.is_occupied.values()):
                 audio.stop()
@@ -251,7 +252,7 @@ def main():
                 arduino.trigger_off()
                 ttl_active = False
             
-            #  G. Render Feedback 
+            # --- G. Render Feedback ---
             tracker.draw_feedback(display_frame)
             
             remaining = int(trial_end_time - time.time())
@@ -263,9 +264,9 @@ def main():
             if cfg.show_binary_view:
                 cv.imshow("Binary Debug View", binary)
 
-            #  H. Loop Checks 
+            # --- H. Loop Checks ---
             if time.time() >= trial_end_time:
-                print("Trial Time Ended")
+                print("🛑 Trial Time Ended")
                 trial_running = False
                 
             if cv.waitKey(1) & 0xFF in [ord('q'), 27]: # q or ESC
@@ -275,23 +276,6 @@ def main():
                 trial_idx = unique_trials[-1] + 1 
                 break
 
-
-        end_of_trial_t = time.time()
-        for roi in full_rois_list:
-            if visit_start_times[roi] is not None:
-                start_t = visit_start_times[roi]
-                visit_dur = end_of_trial_t - start_t
-                # Log + accumulate as a normal exit
-                stim_info = DataManager.get_stimulus_string(trials_df, trial_idx, roi)
-                data_mgr.log_visit(visit_log_path, trial_idx, roi, stim_info,
-                                start_t, end_of_trial_t, visit_dur)
-                mask = (trials_df['trial_ID'] == trial_idx) & (trials_df['ROIs'] == roi)
-                current_time = trials_df.loc[mask, 'time_spent'].values[0]
-                new_time = visit_dur if pd.isna(current_time) else current_time + visit_dur
-                trials_df.loc[mask, 'time_spent'] = new_time
-                # Re-arm so the visit "continues" into the next trial
-                visit_start_times[roi] = end_of_trial_t
-
         # Save data after every trial (Safety)
         trials_df.to_csv(os.path.join(new_dir_path, f"{base_name}.csv"), index=False)
         
@@ -299,24 +283,39 @@ def main():
         audio.stop()
         arduino.trigger_off()
 
-    
+    # ==========================================
     # 6. CLEANUP & ANALYSIS
-    
-    print("\n Experiment Finished ")
+    # ==========================================
+    print("\n--- 🏁 Experiment Finished ---")
+
+    # Dump grammar sampling history (only if grammar mode ran).
+    # The same GrammarStimulus instance appears in sound_array at multiple
+    # positions (shuffled across blocks), so dedupe by id().
+    grammar_rows = []
+    seen = set()
+    for clip in sound_array:
+        if isinstance(clip, GrammarStimulus) and id(clip) not in seen:
+            seen.add(id(clip))
+            grammar_rows.extend(clip.history)
+    if grammar_rows:
+        grammar_log = os.path.join(new_dir_path, f"grammar_samples_{data_mgr.timestamp}.csv")
+        pd.DataFrame(grammar_rows).to_csv(grammar_log, index=False)
+        print(f"📝 Grammar samples logged: {grammar_log}")
+
     camera.release()
     if video_writer:
         video_writer.release()
     arduino.close()
     cv.destroyAllWindows()
 
-    # 
-    # print("\n Running Post-Experiment Analysis ")
+    # # --- 📊 AUTO-ANALYSIS ---
+    # print("\n--- 📊 Running Post-Experiment Analysis ---")
     # try:
     #     analyzer = SessionAnalyzer(new_dir_path)
     #     analyzer.generate_report()
-    #     print(f"Graphs saved in: {new_dir_path}")
+    #     print(f"📈 Graphs saved in: {new_dir_path}")
     # except Exception as e:
-    #     print(f" Analysis failed (check logs): {e}")
+    #     print(f"⚠️ Analysis failed (check logs): {e}")
     #     # Print full trace for debugging if needed
     #     # import traceback; traceback.print_exc()
 

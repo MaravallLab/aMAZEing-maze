@@ -2,18 +2,21 @@
 
 Examples
 --------
-Dry-run a 4-hour training session for counterbalance group 1 / EE housing::
+Dry-run a 4-hour training session playing Grammar A to two cages
+(one EE-housed, one SC-housed) sharing a speaker in the same room::
 
-    python -m grammar_stimuli.run --mode training --group 1 --condition EE --dry-run
+    python -m grammar_stimuli.run --mode training \\
+        --grammar A --cage-ids "6224_EE,6225_SC" \\
+        --duration-seconds 14400 --dry-run
 
-Run a test session, 30 minutes per arm::
+Run a test session for a group 2 mouse, 30 minutes per arm::
 
-    python -m grammar_stimuli.run --mode test --group 2 --condition SC \\
+    python -m grammar_stimuli.run --mode test --group 2 \\
         --per-arm-seconds 1800 --output-dir ./sessions/anim042
 
-Run a short sanity check (10 s) on real audio::
+Quick sanity check (10 s) on real audio::
 
-    python -m grammar_stimuli.run --mode training --duration-seconds 10
+    python -m grammar_stimuli.run --mode training --grammar A --duration-seconds 10
 """
 
 from __future__ import annotations
