@@ -36,8 +36,11 @@ def _parse_args(argv: Optional[list] = None) -> argparse.Namespace:
                    help="Counterbalancing group")
     p.add_argument("--condition", choices=["EE", "SC"], default="EE",
                    help="Housing condition: Enriched Environment or Standard Conditions")
-    p.add_argument("--training-grammar", choices=["A", "B"], default=None,
-                   help="Override trained grammar (otherwise inferred from group/condition)")
+    p.add_argument("--training-grammar", "--grammar", dest="training_grammar",
+                   choices=["A", "B"], default=None,
+                   help="Play this specific grammar. Overrides --group/--condition "
+                        "lookup. Use when one speaker covers cages of mixed "
+                        "EE/SC status in the same room.")
     p.add_argument("--duration-seconds", type=float, default=None,
                    help="Session length in seconds (default: 4 hours)")
     p.add_argument("--per-arm-seconds", type=float, default=None,
@@ -47,6 +50,10 @@ def _parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     p.add_argument("--device-id", type=int, default=3, help="sounddevice output device")
     p.add_argument("--output-dir", default="./sessions")
     p.add_argument("--seed", type=int, default=None)
+    p.add_argument("--cage-ids", default="",
+                   help="Comma-separated cage IDs being exposed to this stream "
+                        "(e.g. '6224,6235'). Pure bookkeeping — tagged into the "
+                        "output filename and JSON summary; does not affect audio.")
     p.add_argument("--dry-run", action="store_true",
                    help="Do not play audio; still generate and log symbols")
     return p.parse_args(argv)
@@ -54,6 +61,8 @@ def _parse_args(argv: Optional[list] = None) -> argparse.Namespace:
 
 def main(argv: Optional[list] = None) -> int:
     args = _parse_args(argv)
+
+    cage_ids = [c.strip() for c in args.cage_ids.split(",") if c.strip()]
 
     session_cfg = cfg.GrammarSessionConfig(
         sample_rate=args.sample_rate,
@@ -64,6 +73,7 @@ def main(argv: Optional[list] = None) -> int:
         seed=args.seed,
         group=args.group,
         condition=args.condition,
+        cage_ids=cage_ids,
         mode=args.mode,
         training_grammar=args.training_grammar,
         session_duration_s=(

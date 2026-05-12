@@ -278,6 +278,11 @@ class GrammarSessionConfig:
     group: int = 1                     # counterbalancing group (1 or 2)
     condition: str = "EE"              # 'EE' or 'SC'
 
+    # Cage IDs being exposed to this audio stream. Pure bookkeeping — affects
+    # only the output filename and JSON summary, not the audio. Use when a
+    # single speaker covers multiple cages in the same room/condition.
+    cage_ids: List[str] = field(default_factory=list)
+
     # Mode: 'training' or 'test'.
     mode: str = "training"
     # Only used when mode == 'training'. Defaults to the trained grammar for

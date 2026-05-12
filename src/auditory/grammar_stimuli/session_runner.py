@@ -126,6 +126,7 @@ class SessionSummary:
     condition: str                           # 'EE'/'SC' for training; ignored for test
     ee_grammar: str                          # which grammar is paired with EE for this group
     sc_grammar: str                          # which grammar is paired with SC for this group
+    cage_ids: List[str]                      # cages exposed to this stream (bookkeeping)
     arm_logs: Dict[str, str]                 # arm_id -> csv path
     n_melodies: Dict[str, int]               # arm_id -> melody count
     duration_s: Dict[str, float]             # arm_id -> wall-clock-ish duration
@@ -230,9 +231,10 @@ class SessionRunner:
         sc_grammar = cfg.grammar_for(self.cfg.group, "SC")
 
         stamp = time.strftime("%Y%m%d_%H%M%S")
+        cage_tag = ("_cages-" + "-".join(self.cfg.cage_ids)) if self.cfg.cage_ids else ""
         base = os.path.join(
             self.cfg.output_dir,
-            f"training_g{self.cfg.group}_{self.cfg.condition}_{grammar}_{stamp}",
+            f"training_grammar{grammar}{cage_tag}_{stamp}",
         )
         log_path = base + ".csv"
         meta_path = base + ".json"
@@ -252,6 +254,7 @@ class SessionRunner:
             condition=self.cfg.condition,
             ee_grammar=ee_grammar,
             sc_grammar=sc_grammar,
+            cage_ids=list(self.cfg.cage_ids),
             arm_logs={"training": log_path},
             n_melodies={"training": n},
             duration_s={"training": self.cfg.session_duration_s},
@@ -339,6 +342,7 @@ class SessionRunner:
             condition=self.cfg.condition,
             ee_grammar=ee_grammar,
             sc_grammar=sc_grammar,
+            cage_ids=list(self.cfg.cage_ids),
             arm_logs=arm_logs,
             n_melodies=n_melodies,
             duration_s=durations,

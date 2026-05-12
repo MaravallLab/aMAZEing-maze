@@ -57,31 +57,40 @@ Alternate daily. For example:
 (Mice in the same cage today share the same audio stream — only one
 `run.py` process is needed per cage per day.)
 
-### Step 2. Start the training session for each cage
+### Step 2. Start one training process for the room
 
-For the EE cage today:
-
-```bash
-python -m grammar_stimuli.run --mode training \
-    --group <GROUP-OF-MICE-IN-THIS-CAGE> --condition EE \
-    --duration-seconds 14400 \
-    --seed <some-integer> \
-    --output-dir ./sessions/<date>_<group>_EE
-```
-
-For the SC cage today:
+All cages in the same room share one speaker, hear the same grammar.
+Use `--grammar A|B` to pick today's grammar directly, and list every
+cage being exposed (with its EE/SC status as a tag) in `--cage-ids`.
 
 ```bash
 python -m grammar_stimuli.run --mode training \
-    --group <GROUP-OF-MICE-IN-THIS-CAGE> --condition SC \
+    --grammar A \
+    --cage-ids "6224_EE,6225_SC" \
     --duration-seconds 14400 \
-    --seed <some-integer> \
-    --output-dir ./sessions/<date>_<group>_SC
+    --seed 12345 \
+    --output-dir ./sessions/<date>_grammarA
 ```
 
-If group 1 mice and group 2 mice are in the same cage today, you'll
-need to run them on **separate speakers/processes** (group 1 hears its
-EE-grammar, group 2 hears its different EE-grammar).
+Tomorrow, swap each cage's status and switch the grammar:
+
+```bash
+python -m grammar_stimuli.run --mode training \
+    --grammar B \
+    --cage-ids "6224_SC,6225_EE" \
+    --duration-seconds 14400 \
+    --seed 12346 \
+    --output-dir ./sessions/<date>_grammarB
+```
+
+`--cage-ids` is bookkeeping only — it tags the output filename and JSON
+summary; it does not change the audio. You can use any format for the
+cage tags (e.g. `"6224_EE"`, `"6224-EE"`, `"6224:EE"`); the script just
+stores them as strings.
+
+> If different cages in the room ever need *different* grammars
+> simultaneously, you'd need two speakers and two processes — but your
+> schedule (one grammar per day for everyone in the room) avoids that.
 
 ### Step 3. Confirm it's running
 
