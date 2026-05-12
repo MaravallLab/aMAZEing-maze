@@ -6,12 +6,51 @@ import numpy as np
 import pandas as pd
 import random
 import os
+from dataclasses import dataclass, field
 from typing import Tuple, List, Any, Dict, Union, Optional
 from modules.audio import Audio
 from config import ExperimentConfig
 
+# Grammar stimuli: samplers live at auditory/grammar_stimuli/.
+from grammar_stimuli import config as gcfg
+from grammar_stimuli.sequence_sampler import MarkovSampler
+from grammar_stimuli.tone_generator import generate_melody
+
 #this will be the structure of the output of the trial generation. A dataframe containing all the trials information + the list of the sound sound_arrays
 TrialData = Tuple[pd.DataFrame, List[Any]]
+
+
+@dataclass
+class GrammarStimulus:
+    """Sentinel placed into sound_array for grammar arms.
+
+    main.py detects this type on ROI entry, calls ``render(audio, roi,
+    trial_id)`` to produce a fresh melody waveform, and appends the symbol
+    sequence to ``history`` for downstream logging.
+
+    The same sentinel instance may appear at multiple ROIs across blocks
+    (the shuffle reassigns stimuli to ROIs each active block), so history
+    records the ROI at play time rather than at construction.
+    """
+    sampler: MarkovSampler
+    tier: str                       # "dominant" / "secondary" / "rare"
+    environment_association: str    # "EE" / "SC" — which cage this grammar was paired with
+    history: List[Dict[str, Any]] = field(default_factory=list)
+
+    def render(self, audio: Audio, roi: str = "", trial_id: int = 0) -> np.ndarray:
+        meta = self.sampler.sample_melody(length=gcfg.MELODY_LENGTH)
+        wave = generate_melody(meta.symbols, sample_rate=audio.fs,
+                               amplitude=gcfg.AMPLITUDE)
+        self.history.append({
+            "trial_ID": trial_id,
+            "ROI": roi,
+            "grammar": meta.grammar_name,
+            "tier": meta.tier,
+            "environment_association": self.environment_association,
+            "symbols": "".join(meta.symbols),
+            "mean_bits": meta.mean_bits,
+        })
+        return wave.astype(np.float32)
 
 # ── helpers ──────────────────────────────────────────────────────────
 
@@ -64,6 +103,8 @@ class ExperimentFactory:
             return ExperimentFactory._make_sequences(generic_rois, cfg, audio)
         elif experiment_type == "vocalisation":
             return ExperimentFactory._make_vocalisation(generic_rois, cfg, audio)
+        elif experiment_type == "grammar":
+            return ExperimentFactory._make_grammar(generic_rois, cfg, audio)
         elif experiment_type == "semantic_predictive_complexity":
             raise NotImplementedError("semantic_predictive_complexity is not yet implemented")
         else:
@@ -317,6 +358,156 @@ class ExperimentFactory:
             rois, frequencies, interval_numerical_list, interval_string_names,
             sound_type, sounds_arrays, audio
         )
+
+
+    @staticmethod
+    def _make_grammar(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        """Grammar-learning test-day stimuli (9-block shuffle structure).
+
+        Each mouse has alternated between EE and SC cages during training,
+        with one grammar paired to each cage. On test day the maze
+        presents both grammars at all three predictability tiers, so the
+        experiment can dissociate (a) the grammar-environment association
+        from (b) the predictability tier.
+
+        Builds the 8 canonical stimuli (3 EE-grammar x tier + 3 SC-grammar
+        x tier + vocalisation + silent) once, then assigns them to the 8
+        ROIs in the standard 9-block pattern: odd blocks silent, even
+        blocks shuffle the stimulus-to-ROI mapping.
+
+        Requires rois_number == 8. For training day playback (no video,
+        ROI gating) use the standalone runner instead:
+
+            cd src/auditory
+            python -m grammar_stimuli.run --mode training \\
+                --group 1 --condition EE --duration-seconds 14400
+        """
+        if cfg.grammar_mode == "training":
+            raise NotImplementedError(
+                "main.py is ROI-gated and records video; it is not the right driver "
+                "for continuous training playback. Run:\n"
+                "    python -m grammar_stimuli.run --mode training --group "
+                f"{cfg.grammar_group} --condition <EE-or-SC-for-today> "
+                "--duration-seconds 14400\n"
+                "from src/auditory/ instead."
+            )
+        if cfg.grammar_mode != "test":
+            raise ValueError(
+                f"grammar_mode must be 'training' or 'test', got {cfg.grammar_mode!r}"
+            )
+        if len(rois) != len(gcfg.TEST_ARM_PLAN):
+            raise ValueError(
+                f"grammar test mode needs {len(gcfg.TEST_ARM_PLAN)} ROIs "
+                f"(got {len(rois)}). Set rois_number=8 in config.py."
+            )
+
+        rng_master = np.random.default_rng(cfg.grammar_seed)
+
+        # The mouse has heard both grammars during training. The counterbalance
+        # table tells us which physical grammar (A or B) was paired with EE
+        # and which with SC for this mouse's group.
+        ee_grammar = gcfg.grammar_for(cfg.grammar_group, "EE")
+        sc_grammar = gcfg.grammar_for(cfg.grammar_group, "SC")
+        env_to_grammar: Dict[str, str] = {"EE": ee_grammar, "SC": sc_grammar}
+
+        # ── Build the 8 canonical stimuli (fixed pool, shuffled per block) ──
+        stimuli: List[Any] = []      # one entry per TEST_ARM_PLAN slot
+        stim_labels: List[Dict[str, Any]] = []   # parallel metadata
+
+        for plan in gcfg.TEST_ARM_PLAN:
+            kind = plan["kind"]
+            if kind == "grammar":
+                env = plan["environment_association"]   # "EE" or "SC"
+                grammar_name = env_to_grammar[env]
+                tier = plan["tier"]
+                sampler = MarkovSampler(
+                    grammar_name=grammar_name, tier=tier,
+                    seed=int(rng_master.integers(0, 2**31 - 1)),
+                )
+                stimuli.append(GrammarStimulus(
+                    sampler=sampler, tier=tier,
+                    environment_association=env,
+                ))
+                stim_labels.append({
+                    "frequency": "grammar", "grammar": grammar_name,
+                    "tier": tier, "environment_association": env,
+                })
+            elif kind == "vocalisation":
+                voc_path = cfg.path_to_vocalisation_control
+                if voc_path and os.path.exists(voc_path):
+                    wave = audio.load_wav(voc_path)
+                else:
+                    print(f"⚠️  No vocalisation at {voc_path!r}; voc arm will be silent.")
+                    wave = np.zeros(int(audio.fs * audio.default_duration), dtype=np.float32)
+                stimuli.append(wave)
+                stim_labels.append({
+                    "frequency": "vocalisation", "grammar": "-",
+                    "tier": "-", "environment_association": "-",
+                })
+            else:  # "silent"
+                stimuli.append(
+                    np.zeros(int(audio.fs * audio.default_duration), dtype=np.float32)
+                )
+                stim_labels.append({
+                    "frequency": 0, "grammar": "-",
+                    "tier": "-", "environment_association": "-",
+                })
+
+        # ── 9-block structure with per-block shuffle ────────────────────────
+        total_repetitions = 9
+        n = len(rois)
+        rois_repeated = rois * total_repetitions
+        trial_ids: List[int] = []
+        freq_col: List[Any] = []
+        grammar_col: List[str] = []
+        tier_col: List[str] = []
+        env_col: List[str] = []
+        wave_arrays: List[Any] = []
+        previous_perms: set = set()
+
+        for block in range(total_repetitions):
+            if block % 2 == 0:
+                # Silent block
+                silence = np.zeros(int(audio.fs * audio.default_duration), dtype=np.float32)
+                for _ in range(n):
+                    trial_ids.append(block + 1)
+                    freq_col.append(0)
+                    grammar_col.append("-")
+                    tier_col.append("-")
+                    env_col.append("-")
+                    wave_arrays.append(silence)
+            else:
+                # Active block: unique permutation of stimulus indices
+                while True:
+                    if block == 1:
+                        perm = tuple(range(n))  # identity on first active block
+                    else:
+                        idxs = list(range(n))
+                        random.shuffle(idxs)
+                        perm = tuple(idxs)
+                    if perm not in previous_perms:
+                        previous_perms.add(perm)
+                        break
+                for j, stim_idx in enumerate(perm):
+                    trial_ids.append(block + 1)
+                    lbl = stim_labels[stim_idx]
+                    freq_col.append(lbl["frequency"])
+                    grammar_col.append(lbl["grammar"])
+                    tier_col.append(lbl["tier"])
+                    env_col.append(lbl["environment_association"])
+                    wave_arrays.append(stimuli[stim_idx])
+
+        df = pd.DataFrame({
+            "trial_ID": trial_ids,
+            "ROIs": rois_repeated,
+            "frequency": freq_col,
+            "grammar": grammar_col,
+            "tier": tier_col,
+            "environment_association": env_col,
+            "wave_arrays": wave_arrays,
+        })
+        df = _add_tracking_columns(df)
+        return df, wave_arrays
 
 
     # ════════════════════════════════════════════════════════════════

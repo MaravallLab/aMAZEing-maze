@@ -1,118 +1,319 @@
 # grammar_stimuli
 
-Acoustic stimulus generation for the mouse-maze grammar-learning experiment.
+Acoustic stimulus generation for the mouse-maze grammar-learning experiment,
+integrated with the auditory harness in `src/auditory/`.
 
 Two first-order Markov grammars (A and B) are defined over a six-tone
-inventory. Mice are trained for several sessions on one grammar (dominant
-transitions only), then tested on eight maze arms that cross grammar
-(trained vs. novel) with complexity tier (dominant / secondary / rare),
-plus a vocalisation arm and a silent arm.
+inventory. Each mouse alternates daily between two cage environments
+(enriched, EE; standard, SC), hearing one grammar in each. On test day
+the maze probes whether time spent in each arm depends on (a) the
+grammar-environment association and (b) the predictability tier of the
+transitions in that arm.
 
-## Design invariants
+---
 
-1. **The grammar matrix is never modified.** Complexity is varied by
-   restricting sampling on each transition to the columns of a row whose
-   probability equals a chosen *tier* value, then renormalising within that
-   subset. The stored 6x6 matrix itself is frozen.
-2. Every row has the same mixture `{1 x 0.60, 2 x 0.12, 2 x 0.07, 1 x 0.02}`,
-   so both grammars are doubly stochastic with identical per-row entropy.
-3. Both grammars have the same entropy rate (~1.78 bits / transition).
-   They differ only in *which* transition is dominant: Grammar A cycles
-   upwards (A->B->C->...->F->A); Grammar B skips by 3 (A<->D, B<->E, C<->F).
+## 1. Tone inventory and timing
 
-## Files
+| Symbol | Frequency (Hz) |
+|:---:|---:|
+| A | 8000 |
+| B | 10079 |
+| C | 12699 |
+| D | 16000 |
+| E | 20159 |
+| F | 25398 |
 
-| File | Role |
-|---|---|
-| `config.py` | Tone inventory, timing constants, matrices, tiers, test-arm plan, counterbalancing |
-| `tone_generator.py` | `generate_tone`, `generate_melody`, `generate_silence_gap` |
-| `sequence_sampler.py` | `MarkovSampler`, `get_tier_targets`, `compute_entropy_rate` |
-| `session_runner.py` | `SessionRunner` for training and test sessions |
-| `run.py` | CLI entry point (`python -m grammar_stimuli.run ...`) |
-| `verify_grammars.py` | Standalone 11-step integrity check |
-| `tests/test_grammars.py` | pytest suite |
+Six pure tones, log-spaced (~1.66 octaves, adjacent ratio ~1.26).
 
-## Quick start
+- Tone: 150 ms + 5 ms cosine² ramps in/out
+- Inter-tone gap: 50 ms
+- Melody: 12 tones → 2400 ms
+- Inter-melody gap: 2000 ms
+- Cycle: 4400 ms
+- Training session: 4 h → ~3272 melodies → ~36k transitions
 
-Dry-run (no audio device needed) a 60-second training session for
-counterbalance group 1, Enriched-Environment housing:
+---
+
+## 2. The two grammars
+
+Each row of a 6×6 transition matrix contains a fixed mixture:
+
+| Tier | Probability | Count per row |
+|---|:---:|:---:|
+| **dominant** | 0.60 | 1 entry |
+| **secondary** | 0.12 | 2 entries |
+| **rare** | 0.07 | 2 entries |
+| **self** | 0.02 | 1 entry |
+
+Rows sum to 1.0. Columns also sum to 1.0 — both matrices are doubly
+stochastic, so the stationary distribution is uniform over the six tones.
+
+The grammars differ only in **which** transition is dominant:
+
+- **Grammar A**: ascending cycle, i → (i+1) mod 6 (A→B→C→D→E→F→A)
+- **Grammar B**: skip-3, i → (i+3) mod 6 (A↔D, B↔E, C↔F)
+
+Both have the same per-row entropy and the same overall entropy rate
+(~1.78 bits/transition). Any grammar-specific effect at test should
+therefore cancel across counterbalance groups.
+
+To inspect the matrices and confirm all four probabilities are encoded:
 
 ```bash
-python -m grammar_stimuli.run \
-    --mode training --group 1 --condition EE \
-    --duration-seconds 60 --dry-run --output-dir ./sessions
+cd src/auditory
+python -m grammar_stimuli.dump_matrices grammars.txt --samples 20
 ```
 
-Sanity-check everything:
+The output text file contains the numeric matrices, tier labels, sample
+melodies at every tier, and empirical transition counts from 100k draws
+(should reproduce 0.60 / 0.12 / 0.07 / 0.02 ±0.005).
 
-```bash
-python -m grammar_stimuli.verify_grammars
-pytest code/grammar_stimuli/tests -q
-```
+---
 
-## Counterbalancing
+## 3. Tier system and the special `'all'` tier
 
-| Group | EE housing trains on | SC housing trains on |
+The 6×6 matrix is **never modified** at runtime. Complexity is controlled
+by which columns of each row the sampler is allowed to draw from.
+
+| Tier | What it samples | Effective per-step surprise |
+|---|---|:---:|
+| `'all'` | the **full row** (mixture of 0.60/0.12/0.07/0.02) | ~1.78 bits |
+| `'dominant'` | the 1 column with p=0.60 | 0.0 bits (deterministic) |
+| `'secondary'` | the 2 columns with p=0.12, renormalised to 0.5/0.5 | 1.0 bit |
+| `'rare'` | the 2 columns with p=0.07, renormalised to 0.5/0.5 | 1.0 bit |
+
+**Important**: within-tier surprise collapses to 0/1/1 for the test tiers
+because tier restriction + renormalisation makes choices uniform inside
+the restricted subset. What distinguishes secondary from rare at test is
+not within-tier entropy — it's the *prior probability* the mouse has
+learned for those transitions during training.
+
+### Why training uses `'all'`
+
+Training samples directly from the unrestricted matrix row. This means
+mice are exposed to all four probability tiers during training and form
+proper probability estimates over every transition. Otherwise the
+secondary/rare tones on test day would be perceived as **novel** rather
+than as **statistically rare**, which would change what the experiment
+is actually measuring.
+
+In a 4 h training session (~36k transitions) each mouse hears (for the
+grammar paired with the day's environment):
+
+| Tier | Approx. count |
+|---|---:|
+| dominant (0.60) | ~21,600 |
+| each secondary (0.12) | ~4,300 (x2 cols/row) |
+| each rare (0.07) | ~2,500 (x2 cols/row) |
+| self (0.02) | ~720 |
+
+---
+
+## 4. Counterbalancing and the alternate-day training design
+
+Each mouse spends **alternating training days in the two cage
+environments**:
+
+- **EE-day**: mouse is in the enriched cage; system plays the grammar paired with EE.
+- **SC-day**: mouse is in the standard cage; system plays the grammar paired with SC.
+
+After several alternating days, the mouse has formed an
+**auditory-structure ↔ environment association**: grammar X "belongs to"
+the EE cage, grammar Y "belongs to" the SC cage.
+
+Counterbalancing flips the pairing across mice so that any preference at
+test cannot be attributed to grammar-specific properties:
+
+| Group | EE-day grammar | SC-day grammar |
 |:---:|:---:|:---:|
 | 1 | Grammar A | Grammar B |
 | 2 | Grammar B | Grammar A |
 
-Because the two grammars are structurally identical in their tier mixture,
-this counterbalancing guarantees that any grammar-specific effect at test
-cancels across groups.
+Both grammars have identical row mixtures and identical entropy rates;
+only the dominant-cycle structure differs.
 
-## Test-day arm plan
+---
 
-| Arm | Kind | Grammar | Tier |
+## 5. Test-day arm plan
+
+8 arms on the maze, presented after training is complete:
+
+| Arm | Kind | Env. association | Tier |
 |:---:|:---|:---:|:---:|
-| arm1 | grammar | trained | dominant |
-| arm2 | grammar | trained | secondary |
-| arm3 | grammar | trained | rare |
-| arm4 | grammar | novel   | dominant |
-| arm5 | grammar | novel   | secondary |
-| arm6 | grammar | novel   | rare |
-| arm7 | vocalisation | - | - |
-| arm8 | silent | - | - |
+| arm1 | grammar | EE | dominant |
+| arm2 | grammar | EE | secondary |
+| arm3 | grammar | EE | rare |
+| arm4 | grammar | SC | dominant |
+| arm5 | grammar | SC | secondary |
+| arm6 | grammar | SC | rare |
+| arm7 | vocalisation | – | – |
+| arm8 | silent | – | – |
 
-## Timing
+The 6 grammar arms cross **{EE-paired, SC-paired} × {dominant, secondary, rare}**.
+Both grammars are fully familiar to the mouse by test day — there is no
+"novel grammar". The contrasts the design measures are:
 
-- Tone: 150 ms + 5 ms cosine-squared ramps (in and out)
-- Inter-tone gap: 50 ms
-- Melody: 12 tones -> 2400 ms
-- Inter-melody gap: 2000 ms
-- Cycle: 4400 ms
-- Training session: 4 h -> ~3272 melodies -> ~36k transitions
+1. **Association effect**: does the mouse spend more time in EE-paired arms
+   than SC-paired arms (or vice versa)? Reflects which environment the
+   mouse "prefers" via its auditory association.
+2. **Predictability effect**: does the mouse prefer high-predictability
+   (dominant), moderately predictable (secondary), or low-predictability
+   (rare) transitions? Reflects sensitivity to statistical structure.
+3. **Interaction**: does the predictability preference depend on which
+   environment the arm is associated with?
 
-## Information content
+`arm7` (vocalisation, if provided) and `arm8` (silent) are control arms
+for baseline acoustic preference.
 
-Per-tone surprise under the unrestricted grammar:
+---
 
-| Tier | p | -log2 p (bits) |
-|---|---|---|
-| dominant | 0.60 | 0.74 |
-| secondary | 0.12 | 3.06 |
-| rare | 0.07 | 3.84 |
+## 6. Files
 
-Per-transition surprise under the *restricted* tier actually used for
-sampling:
+| File | Role |
+|---|---|
+| `config.py` | Tone inventory, timing, matrices, tiers, test-arm plan, counterbalancing |
+| `tone_generator.py` | `generate_tone`, `generate_melody`, `generate_silence_gap` |
+| `sequence_sampler.py` | `MarkovSampler`, `get_tier_targets`, `compute_entropy_rate` |
+| `session_runner.py` | `SessionRunner` (standalone driver for training days) |
+| `run.py` | CLI entry: `python -m grammar_stimuli.run ...` |
+| `dump_matrices.py` | Print matrices + sample melodies + empirical counts |
 
-| Tier | columns / row | bits / transition |
-|---|---|---|
-| dominant | 1 | 0.00 (deterministic) |
-| secondary | 2 | 1.00 |
-| rare | 2 | 1.00 |
+---
 
-The surprise collapses to 0 / 1 / 1 because tier restriction + renormalisation
-makes tier choices uniform *within* the restricted subset. The difference
-between secondary and rare is therefore not in within-tier entropy but in
-their *distance from the trained grammar's dominant transitions*: a rare
-transition is by definition less typical than a secondary one.
+## 7. How to run it
 
-## Integration with the maze session controller
+### 7a. Training day (no video, just continuous melody playback)
 
-`SessionRunner` is a standalone driver that plays melodies on a fixed
-cycle. For the live behavioural session, the existing
-`code/auditory/updated_version/main.py` drives stimulus playback from ROI
-entries: it should construct a `MarkovSampler` per arm, call
-`sampler.sample_melody(...)` on entry, and pass the resulting waveform
-(built with `generate_melody`) to the existing `Audio.play` method.
+Standalone runner — uses `sounddevice` directly, no camera, no Arduino,
+no ROI gating. Run it **once per mouse per day**, with `--condition`
+set to whichever cage the mouse is in today.
+
+```bash
+cd src/auditory
+
+# Mouse in counterbalance group 1, today housed in EE cage:
+# plays Grammar A (the EE-grammar for group 1) for 4 h.
+python -m grammar_stimuli.run --mode training \
+    --group 1 --condition EE \
+    --duration-seconds 14400 \
+    --seed 12345 \
+    --output-dir ./sessions/2026-05-12_g1_EE
+
+# The next day the same mouse is in the SC cage:
+# plays Grammar B (the SC-grammar for group 1).
+python -m grammar_stimuli.run --mode training \
+    --group 1 --condition SC \
+    --duration-seconds 14400 \
+    --seed 12346 \
+    --output-dir ./sessions/2026-05-13_g1_SC
+```
+
+If multiple mice in the same group share a speaker, you only need one
+process for that environment-day; the same audio stream reaches them all.
+
+Optional flags:
+- `--seed N` — reproducible RNG
+- `--dry-run` — no audio output, but still generates and logs symbols
+- `--device-id N` — choose sounddevice output (default 3)
+- `--training-grammar A` — override the group/condition lookup
+- `--duration-seconds 60` — short sanity check
+
+Output (per session): one CSV with melody index, symbols played, per-step
+surprise bits, onset/offset times; plus a JSON summary.
+
+### 7b. Experiment day (video + ROI tracking + visitation log)
+
+Driven by `src/auditory/main.py` — the full harness with camera, ROI
+monitor, video writer, and trial CSV.
+
+1. Edit `src/auditory/config.py` for the mouse currently in the maze:
+   ```python
+   experiment_mode: str = "grammar"
+   grammar_mode: str = "test"
+   grammar_group: int = 1          # this mouse's counterbalance group (1 or 2)
+   # grammar_condition is IGNORED on test day — the mouse has been in
+   # both environments during training and hears both grammars in the maze.
+   rois_number: int = 8            # required: 6 grammar arms + voc + silent
+   record_video: bool = True
+   # optional:
+   # grammar_seed: int = 42
+   # path_to_vocalisation_control: str = "/path/to/voc.wav"
+   ```
+
+2. Run:
+   ```bash
+   cd src/auditory
+   python main.py
+   ```
+
+The harness uses its standard 9-block cycle from `cfg.get_trial_lengths()`
+(default `[15, 15, 2, 15, 2, 15, 2, 15, 2]` minutes, odd blocks silent,
+even blocks active). At the start of each active block the 8 stimuli
+are randomly assigned to the 8 ROIs; every permutation is unique across
+blocks. Every ROI entry samples a **fresh** 12-tone melody — so the same
+arm replays the same grammar/tier but never the exact same sequence.
+
+### 7c. Inspect / verify the matrices
+
+```bash
+cd src/auditory
+python -m grammar_stimuli.dump_matrices grammars.txt --samples 20
+```
+
+Open `grammars.txt` — the bottom shows empirical transition counts
+under `tier='all'`; you should see all four probabilities reproduced
+within ~0.005 of the matrix values.
+
+---
+
+## 8. Output files
+
+### Training (run.py)
+
+`./sessions/<output-dir>/training_g<group>_<condition>_<grammar>_<timestamp>.csv`
+
+| Column | Meaning |
+|---|---|
+| `melody_index` | 0-indexed melody count |
+| `arm_id` | always `"training"` |
+| `grammar` | `"A"` or `"B"` (whichever was paired with this day's environment) |
+| `tier` | `"all"` |
+| `start_symbol` | first tone of this melody |
+| `symbols` | 12-character string e.g. `"BCDEFABCDEFA"` |
+| `per_step_bits` | semicolon-separated surprise per transition |
+| `mean_bits` | mean surprise across the melody (≈1.78 for `'all'`) |
+| `onset_s`, `offset_s` | simulated clock times in seconds |
+
+### Test (main.py)
+
+Two CSVs per session, in the standard data_manager output folder:
+
+`trials_<timestamp>.csv` — per (trial × ROI) row:
+- `trial_ID`, `ROIs`, `frequency`, `grammar`, `tier`,
+  `environment_association`, `wave_arrays`, `time_spent`,
+  `visitation_count`, etc.
+
+`grammar_samples_<timestamp>.csv` — one row per rendered melody:
+- `trial_ID`, `ROI`, `grammar`, `tier`, `environment_association`,
+  `symbols`, `mean_bits`
+
+`environment_association` is `"EE"`, `"SC"`, or `"-"` (for voc/silent
+arms and silent blocks). It directly identifies which cage that grammar
+was paired with during training, so you can filter visits by association
+without re-deriving from group + grammar.
+
+Plus the usual `visit_log_*.csv`, video file, and metadata that the
+harness produces.
+
+---
+
+## 9. Sanity checks
+
+```bash
+# Matrix integrity + empirical transition counts
+python -m grammar_stimuli.dump_matrices
+
+# Quick dry-run of 60 s of training (no audio device needed)
+python -m grammar_stimuli.run --mode training --group 1 --condition EE \
+    --duration-seconds 60 --dry-run --output-dir ./_check
+```

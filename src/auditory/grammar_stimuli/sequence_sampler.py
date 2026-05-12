@@ -35,10 +35,18 @@ def get_tier_targets(matrix: np.ndarray, tier: str) -> Dict[int, np.ndarray]:
     Matching is by probability value against ``config.COMPLEXITY_TIERS[tier]``
     within ``config.PROB_TOLERANCE``. The returned mapping has ``N_TONES``
     keys, each mapping to a 1-D array of column indices.
+
+    Special case: ``tier == config.FULL_TIER`` (``'all'``) returns every
+    column for every row, i.e. no restriction. Sampling then draws from
+    the matrix row verbatim (mixture of all four tier probabilities).
     """
+    if tier == cfg.FULL_TIER:
+        all_cols = np.arange(matrix.shape[1])
+        return {i: all_cols.copy() for i in range(matrix.shape[0])}
     if tier not in cfg.COMPLEXITY_TIERS:
         raise ValueError(
-            f"Unknown tier {tier!r}. Valid: {list(cfg.COMPLEXITY_TIERS)}"
+            f"Unknown tier {tier!r}. Valid: "
+            f"{list(cfg.COMPLEXITY_TIERS) + [cfg.FULL_TIER]}"
         )
     target = cfg.COMPLEXITY_TIERS[tier]
 
@@ -149,9 +157,10 @@ class MarkovSampler:
             raise ValueError(
                 f"Unknown grammar {grammar_name!r}. Valid: {list(cfg.GRAMMARS)}"
             )
-        if tier not in cfg.COMPLEXITY_TIERS:
+        if tier != cfg.FULL_TIER and tier not in cfg.COMPLEXITY_TIERS:
             raise ValueError(
-                f"Unknown tier {tier!r}. Valid: {list(cfg.COMPLEXITY_TIERS)}"
+                f"Unknown tier {tier!r}. Valid: "
+                f"{list(cfg.COMPLEXITY_TIERS) + [cfg.FULL_TIER]}"
             )
 
         self.grammar_name = grammar_name
@@ -172,8 +181,10 @@ class MarkovSampler:
             probs = self.matrix[current_idx, cols]
             probs = probs / probs.sum()
             nxt = int(self.rng.choice(cols, p=probs))
-            # In practice all tier values within a row are equal (q=q, r=r),
-            # so p_eff = 1/len(cols), but we compute from probs for safety.
+            # For single-tier subsets (secondary/rare), values within a row
+            # are equal (q=q, r=r), so p_eff = 1/len(cols). For tier='all'
+            # values differ (0.60 / 0.12 / 0.07 / 0.02), so p_eff is the
+            # actual matrix entry — giving genuine per-tier surprise.
             p_eff = float(probs[np.where(cols == nxt)[0][0]])
         bits = float(-np.log2(p_eff)) if p_eff > 0 else 0.0
         bits = 0.0 if bits == 0.0 else bits  # collapse -0.0 to 0.0
@@ -221,8 +232,13 @@ class MarkovSampler:
         )
 
     def get_information_content(self) -> float:
-        """Mean surprise per transition under the restricted distribution."""
-        # Each tier-restricted row has equal probabilities across its columns,
+        """Mean surprise per transition under the (restricted) distribution."""
+        if self.tier == cfg.FULL_TIER:
+            # Full mixture: use the actual entropy of each row.
+            return float(np.mean([
+                _row_entropy(self.matrix[i]) for i in range(self.matrix.shape[0])
+            ]))
+        # Tier-restricted rows have equal probabilities across their columns,
         # so surprise per step is log2(n_cols). Average across rows.
         bits = [float(np.log2(cols.size)) if cols.size > 1 else 0.0
                 for cols in self._targets.values()]

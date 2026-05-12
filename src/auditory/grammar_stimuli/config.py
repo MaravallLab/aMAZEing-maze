@@ -12,7 +12,7 @@ row, not by reweighting the matrix. See ``sequence_sampler.MarkovSampler``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -67,8 +67,15 @@ SESSION_DURATION_S: float = SESSION_DURATION_HOURS * 3600.0
 N_SOUND_ARMS: int = 7                 # test day: 6 grammar arms + vocalisation arm
 # (+ 1 silent arm = 8 arms total; the silent arm plays nothing)
 
-# Training sessions use only the dominant tier.
-TRAINING_COMPLEXITY: str = "dominant"
+# Special tier name meaning "sample directly from the full matrix row
+# without restricting to a single tier". Used for training so mice are
+# exposed to all four transition probabilities (0.60 / 0.12 / 0.07 / 0.02)
+# and form proper probability estimates over every transition. The 0.12,
+# 0.07, and 0.02 entries are then statistically rare at test, not novel.
+FULL_TIER: str = "all"
+
+# Training sessions sample the full mixture (all transition probabilities).
+TRAINING_COMPLEXITY: str = FULL_TIER
 
 
 # ---------------------------------------------------------------------------
@@ -146,29 +153,38 @@ COMPLEXITY_TIERS: Dict[str, float] = {
 # ---------------------------------------------------------------------------
 # Test-day arm plan
 # ---------------------------------------------------------------------------
-# On test day the animal encounters 8 arms. Six grammar arms cross
-# {trained grammar, novel grammar} x {dominant, secondary, rare}. One arm
-# plays a conspecific vocalisation; one arm is silent.
+# Each mouse alternates daily between two cage environments during training:
+# one grammar in the enriched cage (EE), the other in the standard cage (SC).
+# Both grammars are therefore familiar by test day; the experiment measures
+# whether arm preference depends on (a) the grammar-environment association
+# (EE-paired vs SC-paired) and (b) the predictability tier.
+#
+# Test day: 8 maze arms = 3 EE-grammar x {dom, sec, rare} + 3 SC-grammar x
+# {dom, sec, rare} + vocalisation + silent.
 
-TEST_ARM_PLAN: List[Dict[str, str]] = [
-    {"arm_id": "arm1", "kind": "grammar", "grammar_role": "trained", "tier": "dominant"},
-    {"arm_id": "arm2", "kind": "grammar", "grammar_role": "trained", "tier": "secondary"},
-    {"arm_id": "arm3", "kind": "grammar", "grammar_role": "trained", "tier": "rare"},
-    {"arm_id": "arm4", "kind": "grammar", "grammar_role": "novel",   "tier": "dominant"},
-    {"arm_id": "arm5", "kind": "grammar", "grammar_role": "novel",   "tier": "secondary"},
-    {"arm_id": "arm6", "kind": "grammar", "grammar_role": "novel",   "tier": "rare"},
-    {"arm_id": "arm7", "kind": "vocalisation", "grammar_role": None, "tier": None},
-    {"arm_id": "arm8", "kind": "silent",       "grammar_role": None, "tier": None},
+TEST_ARM_PLAN: List[Dict[str, Optional[str]]] = [
+    {"arm_id": "arm1", "kind": "grammar", "environment_association": "EE", "tier": "dominant"},
+    {"arm_id": "arm2", "kind": "grammar", "environment_association": "EE", "tier": "secondary"},
+    {"arm_id": "arm3", "kind": "grammar", "environment_association": "EE", "tier": "rare"},
+    {"arm_id": "arm4", "kind": "grammar", "environment_association": "SC", "tier": "dominant"},
+    {"arm_id": "arm5", "kind": "grammar", "environment_association": "SC", "tier": "secondary"},
+    {"arm_id": "arm6", "kind": "grammar", "environment_association": "SC", "tier": "rare"},
+    {"arm_id": "arm7", "kind": "vocalisation", "environment_association": None, "tier": None},
+    {"arm_id": "arm8", "kind": "silent",       "environment_association": None, "tier": None},
 ]
 
 
 # ---------------------------------------------------------------------------
 # Counterbalancing
 # ---------------------------------------------------------------------------
-# Group 1: enriched environment trained on Grammar A, standard-conditions
-#          controls trained on Grammar B.
-# Group 2: the reverse. Grammars themselves are identical in structure; only
-# the assignment to housing condition flips.
+# Each mouse alternates between EE and SC environments during training, and
+# hears a different grammar in each. The counterbalance assignment fixes,
+# per mouse, which grammar belongs to which environment.
+#   Group 1: EE-day -> Grammar A; SC-day -> Grammar B.
+#   Group 2: the reverse.
+# Both grammars are structurally identical; only the environment pairing
+# flips across groups, so EE-vs-SC effects at test cannot be confounded
+# with grammar-specific properties.
 
 COUNTERBALANCE: Dict[int, Dict[str, str]] = {
     1: {"EE": "A", "SC": "B"},
@@ -176,18 +192,28 @@ COUNTERBALANCE: Dict[int, Dict[str, str]] = {
 }
 
 
-def trained_grammar_for(group: int, condition: str) -> str:
-    """Return 'A' or 'B' given counterbalance group and housing condition."""
+def grammar_for(group: int, environment: str) -> str:
+    """Return 'A' or 'B' for a given counterbalance group and environment.
+
+    ``environment`` is 'EE' or 'SC' — the cage the mouse is in on this day
+    (training) or the environment-association tag of the arm (test).
+    """
     if group not in COUNTERBALANCE:
         raise ValueError(f"group must be 1 or 2, got {group!r}")
-    if condition not in ("EE", "SC"):
-        raise ValueError(f"condition must be 'EE' or 'SC', got {condition!r}")
-    return COUNTERBALANCE[group][condition]
+    if environment not in ("EE", "SC"):
+        raise ValueError(f"environment must be 'EE' or 'SC', got {environment!r}")
+    return COUNTERBALANCE[group][environment]
+
+
+# Back-compat aliases — older code referred to "trained" vs "novel".
+def trained_grammar_for(group: int, condition: str) -> str:
+    """Deprecated alias for ``grammar_for``; kept so older imports still work."""
+    return grammar_for(group, condition)
 
 
 def novel_grammar_for(group: int, condition: str) -> str:
-    trained = trained_grammar_for(group, condition)
-    return "B" if trained == "A" else "A"
+    """Deprecated: returns the *other* grammar from the (group, condition) pair."""
+    return "B" if grammar_for(group, condition) == "A" else "A"
 
 
 # ---------------------------------------------------------------------------

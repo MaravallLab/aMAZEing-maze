@@ -78,8 +78,8 @@ def main(argv: Optional[list] = None) -> int:
     else:
         summary = runner.run_test_session(per_arm_duration_s=args.per_arm_seconds)
 
-    print(f"Done. Mode={summary.mode} trained={summary.trained_grammar} "
-          f"novel={summary.novel_grammar}")
+    print(f"Done. Mode={summary.mode} group={summary.group} "
+          f"EE-grammar={summary.ee_grammar} SC-grammar={summary.sc_grammar}")
     for arm_id, path in summary.arm_logs.items():
         print(f"  {arm_id}: {summary.n_melodies[arm_id]} melodies -> {path}")
     return 0

@@ -123,9 +123,9 @@ class _Player:
 class SessionSummary:
     mode: str                                # 'training' or 'test'
     group: int
-    condition: str
-    trained_grammar: str
-    novel_grammar: str
+    condition: str                           # 'EE'/'SC' for training; ignored for test
+    ee_grammar: str                          # which grammar is paired with EE for this group
+    sc_grammar: str                          # which grammar is paired with SC for this group
     arm_logs: Dict[str, str]                 # arm_id -> csv path
     n_melodies: Dict[str, int]               # arm_id -> melody count
     duration_s: Dict[str, float]             # arm_id -> wall-clock-ish duration
@@ -218,9 +218,16 @@ class SessionRunner:
 
     # -- training ---------------------------------------------------------
     def run_training_session(self) -> SessionSummary:
-        """Run a full training session (single grammar, dominant tier)."""
-        grammar = self.cfg.resolve_training_grammar()
-        novel = "B" if grammar == "A" else "A"
+        """Run one training day: play this day's grammar for this environment.
+
+        Each mouse alternates daily between EE and SC environments; on a
+        given day, this method plays the grammar paired with the current
+        environment (``cfg.condition``) for ``session_duration_s`` seconds.
+        Tier defaults to the training tier (``'all'``: full mixture).
+        """
+        grammar = self.cfg.resolve_training_grammar()  # grammar for (group, this-day env)
+        ee_grammar = cfg.grammar_for(self.cfg.group, "EE")
+        sc_grammar = cfg.grammar_for(self.cfg.group, "SC")
 
         stamp = time.strftime("%Y%m%d_%H%M%S")
         base = os.path.join(
@@ -243,8 +250,8 @@ class SessionRunner:
             mode="training",
             group=self.cfg.group,
             condition=self.cfg.condition,
-            trained_grammar=grammar,
-            novel_grammar=novel,
+            ee_grammar=ee_grammar,
+            sc_grammar=sc_grammar,
             arm_logs={"training": log_path},
             n_melodies={"training": n},
             duration_s={"training": self.cfg.session_duration_s},
@@ -268,13 +275,17 @@ class SessionRunner:
         if per_arm_duration_s is None:
             per_arm_duration_s = self.cfg.session_duration_s / len(cfg.TEST_ARM_PLAN)
 
-        trained = self.cfg.resolve_training_grammar()
-        novel = "B" if trained == "A" else "A"
+        # Both grammars are familiar by test day (each mouse heard EE-day
+        # grammar in the EE cage and SC-day grammar in the SC cage during
+        # training). Look up each arm's grammar from its
+        # environment_association via the counterbalance table.
+        ee_grammar = cfg.grammar_for(self.cfg.group, "EE")
+        sc_grammar = cfg.grammar_for(self.cfg.group, "SC")
 
         stamp = time.strftime("%Y%m%d_%H%M%S")
         base_dir = os.path.join(
             self.cfg.output_dir,
-            f"test_g{self.cfg.group}_{self.cfg.condition}_{stamp}",
+            f"test_g{self.cfg.group}_{stamp}",
         )
         os.makedirs(base_dir, exist_ok=True)
 
@@ -288,8 +299,8 @@ class SessionRunner:
             _init_csv(log_path)
 
             if arm["kind"] == "grammar":
-                role = arm["grammar_role"]
-                grammar_name = trained if role == "trained" else novel
+                env = arm["environment_association"]   # "EE" or "SC"
+                grammar_name = ee_grammar if env == "EE" else sc_grammar
                 n = self._run_arm(
                     arm_id=arm_id,
                     grammar_name=grammar_name,
@@ -326,8 +337,8 @@ class SessionRunner:
             mode="test",
             group=self.cfg.group,
             condition=self.cfg.condition,
-            trained_grammar=trained,
-            novel_grammar=novel,
+            ee_grammar=ee_grammar,
+            sc_grammar=sc_grammar,
             arm_logs=arm_logs,
             n_melodies=n_melodies,
             duration_s=durations,

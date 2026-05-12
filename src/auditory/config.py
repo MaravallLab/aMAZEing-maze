@@ -44,13 +44,27 @@ class ExperimentConfig:
 
     ### Experiment mode ###
     # Options: "simple_smooth", "simple_intervals", "temporal_envelope_modulation",
-    #          "complex_intervals", "sequences", "vocalisation",
+    #          "complex_intervals", "sequences", "vocalisation", "grammar",
     #          "semantic_predictive_complexity"
     experiment_mode: str = "complex_intervals"
 
     # Only used if experiment_mode == "complex_intervals"
     # Options: "w1day2", "w1day3", "w1day4", "another_day"
     complex_interval_day: str = "w1day3"
+
+    # Only used if experiment_mode == "grammar"
+    # grammar_mode:
+    #   "training" — must use grammar_stimuli.run CLI, not main.py
+    #   "test"     — main.py drives the 9-block test session
+    # grammar_group: per-mouse counterbalance assignment (1 or 2). Determines
+    #   which physical grammar (A/B) is paired with which cage (EE/SC).
+    # grammar_condition: only used for the training CLI to identify which
+    #   cage the mouse is in TODAY. Ignored on test day (both grammars are
+    #   familiar by then).
+    grammar_mode: str = "training"
+    grammar_group: int = 1
+    grammar_condition: str = "EE"
+    grammar_seed: Optional[int] = None      # RNG seed; None = nondeterministic
 
     # Trial Settings
     rois_number: int = 8
