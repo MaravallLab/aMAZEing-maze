@@ -8,20 +8,21 @@ All commands are run from `src/auditory/`.
 
 ## Before the experiment (one-time setup)
 
-### Step 1. Assign each mouse to a counterbalance group
+### Step 1. Assign each mouse to a grammar-environment pairing
 
 Decide once per mouse, then never change it. Write it down somewhere.
+For each mouse, pick which grammar plays in its EE cage:
 
-- **Group 1** mice: hear Grammar A when in the EE cage; Grammar B when in the SC cage.
-- **Group 2** mice: hear Grammar B when in the EE cage; Grammar A when in the SC cage.
+- **EE → A** mice: hear Grammar A in EE, Grammar B in SC.
+- **EE → B** mice: hear Grammar B in EE, Grammar A in SC.
 
-Split your mice ~half-and-half across the two groups.
+Split your mice ~half-and-half across these two options (this is the
+counterbalance).
 
-You won't pass the group to `run.py` (the script only needs to know
-which grammar to play today). The group assignment is what tells *you*
-which cage-type each mouse should be in on a given day so that the
-grammar coming out of the speaker is correctly paired with its
-environment.
+On test day you pass that choice as `--enriched-grammar A` or
+`--enriched-grammar B` to `python main.py`. The system uses it to
+decide which physical grammar plays on the EE-associated arms vs the
+SC-associated arms.
 
 ### Step 2. Verify the matrices look right
 
@@ -111,52 +112,119 @@ single command structure, just with `--grammar B` and updated
 
 ---
 
-## Test day
+## Test days (3-day protocol, 1 hour per mouse per day)
 
-### Step 1. Move the mouse into the maze (not into any cage)
+Each mouse goes through **three test days**, one hour each:
 
-The test happens in the maze, which is a neutral environment.
+| Day | What plays | Purpose |
+|:---:|---|---|
+| **Day 1** | nothing (pure silence) | Baseline ROI preference without acoustic influence |
+| **Day 2** | full grammar test | Effect of audio + grammar associations |
+| **Day 3** | full grammar test (different random sequences) | Within-mouse replication |
 
-### Step 2. Edit `src/auditory/config.py` for this specific mouse
+### Step 1. Move the mouse into the maze
 
-```python
-experiment_mode: str = "grammar"
-grammar_mode: str = "test"
-grammar_group: int = <THIS-MOUSE's-GROUP, 1 or 2>
-rois_number: int = 8
-record_video: bool = True
-# Optional:
-# grammar_seed: int = 42
-# path_to_vocalisation_control: str = "/path/to/voc.wav"
+The test happens in the maze, which is a neutral environment (not in
+its EE or SC cage).
+
+### Step 2. Pass the per-mouse / per-day flags to `main.py`
+
+Stable settings live in `config.py` and you set them once. The
+per-mouse and per-day values come from the command line:
+
+```bash
+# Mouse 6224 (EE→A), Day 1 (silent baseline)
+python main.py --grammar-mode silent_baseline --enriched-grammar A
+
+# Mouse 6224, Day 2 (audio test)
+python main.py --grammar-mode test --enriched-grammar A
+
+# Mouse 6225 (EE→B), Day 1 (silent baseline)
+python main.py --grammar-mode silent_baseline --enriched-grammar B
 ```
 
-There's no `grammar_condition` to set — the mouse has been in both
-cage-types during training, so the maze just plays both grammars.
+All four CLI flags:
+
+| Flag | Effect |
+|---|---|
+| `--grammar-mode {silent_baseline,test,training}` | Which day of the protocol (overrides `cfg.grammar_mode`) |
+| `--enriched-grammar {A,B}` | Which grammar this mouse heard in EE (overrides `cfg.enriched_grammar`) |
+| `--seed N` | RNG seed for reproducible melody draws (overrides `cfg.grammar_seed`) |
+| `--draw-rois` | Force interactive ROI re-drawing (overrides `cfg.draw_rois`) |
+
+Anything you don't pass keeps the default from `config.py`. Both modes
+run for ~60 minutes total (silent_baseline = one 60-min trial; test =
+`[4, 12, 2, 12, 2, 12, 2, 12, 2]`-minute 9-block cycle).
+
+#### Customising the schedule
+
+If you want different durations, override either of these fields in
+`src/auditory/config.py`:
+
+```python
+grammar_silent_baseline_minutes: float = 60.0    # single trial duration
+
+grammar_test_block_minutes: List[float] = field(
+    default_factory=lambda: [4.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0]
+)
+```
+
+The test list **must** have exactly 9 entries. Indices 0/2/4/6/8 are
+silent blocks, indices 1/3/5/7 are active blocks. Zero-minute entries
+are allowed if you want to skip a silent gap.
+
+Example: `[3, 15, 0, 1, 0, 15, 0, 15, 0]` → 3 min opening silence, then
+four active blocks (15 + 1 + 15 + 15 = 46 min active) with no gaps.
+
+### Step 2b. (Optional) Draw or re-draw the ROIs
+
+If `rois1.csv` does not exist in `src/auditory/`, the script will
+automatically prompt you to draw the ROIs the first time you run it
+(using `cv.selectROI` — drag a rectangle, press Enter, repeat for each
+of the 10 ROIs in order: 2 entrances + ROIs 1–8). After that, the same
+layout is reused for every subsequent session.
+
+If you want to **re-draw** the ROIs (e.g. you moved the maze), pass
+`--draw-rois` once: the existing `rois1.csv` is deleted and you'll get
+the drawing prompt again.
+
+```bash
+python main.py --grammar-mode silent_baseline --enriched-grammar A --draw-rois
+```
 
 ### Step 3. Start the maze session
 
 ```bash
-python main.py
+python main.py --grammar-mode <silent_baseline|test> --enriched-grammar <A|B>
 ```
-
-The harness runs the standard 9-block cycle
-(15-15-2-15-2-15-2-15-2 minutes by default), with the 8 stimuli shuffled
-across the 8 ROIs every active block.
 
 ### Step 4. After the session ends
 
-Look in the data folder for the new session. Two new CSVs:
+Look in the data folder for the new session. CSVs:
 
-- `trials_<timestamp>.csv` — what was assigned to each ROI in each block, plus visit counts and time spent.
-- `grammar_samples_<timestamp>.csv` — one row per melody actually played (with the symbol sequence and which arm/tier it was).
+- `trials_<timestamp>.csv` — what was assigned to each ROI in each
+  block, plus visit counts and time spent.
+- `grammar_samples_<timestamp>.csv` — one row per melody actually
+  played (only on Day 2 / Day 3; Day 1 has no melodies).
+- `visit_log_<timestamp>.csv` — per-visit entries with start, end, and
+  duration; same format on all three days.
 
-The `environment_association` column in both files tells you whether
-each row was an EE-paired or SC-paired grammar arm.
+The `environment_association` column in `trials_<timestamp>.csv` tells
+you whether each row was an EE-paired or SC-paired grammar arm (it's
+`"-"` for all rows in silent_baseline mode).
 
-### Step 5. Run the next mouse
+### Step 5. Run the next mouse / next day
 
-Edit `grammar_group` in `config.py` again if the next mouse is in a
-different group, then `python main.py` again.
+Just call `python main.py` again with the right flags. No need to edit
+`config.py`:
+
+```bash
+# Next mouse, same day
+python main.py --grammar-mode silent_baseline --enriched-grammar B
+
+# Same mouse, next day
+python main.py --grammar-mode test --enriched-grammar A
+```
 
 ---
 

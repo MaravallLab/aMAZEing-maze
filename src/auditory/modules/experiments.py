@@ -391,9 +391,30 @@ class ExperimentFactory:
                 "--grammar <A or B> --cage-ids '...' --duration-seconds 14400\n"
                 "from src/auditory/ instead."
             )
+
+        # ── silent_baseline mode (day 1 of the 3-day test protocol) ──────
+        # No audio anywhere — just track which ROIs the mouse visits in the
+        # maze, with the camera + visit log on. Used to establish a
+        # baseline ROI preference before the audio-on test days.
+        if cfg.grammar_mode == "silent_baseline":
+            silence = np.zeros(int(audio.fs * audio.default_duration), dtype=np.float32)
+            n = len(rois)
+            df = pd.DataFrame({
+                "trial_ID": [1] * n,
+                "ROIs": list(rois),
+                "frequency": [0] * n,
+                "grammar": ["-"] * n,
+                "tier": ["-"] * n,
+                "environment_association": ["-"] * n,
+                "wave_arrays": [silence] * n,
+            })
+            df = _add_tracking_columns(df)
+            return df, [silence] * n
+
         if cfg.grammar_mode != "test":
             raise ValueError(
-                f"grammar_mode must be 'training' or 'test', got {cfg.grammar_mode!r}"
+                f"grammar_mode must be 'training', 'silent_baseline', or 'test', "
+                f"got {cfg.grammar_mode!r}"
             )
         if len(rois) != len(gcfg.TEST_ARM_PLAN):
             raise ValueError(
@@ -403,11 +424,15 @@ class ExperimentFactory:
 
         rng_master = np.random.default_rng(cfg.grammar_seed)
 
-        # The mouse has heard both grammars during training. The counterbalance
-        # table tells us which physical grammar (A or B) was paired with EE
-        # and which with SC for this mouse's group.
-        ee_grammar = gcfg.grammar_for(cfg.grammar_group, "EE")
-        sc_grammar = gcfg.grammar_for(cfg.grammar_group, "SC")
+        # The mouse has heard both grammars during training. cfg.enriched_grammar
+        # says which physical grammar (A/B) it heard in the EE cage; the other
+        # one is what it heard in the SC cage.
+        if cfg.enriched_grammar not in ("A", "B"):
+            raise ValueError(
+                f"enriched_grammar must be 'A' or 'B', got {cfg.enriched_grammar!r}"
+            )
+        ee_grammar = cfg.enriched_grammar
+        sc_grammar = "B" if ee_grammar == "A" else "A"
         env_to_grammar: Dict[str, str] = {"EE": ee_grammar, "SC": sc_grammar}
 
         # ── Build the 8 canonical stimuli (fixed pool, shuffled per block) ──
@@ -437,7 +462,7 @@ class ExperimentFactory:
                 if voc_path and os.path.exists(voc_path):
                     wave = audio.load_wav(voc_path)
                 else:
-                    print(f"⚠️  No vocalisation at {voc_path!r}; voc arm will be silent.")
+                    print(f"[warn] No vocalisation at {voc_path!r}; voc arm will be silent.")
                     wave = np.zeros(int(audio.fs * audio.default_duration), dtype=np.float32)
                 stimuli.append(wave)
                 stim_labels.append({

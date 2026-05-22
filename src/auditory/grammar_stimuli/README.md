@@ -230,35 +230,96 @@ Output (per session): one CSV with melody index, symbols played, per-step
 surprise bits, onset/offset times; plus a JSON summary including the
 cage-ids list.
 
-### 7b. Experiment day (video + ROI tracking + visitation log)
+### 7b. Test days — 3-day protocol, 1 hour per mouse per day
+
+Each mouse goes through three test sessions:
+
+| Day | `grammar_mode` | What plays | Total duration | Block schedule |
+|:---:|---|---|:---:|---|
+| Day 1 | `"silent_baseline"` | nothing — pure silence | 60 min | single 60-min trial |
+| Day 2 | `"test"` | full grammar test | 60 min | `[4, 12, 2, 12, 2, 12, 2, 12, 2]` min |
+| Day 3 | `"test"` | full grammar test (new RNG draw) | 60 min | same as Day 2 |
 
 Driven by `src/auditory/main.py` — the full harness with camera, ROI
 monitor, video writer, and trial CSV.
 
-1. Edit `src/auditory/config.py` for the mouse currently in the maze:
-   ```python
-   experiment_mode: str = "grammar"
-   grammar_mode: str = "test"
-   grammar_group: int = 1          # this mouse's counterbalance group (1 or 2)
-   rois_number: int = 8            # required: 6 grammar arms + voc + silent
-   record_video: bool = True
-   # optional:
-   # grammar_seed: int = 42
-   # path_to_vocalisation_control: str = "/path/to/voc.wav"
-   ```
+**Stable defaults** live in `src/auditory/config.py` (sample rate, ROI
+count, timing schedule, output path, etc.). Set those once.
+**Per-mouse and per-day values** come from the command line so you
+don't have to edit the config file for each session.
 
-2. Run:
-   ```bash
-   cd src/auditory
-   python main.py
-   ```
+```bash
+cd src/auditory
 
-The harness uses its standard 9-block cycle from `cfg.get_trial_lengths()`
-(default `[15, 15, 2, 15, 2, 15, 2, 15, 2]` minutes, odd blocks silent,
-even blocks active). At the start of each active block the 8 stimuli
-are randomly assigned to the 8 ROIs; every permutation is unique across
-blocks. Every ROI entry samples a **fresh** 12-tone melody — so the same
-arm replays the same grammar/tier but never the exact same sequence.
+# Day 1, silent baseline, mouse whose EE-grammar is A
+python main.py --grammar-mode silent_baseline --enriched-grammar A
+
+# Day 2/3, audio test, same mouse
+python main.py --grammar-mode test --enriched-grammar A
+
+# Different mouse whose EE-grammar is B
+python main.py --grammar-mode test --enriched-grammar B
+
+# Re-draw the ROIs once at the start of the day
+python main.py --grammar-mode silent_baseline --enriched-grammar A --draw-rois
+```
+
+CLI flags:
+
+| Flag | Effect |
+|---|---|
+| `--grammar-mode {silent_baseline,test,training}` | Day of the protocol. `training` will refuse and point you at `grammar_stimuli.run`. |
+| `--enriched-grammar {A,B}` | Which grammar this mouse heard in EE. Drives arm assignment on test day. |
+| `--seed N` | RNG seed for reproducible melody draws. |
+| `--draw-rois` | Force interactive ROI re-drawing (deletes `rois1.csv` first). |
+
+Any flag you don't pass keeps the default in `config.py`. Defaults are
+deliberately conservative (`grammar_mode = "training"` so a forgotten
+flag raises a clear error instead of silently running the wrong
+session).
+
+**Day 1 (silent_baseline)** runs as one continuous 60-minute trial with
+silent stimuli on every arm. The ROI monitor still logs every visit so
+you get the mouse's baseline arm preference without any acoustic
+influence.
+
+**Days 2 and 3 (test)** use the 9-block cycle: four 12-min active
+blocks (with the 8 stimuli randomly shuffled across the 8 ROIs each
+time) separated by short silent gaps. Every ROI entry samples a
+**fresh** 12-tone melody — so the same arm replays the same
+grammar/tier but never the exact same sequence. Day 2 and Day 3
+produce different melody draws (different RNG state).
+
+#### Customising the durations
+
+The session length is not hardcoded — two `ExperimentConfig` fields
+expose them:
+
+```python
+grammar_silent_baseline_minutes: float = 60.0    # Day 1 total length
+
+grammar_test_block_minutes: List[float] = [
+    4.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0
+]                                                # Day 2/3, 9-block cycle
+```
+
+The test list must have exactly 9 entries (even indices are silent
+blocks, odd indices are active blocks). Zero-minute entries are
+allowed if you want to remove a silent gap. Setting it to e.g.
+`[3, 15, 0, 1, 0, 15, 0, 15, 0]` yields 3 min of opening silence
+followed by four nearly-uninterrupted active blocks.
+
+#### Re-drawing the ROIs
+
+The first time you run `main.py`, you'll be prompted to draw all 10
+ROIs (2 entrances + ROIs 1–8) interactively using OpenCV's selectROI.
+The layout is saved to `src/auditory/rois1.csv` and reused for every
+subsequent session.
+
+To re-draw the ROIs (e.g. you moved the maze), set
+`draw_rois: bool = True` in `config.py` for the next run. The existing
+`rois1.csv` is deleted and you'll be prompted again. Remember to set
+`draw_rois` back to `False` afterwards.
 
 ### 7c. Inspect / verify the matrices
 
@@ -300,7 +361,9 @@ Two CSVs per session, in the standard data_manager output folder:
   `environment_association`, `wave_arrays`, `time_spent`,
   `visitation_count`, etc.
 
-`grammar_samples_<timestamp>.csv` — one row per rendered melody:
+`grammar_samples_<timestamp>.csv` — one row per rendered melody (only
+produced on Day 2 / Day 3; Day 1 has no melodies so the file is absent
+or empty):
 - `trial_ID`, `ROI`, `grammar`, `tier`, `environment_association`,
   `symbols`, `mean_bits`
 

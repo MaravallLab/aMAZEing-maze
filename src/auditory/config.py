@@ -54,15 +54,30 @@ class ExperimentConfig:
 
     # Only used if experiment_mode == "grammar"
     # grammar_mode:
-    #   "training" — main.py refuses; you must use grammar_stimuli.run CLI
-    #                (left as default so a forgotten config raises a clear error)
-    #   "test"     — main.py drives the 9-block test session in the maze
-    # grammar_group: per-mouse counterbalance assignment (1 or 2). Determines
-    #   which physical grammar (A/B) is associated with which cage (EE/SC)
-    #   for arms 1-6 of the test maze.
+    #   "training"        — main.py refuses; you must use grammar_stimuli.run CLI
+    #                       (default so a forgotten config raises a clear error)
+    #   "silent_baseline" — Day 1 of the 3-test-day protocol: 1 hour in the
+    #                       maze with NO audio on any arm. Logs ROI visits
+    #                       only, to establish baseline preference.
+    #   "test"            — Day 2 / Day 3: 1 hour with the full grammar test
+    #                       (9-block shuffle of 8 stimuli).
+    # enriched_grammar: which physical grammar (A or B) this mouse heard
+    #   in the EE (enriched) cage during training. The other grammar is the
+    #   one it heard in the SC cage. This drives arm assignment on test
+    #   day: arms 1-3 play this grammar (EE-associated), arms 4-6 play
+    #   the other (SC-associated). Unused in silent_baseline mode.
     grammar_mode: str = "training"
-    grammar_group: int = 1
+    enriched_grammar: str = "A"
     grammar_seed: Optional[int] = None      # RNG seed; None = nondeterministic
+
+    # Per-day session length, in minutes. Override these if you want a
+    # different schedule than the 1-hour default. The test list must have
+    # exactly 9 entries (the 9-block silent/active cycle): even-indexed
+    # entries are silent blocks, odd-indexed are active.
+    grammar_silent_baseline_minutes: float = 60.0
+    grammar_test_block_minutes: List[float] = field(
+        default_factory=lambda: [4.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0]
+    )
 
     # Trial Settings
     rois_number: int = 8
@@ -77,6 +92,23 @@ class ExperimentConfig:
 
 
     def get_trial_lengths(self) -> List[float]:
+
+        # Grammar experiment: durations are taken from the dedicated
+        # grammar_* fields above so you can override them without touching
+        # this function.
+        if self.experiment_mode == "grammar":
+            if self.grammar_mode == "silent_baseline":
+                return [float(self.grammar_silent_baseline_minutes)]
+            # test mode: must be a 9-element list (the 9-block cycle is
+            # hard-coded in _make_grammar). Validate so a stray change
+            # fails loudly.
+            if len(self.grammar_test_block_minutes) != 9:
+                raise ValueError(
+                    f"grammar_test_block_minutes must have exactly 9 entries "
+                    f"(got {len(self.grammar_test_block_minutes)}). The grammar "
+                    f"test uses a fixed 9-block silent/active cycle."
+                )
+            return list(self.grammar_test_block_minutes)
 
         if self.testing:
             return [0.1, 1, 0.2, 2, 0.2, 2, 0.2, 2, 0.2]

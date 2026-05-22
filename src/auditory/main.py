@@ -1,5 +1,6 @@
-# figure out the logic of the session now that everything else is basically a function 
+# figure out the logic of the session now that everything else is basically a function
 
+import argparse
 import cv2 as cv
 import numpy as np
 import pandas as pd
@@ -16,11 +17,49 @@ from modules.experiments import ExperimentFactory, GrammarStimulus
 from modules.data_manager import DataManager
 #from modules.analysis import SessionAnalyzer
 
+
+def _parse_cli():
+    """CLI flags. Anything passed here overrides the matching field in
+    config.py; anything omitted keeps the config default."""
+    p = argparse.ArgumentParser(
+        description="Run a single maze session. Grammar experiment flags "
+                    "below override the defaults in config.py."
+    )
+    p.add_argument("--grammar-mode",
+                   choices=["training", "silent_baseline", "test"],
+                   default=None,
+                   help="Which day of the test protocol this is.")
+    p.add_argument("--enriched-grammar", choices=["A", "B"], default=None,
+                   help="Which grammar (A or B) this mouse heard in the EE cage "
+                        "during training. Determines arm assignment on test day.")
+    p.add_argument("--seed", type=int, default=None,
+                   help="RNG seed (reproducible melody draws). Omit for random.")
+    p.add_argument("--draw-rois", action="store_true",
+                   help="Force interactive re-drawing of ROIs even if rois1.csv exists.")
+    return p.parse_args()
+
+
 def main():
     # ==========================================
     # 1. SETUP & INITIALIZATION
     # ==========================================
+    args = _parse_cli()
     cfg = ExperimentConfig()
+
+    # Apply CLI overrides (only if the flag was passed)
+    if args.grammar_mode is not None:
+        cfg.grammar_mode = args.grammar_mode
+    if args.enriched_grammar is not None:
+        cfg.enriched_grammar = args.enriched_grammar
+    if args.seed is not None:
+        cfg.grammar_seed = args.seed
+    if args.draw_rois:
+        cfg.draw_rois = True
+
+    print(f"Session config: experiment_mode={cfg.experiment_mode!r}  "
+          f"grammar_mode={cfg.grammar_mode!r}  "
+          f"enriched_grammar={cfg.enriched_grammar!r}  "
+          f"draw_rois={cfg.draw_rois}")
     
     # Initialize Data Manager
     data_mgr = DataManager(cfg.base_output_path)
@@ -89,11 +128,18 @@ def main():
     # Construct the full list of ROIs (Entrances + numbered arms)
     generic_rois = [str(i+1) for i in range(cfg.rois_number)]
     full_rois_list = cfg.entrance_rois + generic_rois
-    
+
+    # If cfg.draw_rois is True, force re-drawing by removing the existing CSV
+    # so ROIMonitor's "missing → interactive draw" path fires.
+    roi_csv_path = "rois1.csv"
+    if cfg.draw_rois and os.path.exists(roi_csv_path):
+        print(f"📐 draw_rois=True → removing existing {roi_csv_path} so you can re-draw.")
+        os.remove(roi_csv_path)
+
     # Initialize Tracker
     tracker = ROIMonitor(
-        roi_csv_path="rois1.csv", # Will prompt user if file missing
-        roi_names_list=full_rois_list,
+        roi_csv_path=roi_csv_path,  # Will prompt user (cv.selectROI) if file missing
+        roiNames=full_rois_list,
         video_input=cfg.video_input
     )
     
