@@ -37,6 +37,9 @@ class ExperimentConfig:
     draw_rois: bool = False
     pause_between_frames: bool = False
     show_binary_view: bool = True
+    binary_threshold: int = 160        # applied to live frames before detection (tune to your lighting)
+    detection_sensitivity: float = 0.5  # mouse detected when binary sum drops below this fraction of raw baseline
+    debug_roi: str = ""            # set to a ROI name (e.g. "1") or "all" to print live pixel sums
 
     # Testing / timing
     testing: bool = False
@@ -74,7 +77,7 @@ class ExperimentConfig:
     # different schedule than the 1-hour default. The test list must have
     # exactly 9 entries (the 9-block silent/active cycle): even-indexed
     # entries are silent blocks, odd-indexed are active.
-    grammar_silent_baseline_minutes: float = 60.0
+    grammar_silent_baseline_minutes: float = 45.0 #60.0
     grammar_test_block_minutes: List[float] = field(
         default_factory=lambda: [4.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0]
     )

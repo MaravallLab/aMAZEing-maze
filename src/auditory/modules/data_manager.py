@@ -102,6 +102,20 @@ class DataManager:
     # keep old name as alias for backward compatibility
     initialise_visit_log = init_visit_log
 
+    def init_maze_log(self, cfg) -> str:
+        experiment_mode = cfg if isinstance(cfg, str) else cfg.experiment_mode
+        filename = f"{self.mouseID}_{experiment_mode}_maze_entries.csv"
+        full_path = os.path.join(self.session_directory, filename)
+        headers = ["trial_ID", "event", "timestamp", "time_in_maze_seconds"]
+        with open(full_path, 'w', newline='') as f:
+            csv.writer(f).writerow(headers)
+        return full_path
+
+    @staticmethod
+    def log_maze_event(csv_path: str, trial_id: int, event: str, timestamp: float, duration: float):
+        with open(csv_path, 'a', newline='') as f:
+            csv.writer(f).writerow([trial_id, event, timestamp, f"{duration:.3f}" if duration is not None else ""])
+
     @staticmethod
 
     def get_stimulus_string(trials_df:pd.DataFrame, trial_id:int, roi:str) -> str:

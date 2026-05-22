@@ -64,17 +64,22 @@ def define_rois(video_input: int, output_csv_path: str, roiNames: List[str] = ["
 # (aka a threshold of an arbitrary number of frames to basically confirm that there is activity or inactivity in the roi)
 #the current camera is 30fps, so if exit_frames = 5 it means that the roi needs to be empty for 0.16 seconds to be considered empty
 class ROIMonitor: 
-    def __init__(self, 
+    def __init__(self,
                  roi_csv_path: str,
-                 video_input: int,  
+                 video_input: int,
                  roiNames: List[str] = ["entrance1", "entrance2", "ROI1", "ROI2", "ROI3", "ROI4", "ROI5", "ROI6", "ROI7", "ROI8"],
-                 enter_frames: int = 1, 
-                 exit_frames : int = 5 ):
+                 enter_frames: int = 1,
+                 exit_frames: int = 5,
+                 detection_sensitivity: float = 5.0,
+                 debug_roi: str = ""):
         
 
         self.roiNames = roiNames
         self.enter_frames = enter_frames
         self.exit_frames = exit_frames
+        self.detection_sensitivity = detection_sensitivity
+        self.debug_roi = debug_roi
+        self.background: Optional[np.ndarray] = None
 
         #check if the rois.csv exists, and if not, create it 
 
@@ -93,41 +98,39 @@ class ROIMonitor:
         
 
         #initialise State Tracking variables
-        self.thresholds: Dict[str, float]= {}
+        self.thresholds: Dict[str, float] = {}
         self.is_occupied: Dict[str, bool] = {name: False for name in self.roiNames}
-        self.present_streak: Dict[str, int] = {name : 0 for name in self.roiNames}
-        self.absent_streak: Dict[str, int] = {name:0 for name in self.roiNames}
+        self.present_streak: Dict[str, int] = {name: 0 for name in self.roiNames}
+        self.absent_streak: Dict[str, int] = {name: 0 for name in self.roiNames}
 
 
-    def calibrate(self, binary_frame: np.ndarray): 
-        # take a clean frame to establish the baseling pixel count
-        #the frame needs to be without mouse
-        print("Calibrating ROI thresholds...")
+    def calibrate(self, raw_frames: List[np.ndarray]):
+        # Calibrate using raw (non-binary) frames so baselines reflect actual
+        # pixel values. Detection compares binary sums against these raw baselines.
+        print(f"Calibrating from {len(raw_frames)} raw frames...")
         for name in self.roiNames:
             if name not in self.rois_df.columns:
-                print(f" Warning: ROI '{name}' in config.py but not in CSV. Skipping but double check.")
+                print(f"  Warning: ROI '{name}' in config.py but not in CSV. Skipping.")
                 continue
-
-
-                
-            cutout = self._crop_roi(binary_frame, name)
-            self.thresholds[name] = np.sum(cutout)
+            sums = [np.sum(self._crop_roi(f, name)) for f in raw_frames]
+            self.thresholds[name] = float(np.mean(sums))
+            print(f"  {name}: raw_baseline={self.thresholds[name]:.0f}")
 
     def update(self, binary_frame: np.ndarray) -> List[str]:
-        
-        #Process a new frame. Returns list of newly entered ROIs.
-        
+        # Compare binary pixel sum in each ROI against the raw baseline.
+        # Mouse blocks IR → binary sum drops well below the raw baseline.
         just_entered_rois = []
 
         for name in self.roiNames:
-            # Skip if something is wrong with CSV vs Config sync
             if name not in self.thresholds: continue
 
-            cutout = self._crop_roi(binary_frame, name)
-            current_sum = np.sum(cutout)
-            
-            # 1. If current sum is < 50% of baseline, something (mouse) is blocking the background
-            raw_present = current_sum < (self.thresholds[name] * 0.5)
+            current_sum = float(np.sum(self._crop_roi(binary_frame, name)))
+
+            if self.debug_roi == "all" or (self.debug_roi and name == self.debug_roi):
+                ratio = current_sum / self.thresholds[name] if self.thresholds[name] > 0 else 0
+                print(f"  [DEBUG] {name}: binary_sum={current_sum:.0f}  raw_baseline={self.thresholds[name]:.0f}  ratio={ratio:.2f}")
+
+            raw_present = current_sum < (self.thresholds[name] * self.detection_sensitivity)
 
             # update Debouncing conters
             if raw_present:
@@ -143,9 +146,11 @@ class ROIMonitor:
             if not was_occupied and self.present_streak[name] >= self.enter_frames:
                 self.is_occupied[name] = True
                 just_entered_rois.append(name)
+                print(f"  [ROI] ENTERED: {name}")
 
             elif was_occupied and self.absent_streak[name] >= self.exit_frames:
                 self.is_occupied[name] = False
+                print(f"  [ROI] EXITED:  {name}")
             
         return just_entered_rois
 

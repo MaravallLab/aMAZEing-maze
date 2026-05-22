@@ -74,7 +74,10 @@ def main():
     
     # Initialize the detailed CSV log for individual visits
     visit_log_path = data_mgr.init_visit_log(cfg.experiment_mode)
-    
+
+    # Initialize the maze entry/exit log
+    maze_log_path = data_mgr.init_maze_log(cfg.experiment_mode)
+
     print(f"📂 Session Ready: {new_dir_path}")
 
     # ==========================================
@@ -86,11 +89,7 @@ def main():
     audio = Audio(cfg)
     
     # Initialize Arduino (if enabled in config)
-    arduino = ArduinoController(
-        port=cfg.arduino_port, 
-        baud_rate=cfg.arduino_baud, 
-        active=cfg.use_microcontroller
-    )
+    arduino = ArduinoController(cfg=cfg, active=cfg.use_microcontroller)
     
     # Initialize Camera
     camera = Camera(device_id=cfg.video_input)
@@ -122,6 +121,12 @@ def main():
     unique_trials = trials_df['trial_ID'].unique()
     trial_lengths = cfg.get_trial_lengths()
 
+    def _fmt(seconds: float) -> str:
+        s = max(0, int(seconds))
+        h, rem = divmod(s, 3600)
+        m, s = divmod(rem, 60)
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
     # ==========================================
     # 4. VISION CALIBRATION
     # ==========================================
@@ -140,25 +145,24 @@ def main():
     tracker = ROIMonitor(
         roi_csv_path=roi_csv_path,  # Will prompt user (cv.selectROI) if file missing
         roiNames=full_rois_list,
-        video_input=cfg.video_input
+        video_input=cfg.video_input,
+        detection_sensitivity=cfg.detection_sensitivity,
+        debug_roi=cfg.debug_roi
     )
-    
-    print("\n Calibrating background (Please step away)...")
-    time.sleep(1) # Allow camera to settle
-    
-    valid, frame = camera.get_frame()
-    if valid:
-        # Handle Grayscale vs Color
-        if frame.ndim == 3:
-            gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-        else:
-            gray = frame 
-            
-        ret, binary = cv.threshold(gray, 160, 255, cv.THRESH_BINARY)
-        tracker.calibrate(binary)
-        print("Calibration Complete.")
-    else:
-        raise RuntimeError("Failed to capture frame for calibration.")
+
+    print("\n Calibrating background — please keep the maze empty...")
+    calib_frames = []
+    for i in range(40):  # discard first 30 warmup frames, collect 10 raw frames
+        valid, frame = camera.get_frame()
+        if valid and i >= 30:
+            gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+            calib_frames.append(gray)
+
+    if len(calib_frames) < 5:
+        raise RuntimeError("Not enough frames captured for calibration. Check camera.")
+
+    tracker.calibrate(calib_frames)
+    print("Calibration Complete.")
 
     # ==========================================
     # 5. MAIN EXPERIMENT LOOP
@@ -166,6 +170,13 @@ def main():
     # Create window
     cv.namedWindow("Experiment View", cv.WINDOW_NORMAL)
     cv.resizeWindow("Experiment View", 1024, 768)
+
+    # Maze entry/exit tracking (persists across trials)
+    last_entrance = None       # which entrance was triggered most recently
+    maze_entry_time = None     # wall-clock time when mouse entered the maze
+    total_maze_time = 0.0      # cumulative seconds inside the maze
+
+    session_end_time = time.time() + sum(trial_lengths) * 60
 
     for trial_idx in unique_trials:
         # Calculate timing
@@ -201,8 +212,8 @@ def main():
                 # Convert to BGR for display so drawn boxes are colored
                 display_frame = cv.cvtColor(raw_frame, cv.COLOR_GRAY2BGR)
 
-            ret, binary = cv.threshold(gray, 160, 255, cv.THRESH_BINARY)
-            
+            ret, binary = cv.threshold(gray, cfg.binary_threshold, 255, cv.THRESH_BINARY)
+
             # --- C. Tracking ---
             # 'entered_rois' is a list of ROIs entered *this frame*
             entered_rois = tracker.update(binary)
@@ -210,7 +221,24 @@ def main():
             # --- D. Handle Entries ---
             for roi in entered_rois:
                 visit_start_times[roi] = time.time()
-                
+
+                # --- Entrance/exit logic ---
+                if roi in ("entrance1", "entrance2"):
+                    if roi == "entrance2" and last_entrance == "entrance1":
+                        # Passed through entrance1 → entrance2: entered maze
+                        maze_entry_time = time.time()
+                        print("  [MAZE] Mouse ENTERED the maze")
+                        DataManager.log_maze_event(maze_log_path, trial_idx, "entered", maze_entry_time, None)
+                    elif roi == "entrance1" and last_entrance == "entrance2":
+                        # Passed through entrance2 → entrance1: left maze
+                        now = time.time()
+                        duration = (now - maze_entry_time) if maze_entry_time is not None else 0.0
+                        total_maze_time += duration
+                        maze_entry_time = None
+                        print(f"  [MAZE] Mouse LEFT the maze (time inside: {duration:.1f}s, total: {total_maze_time:.1f}s)")
+                        DataManager.log_maze_event(maze_log_path, trial_idx, "exited", now, duration)
+                    last_entrance = roi
+
                 # Check dataframe for this Trial/ROI combo
                 mask = (trials_df['trial_ID'] == trial_idx) & (trials_df['ROIs'] == roi)
                 if not mask.any(): continue
@@ -272,18 +300,19 @@ def main():
                     
                     # Log the visit to CSV
                     stim_info = DataManager.get_stimulus_string(trials_df, trial_idx, roi)
-                    data_mgr.log_visit(visit_log_path, trial_idx, roi, stim_info, start_t, end_t, visit_dur)
+                    DataManager.log_individual_visit(visit_log_path, trial_idx, roi, stim_info, start_t, end_t, visit_dur)
                     
                     print(f"   📝 Visit Logged: {roi} ({visit_dur:.2f}s)")
                     
                     # Reset timer
                     visit_start_times[roi] = None
                     
-                    # Update total time spent in main dataframe
+                    # Update total time spent in main dataframe (entrance ROIs won't be in trials_df)
                     mask = (trials_df['trial_ID'] == trial_idx) & (trials_df['ROIs'] == roi)
-                    current_time = trials_df.loc[mask, 'time_spent'].values[0]
-                    new_time = visit_dur if pd.isna(current_time) else current_time + visit_dur
-                    trials_df.loc[mask, 'time_spent'] = new_time
+                    if mask.any():
+                        current_time = trials_df.loc[mask, 'time_spent'].values[0]
+                        new_time = visit_dur if pd.isna(current_time) else current_time + visit_dur
+                        trials_df.loc[mask, 'time_spent'] = new_time
 
             # --- F. Hardware Logic (Stop Sound/TTL) ---
             # Stop sound if mouse leaves ALL ROIs
@@ -301,9 +330,11 @@ def main():
             # --- G. Render Feedback ---
             tracker.draw_feedback(display_frame)
             
-            remaining = int(trial_end_time - time.time())
-            cv.putText(display_frame, f"Trial {trial_idx}: {remaining}s left", (10, 30), 
+            now = time.time()
+            cv.putText(display_frame, f"Trial {trial_idx}:   {_fmt(trial_end_time - now)} left", (10, 30),
                        cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv.putText(display_frame, f"Session: {_fmt(session_end_time - now)} left", (10, 60),
+                       cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 255), 2)
             
             cv.imshow("Experiment View", display_frame)
 
@@ -333,6 +364,14 @@ def main():
     # 6. CLEANUP & ANALYSIS
     # ==========================================
     print("\n--- 🏁 Experiment Finished ---")
+
+    # If mouse was still inside the maze when the session ended, close that bout
+    if maze_entry_time is not None:
+        duration = time.time() - maze_entry_time
+        total_maze_time += duration
+        DataManager.log_maze_event(maze_log_path, trial_idx, "session_end_still_inside", time.time(), duration)
+
+    print(f"  Total time spent in maze: {total_maze_time:.1f}s ({total_maze_time/60:.2f} min)")
 
     # Dump grammar sampling history (only if grammar mode ran).
     # The same GrammarStimulus instance appears in sound_array at multiple

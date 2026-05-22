@@ -162,3 +162,5 @@ Thumbs.db
 
 # Claude Code worktrees
 .claude/worktrees/
+/src/auditory/sessions
+/src/auditory/_test_audio
