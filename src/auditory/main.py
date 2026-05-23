@@ -15,7 +15,7 @@ from modules.vision import ROIMonitor
 from modules.audio import Audio
 from modules.experiments import ExperimentFactory, GrammarStimulus
 from modules.data_manager import DataManager
-#from modules.analysis import SessionAnalyzer
+from modules.analysis import SessionAnalyzer
 
 
 def _parse_cli():
@@ -86,7 +86,7 @@ def main():
     print("\n--- 🔌 Hardware Setup ---")
     
     # Initialize Audio — pulls samplerate/device/defaults from cfg.
-    audio = Audio(cfg)
+    audio = Audio(cfg, calibration_gain_path=cfg.calibration_gain_path)
     
     # Initialize Arduino (if enabled in config)
     arduino = ArduinoController(cfg=cfg, active=cfg.use_microcontroller)
@@ -268,7 +268,15 @@ def main():
                         should_play = False
 
                 if should_play:
-                    print(f"   🔊 Playing sound for {roi}")
+                    row = trials_df.loc[sound_index]
+                    freq_val = row['frequency']
+                    if freq_val == 'grammar':
+                        stim_label = f"{row['tier']} {row['environment_association']} (Grammar {row['grammar']})"
+                    elif freq_val == 'vocalisation':
+                        stim_label = "vocalisation"
+                    else:
+                        stim_label = f"{freq_val} Hz"
+                    print(f"   Playing: {roi} -> {stim_label}")
 
                     # Grammar arm: sample a fresh melody on every entry
                     if isinstance(sound_clip, GrammarStimulus):
@@ -393,16 +401,15 @@ def main():
     arduino.close()
     cv.destroyAllWindows()
 
-    # # --- 📊 AUTO-ANALYSIS ---
-    # print("\n--- 📊 Running Post-Experiment Analysis ---")
-    # try:
-    #     analyzer = SessionAnalyzer(new_dir_path)
-    #     analyzer.generate_report()
-    #     print(f"📈 Graphs saved in: {new_dir_path}")
-    # except Exception as e:
-    #     print(f"⚠️ Analysis failed (check logs): {e}")
-    #     # Print full trace for debugging if needed
-    #     # import traceback; traceback.print_exc()
+    # --- AUTO-ANALYSIS ---
+    print("\n--- Running Post-Experiment Analysis ---")
+    try:
+        analyzer = SessionAnalyzer(new_dir_path)
+        analyzer.generate_report()
+        print(f"Graphs saved in: {new_dir_path}")
+    except Exception as e:
+        print(f"Analysis failed: {e}")
+        import traceback; traceback.print_exc()
 
 if __name__ == "__main__":
     main()

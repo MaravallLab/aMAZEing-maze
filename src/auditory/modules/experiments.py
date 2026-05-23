@@ -84,7 +84,7 @@ class ExperimentFactory:
     @staticmethod
     def generate_trials(cfg: ExperimentConfig, audio: Audio) -> TrialData:
 
-        generic_rois = [f"ROI{str(i+1)}" for i in range(cfg.rois_number)]
+        generic_rois = [str(i+1) for i in range(cfg.rois_number)]
         rois_list = cfg.entrance_rois + generic_rois
 
         experiment_type = cfg.experiment_mode

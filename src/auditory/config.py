@@ -11,6 +11,10 @@ from typing import List, Optional
 # Default base directory: ~/Desktop/auditory_maze_experiments/maze_recordings
 _DEFAULT_BASE = os.path.join(os.path.expanduser("~"), "Desktop", "auditory_maze_experiments", "maze_recordings")
 
+# Calibration CSV shipped with the repo (analysis/calibration/)
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+_DEFAULT_CALIBRATION = os.path.join(_REPO_ROOT, "analysis", "calibration", "frequency_response_speaker.csv")
+
 @dataclass
 class ExperimentConfig:
 
@@ -79,7 +83,7 @@ class ExperimentConfig:
     # entries are silent blocks, odd-indexed are active.
     grammar_silent_baseline_minutes: float = 45.0 #60.0
     grammar_test_block_minutes: List[float] = field(
-        default_factory=lambda: [4.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0]
+        default_factory=lambda: [0, 15.0, 0, 15.0, 0, 15.0, 0, 15.0, 0]
     )
 
     # Trial Settings
@@ -88,10 +92,11 @@ class ExperimentConfig:
 
     # PATHS — override these for your machine
     base_output_path: str = _DEFAULT_BASE
+    calibration_gain_path: str = _DEFAULT_CALIBRATION
 
     # Path to vocalisation control files
-    path_to_vocalisation_folder: str = ""
-    path_to_vocalisation_control: str = ""
+    path_to_vocalisation_folder: str = r"C:\Users\labuser\Downloads\vocalisationzzzzzz\trimmed_vocalisations"
+    path_to_vocalisation_control: str = r"c:\Users\labuser\Downloads\vocalisationzzzzzz\trimmed_vocalisations\run1_day2_male_w_female_oestrus.wav"
 
 
     def get_trial_lengths(self) -> List[float]:
