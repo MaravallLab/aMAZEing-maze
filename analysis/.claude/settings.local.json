@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem D:\\\\ -Recurse -Filter \"alignment_summary.csv\" -ErrorAction SilentlyContinue | Select-Object FullName, LastWriteTime, @{n='Size';e={$_.Length}})",
+      "PowerShell(python -c \"import ast; ast.parse\\(open\\(r'c:\\\\Users\\\\shahd\\\\OneDrive\\\\Documents\\\\GitHub\\\\aMAZEing-maze\\\\analysis\\\\crop_and_align_maze.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "PowerShell(python \"c:\\\\Users\\\\shahd\\\\OneDrive\\\\Documents\\\\GitHub\\\\aMAZEing-maze\\\\analysis\\\\crop_and_align_maze.py\" --help 2>&1)"
+    ]
+  }
+}
