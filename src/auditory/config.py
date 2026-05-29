@@ -94,6 +94,11 @@ class ExperimentConfig:
     base_output_path: str = _DEFAULT_BASE
     calibration_gain_path: str = _DEFAULT_CALIBRATION
 
+    # Top-level day label inserted between base_output_path and experiment_mode.
+    # Set via --day on the CLI (e.g. habituation, day_1, day_2).
+    # Leave empty to keep the old flat structure.
+    experiment_day: str = ""
+
     # Path to vocalisation control files
     path_to_vocalisation_folder: str = r"C:\Users\labuser\Downloads\vocalisationzzzzzz\trimmed_vocalisations"
     path_to_vocalisation_control: str = r"c:\Users\labuser\Downloads\vocalisationzzzzzz\trimmed_vocalisations\run1_day2_male_w_female_oestrus.wav"

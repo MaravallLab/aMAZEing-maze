@@ -112,15 +112,15 @@ single command structure, just with `--grammar B` and updated
 
 ---
 
-## Test days (3-day protocol, 1 hour per mouse per day)
+## Test days (3-day protocol)
 
-Each mouse goes through **three test days**, one hour each:
+Each mouse goes through **three test days**:
 
-| Day | What plays | Purpose |
-|:---:|---|---|
-| **Day 1** | nothing (pure silence) | Baseline ROI preference without acoustic influence |
-| **Day 2** | full grammar test | Effect of audio + grammar associations |
-| **Day 3** | full grammar test (different random sequences) | Within-mouse replication |
+| Day | Label | Duration | What plays | Purpose |
+|:---:|---|:---:|---|---|
+| **Habituation** | `habituation` | 45 min | nothing (pure silence) | Baseline ROI preference without acoustic influence |
+| **Test day 1** | `day_1` | 60 min | full grammar test | Effect of audio + grammar associations |
+| **Test day 2** | `day_2` | 60 min | full grammar test (different random sequences) | Within-mouse replication |
 
 ### Step 1. Move the mouse into the maze
 
@@ -133,48 +133,53 @@ Stable settings live in `config.py` and you set them once. The
 per-mouse and per-day values come from the command line:
 
 ```bash
-# Mouse 6224 (EE→A), Day 1 (silent baseline)
-python main.py --grammar-mode silent_baseline --enriched-grammar A
+# Mouse 6224 (EE→A), habituation day (silent baseline)
+python main.py --grammar-mode silent_baseline --enriched-grammar A --day habituation
 
-# Mouse 6224, Day 2 (audio test)
-python main.py --grammar-mode test --enriched-grammar A
+# Mouse 6224, first audio test day
+python main.py --grammar-mode test --enriched-grammar A --day day_1
 
-# Mouse 6225 (EE→B), Day 1 (silent baseline)
-python main.py --grammar-mode silent_baseline --enriched-grammar B
+# Mouse 6224, second audio test day
+python main.py --grammar-mode test --enriched-grammar A --day day_2
+
+# Mouse 6225 (EE→B), habituation day
+python main.py --grammar-mode silent_baseline --enriched-grammar B --day habituation
 ```
 
-All four CLI flags:
+All CLI flags:
 
 | Flag | Effect |
 |---|---|
-| `--grammar-mode {silent_baseline,test,training}` | Which day of the protocol (overrides `cfg.grammar_mode`) |
+| `--grammar-mode {silent_baseline,test}` | Which day of the protocol (overrides `cfg.grammar_mode`) |
 | `--enriched-grammar {A,B}` | Which grammar this mouse heard in EE (overrides `cfg.enriched_grammar`) |
+| `--day LABEL` | Parent folder in the output path — e.g. `habituation`, `day_1`, `day_2` |
 | `--seed N` | RNG seed for reproducible melody draws (overrides `cfg.grammar_seed`) |
 | `--draw-rois` | Force interactive ROI re-drawing (overrides `cfg.draw_rois`) |
 
-Anything you don't pass keeps the default from `config.py`. Both modes
-run for ~60 minutes total (silent_baseline = one 60-min trial; test =
-`[4, 12, 2, 12, 2, 12, 2, 12, 2]`-minute 9-block cycle).
+Anything you don't pass keeps the default from `config.py`.
+
+**Current schedule:**
+- `silent_baseline` — one 45-minute trial, no audio
+- `test` — four 15-minute active blocks, no silent gaps between them (60 min total)
 
 #### Customising the schedule
 
-If you want different durations, override either of these fields in
-`src/auditory/config.py`:
+Override these fields in `src/auditory/config.py` if needed:
 
 ```python
-grammar_silent_baseline_minutes: float = 60.0    # single trial duration
+grammar_silent_baseline_minutes: float = 45.0    # single trial duration
 
 grammar_test_block_minutes: List[float] = field(
-    default_factory=lambda: [4.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0, 12.0, 2.0]
+    default_factory=lambda: [0, 15.0, 0, 15.0, 0, 15.0, 0, 15.0, 0]
 )
 ```
 
 The test list **must** have exactly 9 entries. Indices 0/2/4/6/8 are
-silent blocks, indices 1/3/5/7 are active blocks. Zero-minute entries
-are allowed if you want to skip a silent gap.
+silent blocks, indices 1/3/5/7 are active blocks. Set a silent-block
+entry to `0` to skip it entirely.
 
-Example: `[3, 15, 0, 1, 0, 15, 0, 15, 0]` → 3 min opening silence, then
-four active blocks (15 + 1 + 15 + 15 = 46 min active) with no gaps.
+Example: `[2, 15, 0, 15, 0, 15, 0, 15, 0]` → 2-minute opening silence,
+then four 15-minute active blocks with no gaps between them (62 min total).
 
 ### Step 2b. (Optional) Draw or re-draw the ROIs
 
@@ -195,23 +200,74 @@ python main.py --grammar-mode silent_baseline --enriched-grammar A --draw-rois
 ### Step 3. Start the maze session
 
 ```bash
-python main.py --grammar-mode <silent_baseline|test> --enriched-grammar <A|B>
+python main.py --grammar-mode <silent_baseline|test> --enriched-grammar <A|B> --day <habituation|day_1|day_2>
 ```
 
 ### Step 4. After the session ends
 
-Look in the data folder for the new session. CSVs:
+The session folder is created at:
 
-- `trials_<timestamp>.csv` — what was assigned to each ROI in each
-  block, plus visit counts and time spent.
-- `grammar_samples_<timestamp>.csv` — one row per melody actually
-  played (only on Day 2 / Day 3; Day 1 has no melodies).
-- `visit_log_<timestamp>.csv` — per-visit entries with start, end, and
-  duration; same format on all three days.
+```
+base_output_path / grammar / <--day label> / time_<timestamp>_<mouseID> /
+```
+
+For example:
+```
+maze_recordings/grammar/day_1/time_2026-05-23_14_30_00_mouse1/
+```
+
+**Files saved automatically:**
+
+| File | Contents |
+|------|----------|
+| `trials_<timestamp>.csv` | One row per (trial block, ROI): stimulus assigned, time spent, visit count |
+| `<mouseID>_grammar_detailed_visits.csv` | One row per visit: ROI, stimulus string, entry/exit times, duration |
+| `<mouseID>_grammar_maze_entries.csv` | Maze entry and exit events with timestamps |
+| `<mouseID>_<timestamp>_metadata.csv` | Mouse metadata (ID, DOB, sex, ear marks) |
+| `grammar_samples_<timestamp>.csv` | One row per melody played — grammar, tier, symbol sequence (test days only) |
+| `trials_<timestamp>.npy` | Raw audio arrays (for debugging sounds) |
+| `fig1_arm_totals.png` … `fig6_location_preference.png` | Per-session analysis figures (auto-generated) |
 
 The `environment_association` column in `trials_<timestamp>.csv` tells
 you whether each row was an EE-paired or SC-paired grammar arm (it's
-`"-"` for all rows in silent_baseline mode).
+`"-"` on silent_baseline days).
+
+**If you need to regenerate the per-session figures later:**
+
+```bash
+cd src/auditory
+python run_analysis.py "C:\path\to\session_folder"
+```
+
+### Step 4b. After the last mouse of a day — run the day summary
+
+After you've run all mice for a given day, generate cross-mouse summary
+figures with:
+
+```bash
+cd src/auditory
+
+# Summary for one day (all mice tested that day):
+python run_summary_analysis.py --day "C:\...\maze_recordings\grammar\day_1"
+
+# Cross-day summary (all mice, all days collected so far):
+python run_summary_analysis.py --all "C:\...\maze_recordings\grammar"
+```
+
+Figures are saved into the folder you pass.
+
+| Figure | What it shows |
+|--------|---------------|
+| `summary_A_ee_sc_per_mouse.png` | EE vs SC total time — one pair of bars per mouse per day |
+| `summary_B_preference_index.png` | EE preference index (−1 to +1) per mouse per day |
+| `summary_C_group_summary.png` | Group mean ± SEM time and visits on EE vs SC arms |
+| `summary_D_cross_day_pi.png` | PI trajectory per mouse + group mean across days *(multi-day only)* |
+| `summary_E_tier_breakdown_per_mouse.png` | Stacked bars showing dominant / secondary / rare time on EE and SC arms per mouse |
+| `summary_F_group_tier_breakdown.png` | Group mean ± SEM for all 6 tier × environment combinations |
+| `summary_G_cross_day_tiers.png` | Per-tier preference across days — group mean ± SEM for each complexity level *(multi-day only)* |
+
+Silent-baseline sessions (no audio) are automatically excluded from
+all summary figures — only test-day sessions contribute.
 
 ### Step 5. Run the next mouse / next day
 
@@ -220,10 +276,10 @@ Just call `python main.py` again with the right flags. No need to edit
 
 ```bash
 # Next mouse, same day
-python main.py --grammar-mode silent_baseline --enriched-grammar B
+python main.py --grammar-mode silent_baseline --enriched-grammar B --day habituation
 
-# Same mouse, next day
-python main.py --grammar-mode test --enriched-grammar A
+# Same mouse, next test day
+python main.py --grammar-mode test --enriched-grammar A --day day_2
 ```
 
 ---
@@ -233,7 +289,12 @@ python main.py --grammar-mode test --enriched-grammar A
 | Problem | Fix |
 |---|---|
 | `python -m grammar_stimuli.run` says "No module named grammar_stimuli" | Make sure you're in `src/auditory/` |
-| `main.py` errors complain about rois_number | Set `rois_number: int = 8` in `src/auditory/config.py` |
-| No audio | Use `--device-id N` to pick a different sounddevice output |
-| Audio plays but I want to verify | Open the session CSV and inspect the `symbols` column |
-| Want to re-derive what was played | Re-run with the same `--seed N` and you get the same melodies (otherwise just look at the CSV) |
+| `main.py` raises `NotImplementedError` about training | You forgot `--grammar-mode test` (or `silent_baseline`) — the config default intentionally forces you to pass it |
+| `main.py` errors about `rois_number` | Set `rois_number: int = 8` in `src/auditory/config.py` |
+| Baselines all 0 after calibration | The ROI coordinates in `rois1.csv` are likely stale — re-run with `--draw-rois` to redraw them |
+| Mouse not detected / no ROI ENTERED messages | Try raising `detection_sensitivity` from `0.5` to `0.7` in `config.py`, or redraw ROIs with `--draw-rois` |
+| No audio | Check `channel_id` in `config.py` — run `python -c "import sounddevice; print(sounddevice.query_devices())"` to list available devices |
+| "No gain" warning at startup | The calibration CSV was not found — check `calibration_gain_path` in `config.py` resolves to `analysis/calibration/frequency_response_speaker.csv` in the repo |
+| Audio plays but I want to verify what was played | Open `grammar_samples_<timestamp>.csv` and inspect the `symbols` and `tier` columns |
+| Want to reproduce the same melody draws | Re-run with `--seed N` using the same seed (otherwise check the CSV) |
+| Post-session figures not generated | Run `python run_analysis.py <session_folder>` manually; check the terminal for the traceback |

@@ -43,7 +43,11 @@ class DataManager:
         if cfg.experiment_mode == "complex_intervals":
             experiment_dir_name = f"{cfg.experiment_mode}_{cfg.complex_interval_day}"
 
-        exp_sess_dir = os.path.join(self.base_output_path, experiment_dir_name)
+        day_label = getattr(cfg, "experiment_day", "")
+        if day_label:
+            exp_sess_dir = os.path.join(self.base_output_path, experiment_dir_name, day_label)
+        else:
+            exp_sess_dir = os.path.join(self.base_output_path, experiment_dir_name)
 
         if not os.path.exists(exp_sess_dir):
             os.makedirs(exp_sess_dir)

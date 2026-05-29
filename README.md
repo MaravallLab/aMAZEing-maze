@@ -57,13 +57,15 @@ The system supports two main experimental paradigms:
 
 - **Real-time ROI tracking** via OpenCV binary thresholding with temporal debouncing
 - **High-fidelity sound generation** at 192 kHz: sine, square, sawtooth, triangle, pulse, white noise
-- **Speaker frequency-response compensation** from calibration CSV data
+- **Speaker frequency-response compensation** automatically loaded from the repo calibration CSV
 - **Musical interval system** using just-intonation ratios (consonant vs dissonant)
 - **Temporal envelope modulation** (constant AM and complex multi-frequency AM)
+- **Grammar learning experiment** — two first-order Markov grammars (A/B) over six pure tones, with three predictability tiers (dominant / secondary / rare), EE/SC environment counterbalancing, and a 4-block shuffled test protocol
 - **Trial state machine** with 9-block silent/active alternation and unique-shuffle constraints
 - **Arduino TTL synchronisation** for photometry alignment
 - **MicroPython servo control** via PCA9685 PWM driver
-- **Fully configurable** from a single dataclass (`ExperimentConfig`)
+- **Automatic post-session analysis** — per-session figures generated at the end of every session; cross-session summary figures (per mouse, per day, group) via a single CLI command
+- **Fully configurable** from a single dataclass (`ExperimentConfig`) with per-session CLI overrides
 
 ---
 
@@ -112,12 +114,34 @@ cd src/auditory
 python main.py
 ```
 
+For the grammar experiment, pass per-session flags on the command line:
+
+```bash
+# Silent baseline (Day 1 — no audio, establishes location preference baseline)
+python main.py --grammar-mode silent_baseline --enriched-grammar A --day habituation
+
+# Audio test (Day 2 / Day 3)
+python main.py --grammar-mode test --enriched-grammar A --day day_1
+python main.py --grammar-mode test --enriched-grammar A --day day_2
+```
+
 3. The system will:
-   - Prompt for mouse ID and create a session folder
+   - Prompt for mouse ID and create a timestamped session folder
    - Generate the trial structure based on your chosen experiment mode
-   - Calibrate the background (step away from the camera)
-   - Run the experiment loop: track the mouse, play sounds on ROI entry, log visits
+   - Calibrate the background using raw camera frames (keep the maze empty during calibration)
+   - Run the experiment loop: track the mouse, play sounds on ROI entry, log every visit
    - Save trial data (CSV + NPY) after every trial
+   - Generate post-session analysis figures automatically when the session ends
+
+### CLI flags
+
+| Flag | Effect |
+|---|---|
+| `--grammar-mode {silent_baseline,test}` | Which day of the test protocol (overrides `cfg.grammar_mode`) |
+| `--enriched-grammar {A,B}` | Which grammar this mouse heard in the EE cage during training |
+| `--day LABEL` | Parent folder label in the output path (e.g. `habituation`, `day_1`, `day_2`) |
+| `--seed N` | RNG seed for reproducible melody draws |
+| `--draw-rois` | Force interactive ROI re-drawing even if `rois1.csv` already exists |
 
 ### Experiment Modes
 
@@ -125,6 +149,7 @@ Set `experiment_mode` in `config.py` to one of:
 
 | Mode | Description |
 |---|---|
+| `grammar` | Grammar learning test — two Markov grammars × three predictability tiers (dominant/secondary/rare) + vocalisation + silent control, shuffled across 4 active 15-min blocks |
 | `simple_smooth` | One pure tone per ROI arm |
 | `simple_intervals` | Two-tone chords (musical intervals) per ROI |
 | `temporal_envelope_modulation` | Smooth, constant-AM, and complex-AM sounds |
@@ -161,10 +186,16 @@ class ExperimentConfig:
 ```
 
 Key settings to adjust for your setup:
-- `channel_id` -- your audio output device index
-- `arduino_port` -- COM port for the Arduino (e.g. `"COM4"`)
-- `video_input` -- camera device index
-- `base_output_path` -- where session data is saved (defaults to `~/Desktop/auditory_maze_experiments/maze_recordings`)
+- `channel_id` — your audio output device index
+- `arduino_port` — COM port for the Arduino (e.g. `"COM4"`); set `use_microcontroller = False` to disable
+- `video_input` — camera device index
+- `base_output_path` — where session data is saved (defaults to `~/Desktop/auditory_maze_experiments/maze_recordings`)
+- `binary_threshold` — pixel threshold for IR camera detection (default 160; tune to your lighting)
+- `detection_sensitivity` — mouse detected when binary pixel sum drops below this fraction of the raw baseline (default 0.5)
+- `grammar_test_block_minutes` — list of 9 durations (min) for the 9-block cycle; even indices are silent blocks, odd are active; set silent entries to `0` to skip them
+- `path_to_vocalisation_control` — path to the `.wav` file played on the vocalisation control arm
+
+The speaker frequency-response calibration CSV (`analysis/calibration/frequency_response_speaker.csv`) is loaded automatically — no path configuration needed.
 
 ---
 
@@ -176,12 +207,23 @@ aMAZEing-maze/
 │   ├── auditory/               # Auditory maze experiment
 │   │   ├── config.py           #   Experiment configuration dataclass
 │   │   ├── main.py             #   Main experiment loop
-│   │   └── modules/
-│   │       ├── audio.py        #   Sound generation & playback
-│   │       ├── experiments.py  #   Trial structure factory
-│   │       ├── vision.py       #   ROI tracking (OpenCV)
-│   │       ├── data_manager.py #   Session & visit logging
-│   │       └── hardware.py     #   Arduino/camera control
+│   │   ├── run_analysis.py     #   Standalone per-session analysis CLI
+│   │   ├── run_summary_analysis.py # Cross-session summary analysis CLI (--day / --all)
+│   │   ├── rois1.csv           #   ROI coordinates (auto-created on first run)
+│   │   ├── modules/
+│   │   │   ├── audio.py        #   Sound generation, playback & speaker compensation
+│   │   │   ├── experiments.py  #   Trial structure factory (all experiment modes)
+│   │   │   ├── vision.py       #   ROI tracking (OpenCV binary threshold + debounce)
+│   │   │   ├── data_manager.py #   Session setup, visit & maze-entry logging
+│   │   │   ├── hardware.py     #   Arduino TTL & camera control
+│   │   │   ├── analysis.py     #   Per-session figure generation (SessionAnalyzer)
+│   │   │   └── summary_analysis.py # Cross-session figure generation (SummaryAnalyzer)
+│   │   └── grammar_stimuli/    #   Grammar learning stimulus package
+│   │       ├── config.py       #     Tone inventory, transition matrices, arm plan
+│   │       ├── sequence_sampler.py # Markov sampler with complexity tiers
+│   │       ├── tone_generator.py   # Pure-tone melody synthesis
+│   │       ├── run.py          #     Training-day playback CLI
+│   │       └── QUICKSTART.md   #     Step-by-step grammar experiment guide
 │   └── simplermaze/            # Y-maze with servos
 │       ├── simplerCode.py      #   Main script
 │       └── supFun.py           #   Support functions
@@ -214,6 +256,82 @@ aMAZEing-maze/
 ├── requirements-dev.txt
 └── LICENSE                     # GPLv3
 ```
+
+---
+
+## Post-Session Analysis
+
+### Output path structure
+
+Sessions are saved under:
+
+```
+base_output_path / experiment_mode / [--day label] / time_<timestamp>_<mouseID> /
+```
+
+Examples:
+
+```
+maze_recordings/grammar/habituation/time_2026-05-23_10_00_00_mouse1/
+maze_recordings/grammar/day_1/time_2026-05-23_14_30_00_mouse1/
+maze_recordings/grammar/day_2/time_2026-05-24_10_00_00_mouse1/
+```
+
+### Per-session figures
+
+Figures are generated **automatically at the end of every session** and saved inside the session folder alongside the CSVs. To regenerate them for sessions already collected:
+
+```bash
+cd src/auditory
+
+# Single session
+python run_analysis.py "C:\path\to\session_folder"
+
+# Multiple sessions at once
+python run_analysis.py "C:\path\to\session1" "C:\path\to\session2"
+```
+
+| File | What it shows |
+|------|--------------|
+| `fig1_arm_totals.png` | Total time (min) and visit count per arm, coloured by stimulus type |
+| `fig2_ee_vs_sc.png` | EE vs SC arms grouped by predictability tier — time and visits |
+| `fig3_block_evolution.png` | Time per stimulus category across active blocks — checks whether preference shifts |
+| `fig4_visit_duration.png` | Boxplot of individual visit durations per stimulus type |
+| `fig5_maze_time.png` | Total time inside the maze per trial block |
+| `fig6_location_preference.png` | Heatmap of time per arm per block with stimulus labels — distinguishes location bias from stimulus preference |
+
+### Cross-session summary figures
+
+After running all mice for a day (or across multiple days), generate summary figures with `run_summary_analysis.py`. Saved into the folder you pass.
+
+```bash
+cd src/auditory
+
+# All mice on one day
+python run_summary_analysis.py --day "C:\...\maze_recordings\grammar\day_1"
+
+# All mice across all days collected so far
+python run_summary_analysis.py --all "C:\...\maze_recordings\grammar"
+```
+
+Silent-baseline sessions are automatically excluded — only active test-day sessions contribute.
+
+**EE vs SC preference:**
+
+| File | What it shows |
+|------|--------------|
+| `summary_A_ee_sc_per_mouse.png` | EE vs SC total time — one pair of bars per mouse, one panel per day |
+| `summary_B_preference_index.png` | EE preference index (−1 to +1) per mouse; positive = EE preference |
+| `summary_C_group_summary.png` | Group mean ± SEM time and visit count on EE vs SC arms per day |
+| `summary_D_cross_day_pi.png` | PI trajectory per mouse + group mean ± SEM across days *(multi-day only)* |
+
+**Predictive complexity (dominant / secondary / rare):**
+
+| File | What it shows |
+|------|--------------|
+| `summary_E_tier_breakdown_per_mouse.png` | Stacked bars per mouse: EE bar and SC bar each split by tier (dark → light = dominant → rare) |
+| `summary_F_group_tier_breakdown.png` | Group mean ± SEM for all 6 tier × environment combinations |
+| `summary_G_cross_day_tiers.png` | Per-tier preference across days — group mean ± SEM for each complexity level, EE and SC panels *(multi-day only)* |
 
 ---
 
