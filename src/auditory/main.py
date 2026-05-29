@@ -36,6 +36,9 @@ def _parse_cli():
                    help="RNG seed (reproducible melody draws). Omit for random.")
     p.add_argument("--draw-rois", action="store_true",
                    help="Force interactive re-drawing of ROIs even if rois1.csv exists.")
+    p.add_argument("--day", default=None,
+                   help="Day label used as a parent folder in the output path "
+                        "(e.g. habituation, day_1, day_2).")
     return p.parse_args()
 
 
@@ -55,6 +58,8 @@ def main():
         cfg.grammar_seed = args.seed
     if args.draw_rois:
         cfg.draw_rois = True
+    if args.day is not None:
+        cfg.experiment_day = args.day
 
     print(f"Session config: experiment_mode={cfg.experiment_mode!r}  "
           f"grammar_mode={cfg.grammar_mode!r}  "

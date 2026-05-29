@@ -14,7 +14,7 @@ from config import ExperimentConfig
 # Grammar stimuli: samplers live at auditory/grammar_stimuli/.
 from grammar_stimuli import config as gcfg
 from grammar_stimuli.sequence_sampler import MarkovSampler
-from grammar_stimuli.tone_generator import generate_melody
+from grammar_stimuli.tone_generator import generate_melody, generate_silence_gap
 
 #this will be the structure of the output of the trial generation. A dataframe containing all the trials information + the list of the sound sound_arrays
 TrialData = Tuple[pd.DataFrame, List[Any]]
@@ -37,20 +37,31 @@ class GrammarStimulus:
     environment_association: str    # "EE" / "SC" — which cage this grammar was paired with
     history: List[Dict[str, Any]] = field(default_factory=list)
 
-    def render(self, audio: Audio, roi: str = "", trial_id: int = 0) -> np.ndarray:
-        meta = self.sampler.sample_melody(length=gcfg.MELODY_LENGTH)
-        wave = generate_melody(meta.symbols, sample_rate=audio.fs,
-                               amplitude=gcfg.AMPLITUDE)
-        self.history.append({
-            "trial_ID": trial_id,
-            "ROI": roi,
-            "grammar": meta.grammar_name,
-            "tier": meta.tier,
-            "environment_association": self.environment_association,
-            "symbols": "".join(meta.symbols),
-            "mean_bits": meta.mean_bits,
-        })
-        return wave.astype(np.float32)
+    def render(self, audio: Audio, roi: str = "", trial_id: int = 0,
+               n_repeats: int = 20) -> np.ndarray:
+        """Generate n_repeats consecutive melody cycles (melody + inter-melody gap).
+
+        n_repeats=20 gives ~88 s of audio (20 × 4.4 s), which covers any
+        realistic arm visit without the mouse sitting in silence.
+        """
+        gap = generate_silence_gap(sample_rate=audio.fs)
+        chunks = []
+        for _ in range(n_repeats):
+            meta = self.sampler.sample_melody(length=gcfg.MELODY_LENGTH)
+            wave = generate_melody(meta.symbols, sample_rate=audio.fs,
+                                   amplitude=gcfg.AMPLITUDE)
+            chunks.append(wave)
+            chunks.append(gap)
+            self.history.append({
+                "trial_ID": trial_id,
+                "ROI": roi,
+                "grammar": meta.grammar_name,
+                "tier": meta.tier,
+                "environment_association": self.environment_association,
+                "symbols": "".join(meta.symbols),
+                "mean_bits": meta.mean_bits,
+            })
+        return np.concatenate(chunks).astype(np.float32)
 
 # ── helpers ──────────────────────────────────────────────────────────
 
