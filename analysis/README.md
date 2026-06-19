@@ -33,6 +33,93 @@ Once you've clicked the 24 landmarks on one frame (per rig setup),
 every subsequent video is processed without any thresholding, contour
 finding, or corner detection.
 
+## Quick start
+
+The full reference is below. If you just want to run this on a folder
+of videos, do these four things in order. Substitute your own paths
+for `<videos>` (your input folder) and `<out>` (where you want
+calibrations, cropped videos, and the summary CSV to land).
+
+**1. Install dependencies (one time).**
+
+```
+pip install opencv-python numpy pandas
+```
+
+**2. Calibrate once.** Pick a video that represents your rig setup
+well (clear maze, mouse not occluding obvious corners) and run:
+
+```
+python crop_and_align_maze.py --calibrate \
+    --input_dir  <videos> \
+    --output_dir <out>
+```
+
+A window opens on the median frame of that video. Left-click each of
+the 24 maze corners in clockwise order starting from the top-left
+arm (see the click-order table further down). Press `y` to confirm,
+`r` to restart, `ESC` to cancel. This writes `calibration.json` +
+`calibration_frame.png` into `<out>` and exits.
+
+**3. Run the batch.**
+
+```
+python crop_and_align_maze.py \
+    --input_dir  <videos> \
+    --output_dir <out>
+```
+
+The script walks every subfolder of `<videos>`, samples a median
+frame, finds the 24 landmarks, fits a homography, and writes a
+cropped video next to its source location inside `<out>`. Skipping
+already-cropped videos is on by default, so you can interrupt and
+resume safely.
+
+**4. Check the results.** Look at `<out>/alignment_summary.csv`. The
+`confidence` column will be `high` / `medium` / `low` / `failed` /
+`skipped`. The script also prints a count breakdown at the end:
+
+```
+Confidence summary: high=141, medium=26, low=0, failed=238, skipped=0 (total 405)
+```
+
+If you have failures:
+
+- **A whole cohort failed together** (e.g. an entire mouse folder).
+  This usually means those videos are from a different rig setup.
+  Calibrate a second rig from one of the failed videos and re-run
+  with `--calibration_dir`:
+
+  ```
+  python crop_and_align_maze.py --calibrate \
+      --calibrate_video  <a failed video> \
+      --output_dir       <out> \
+      --calibration_file <out>/calibration_rig2.json
+
+  python crop_and_align_maze.py \
+      --input_dir       <videos> \
+      --output_dir      <out> \
+      --calibration_dir <out>
+  ```
+
+  The script auto-picks the best calibration per video. Already-
+  cropped videos from the first pass are skipped.
+
+- **A single video failed** (lone mouse occlusion, weird frame, etc.).
+  Rescue it with `--manual_video`:
+
+  ```
+  python crop_and_align_maze.py \
+      --manual_video <path to bad video> \
+      --output_dir   <out>
+  ```
+
+  The clicks are saved next to the cropped output and future batch
+  runs use them automatically.
+
+Open `<out>/review/<mouse>/<session>/*_review.png` for any `medium` /
+`low` / `failed` video to see what the matcher did or didn't find.
+
 ## Workflow
 
 ```
