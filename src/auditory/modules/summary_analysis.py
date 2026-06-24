@@ -65,6 +65,7 @@ def _discover_sessions(root: str) -> List[Dict]:
 
         sessions.append({
             "path":      dirpath,
+            "day_path":  os.path.dirname(dirpath),
             "mouse_id":  mouse_id,
             "day_label": day_label,
             "trials_df": df,
@@ -174,6 +175,74 @@ class SummaryAnalyzer:
             print(f"  [summary] Saved {fname}")
 
         return self.root_path
+
+    def export_csvs(self) -> str:
+        """Write per-mouse metric CSVs.
+
+        Produces one ``summary_<day>.csv`` inside each day folder (one row per
+        mouse tested that day) and a comprehensive ``summary_all_sessions.csv``
+        at the root (one row per mouse per day). Returns the root path.
+
+        The habituation sessions are excluded — only the sound experiment days
+        (day_1, day_2, ...) are written.
+        """
+        # Sound experiment days only; habituation is not part of the analysis.
+        sessions = [s for s in self.sessions if s["day_label"] != "habituation"]
+        if not sessions:
+            print("  [summary] No sound-experiment sessions to export "
+                  "(habituation excluded).")
+            return self.root_path
+
+        # Make sure metrics have been computed (generate_report may not have run).
+        for s in sessions:
+            if "metrics" not in s:
+                s["metrics"] = _compute_metrics(s["trials_df"])
+
+        rows = [
+            {
+                "mouse_id":  s["mouse_id"],
+                "day_label": s["day_label"],
+                "day_path":  s["day_path"],
+                "session_path": s["path"],
+                **s["metrics"],
+            }
+            for s in sessions
+        ]
+        full = pd.DataFrame(rows)
+        full = full.sort_values(
+            ["day_label", "mouse_id"],
+            key=lambda col: col.map(_day_sort_key) if col.name == "day_label" else col,
+        ).reset_index(drop=True)
+
+        cols = self._ordered_columns(full)
+
+        # ── per-day CSV inside each day folder ──────────────────────────
+        for day_path, dd in full.groupby("day_path"):
+            day_label = dd["day_label"].iloc[0]
+            fname     = f"summary_{day_label}.csv"
+            out       = os.path.join(day_path, fname)
+            dd[[c for c in cols if c != "day_path"]].to_csv(out, index=False)
+            print(f"  [summary] Saved {os.path.relpath(out, self.root_path)}")
+
+        # ── comprehensive CSV at root ───────────────────────────────────
+        out_all = os.path.join(self.root_path, "summary_all_sessions.csv")
+        full[cols].to_csv(out_all, index=False)
+        print(f"  [summary] Saved summary_all_sessions.csv")
+
+        return self.root_path
+
+    @staticmethod
+    def _ordered_columns(df: pd.DataFrame) -> List[str]:
+        """Return df columns in a readable order: identity, totals, tiers, extras."""
+        identity = ["mouse_id", "day_label", "session_path", "day_path"]
+        totals   = ["EE_time", "SC_time", "EE_visits", "SC_visits", "PI"]
+        tiers    = []
+        for tier, env in TIER_ENV_ORDER:
+            tiers += [f"{tier}_{env}_time", f"{tier}_{env}_visits"]
+
+        preferred = [c for c in identity + totals + tiers if c in df.columns]
+        extras    = [c for c in df.columns if c not in preferred]
+        return preferred + extras
 
     # ══════════════════════════════════════════════════════════════════
     # EE vs SC figures

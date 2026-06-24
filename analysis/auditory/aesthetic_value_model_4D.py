@@ -74,6 +74,7 @@ Usage:
 """
 
 import os
+os.environ["MAZE_DATA_DIR"]= r""
 import itertools
 import warnings
 from copy import deepcopy
