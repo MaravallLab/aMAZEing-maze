@@ -42,7 +42,7 @@ class ExperimentConfig:
     pause_between_frames: bool = False
     show_binary_view: bool = True
     binary_threshold: int = 160        # applied to live frames before detection (tune to your lighting)
-    detection_sensitivity: float = 0.5  # mouse detected when binary sum drops below this fraction of raw baseline
+    detection_sensitivity: float = 0.6  # mouse detected when binary sum drops below this fraction of raw baseline
     debug_roi: str = ""            # set to a ROI name (e.g. "1") or "all" to print live pixel sums
 
     # Testing / timing

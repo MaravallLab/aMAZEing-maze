@@ -39,6 +39,9 @@ def _parse_cli():
     p.add_argument("--day", default=None,
                    help="Day label used as a parent folder in the output path "
                         "(e.g. habituation, day_1, day_2).")
+    p.add_argument("--no-record-video", action="store_true",
+                   help="Disable video file saving while keeping camera tracking active. "
+                        "Useful for habituation days to save disk space.")
     return p.parse_args()
 
 
@@ -60,6 +63,8 @@ def main():
         cfg.draw_rois = True
     if args.day is not None:
         cfg.experiment_day = args.day
+    if args.no_record_video:
+        cfg.record_video = False
 
     print(f"Session config: experiment_mode={cfg.experiment_mode!r}  "
           f"grammar_mode={cfg.grammar_mode!r}  "
@@ -187,8 +192,13 @@ def main():
         # Calculate timing
         # trial_idx is 1-based, list index is 0-based
         duration_mins = trial_lengths[trial_idx - 1]
+
+        # Skip blocks with 0 duration entirely (no frame captured, no data bleed)
+        if duration_mins == 0:
+            continue
+
         trial_end_time = time.time() + (duration_mins * 60)
-        
+
         print(f"\n STARTING TRIAL {trial_idx} (Duration: {duration_mins} min)")
         print(f"   Ends at: {time.ctime(trial_end_time)}")
         
