@@ -46,11 +46,12 @@ day-2 secondary. CLI: `run_validation.py`. 9/9 unit tests pass.
   design separated fluency from semantics in practice). VIFs ≈ 1.0–1.4. ΔV
   between-arm variance ≈ 3e-8 (≈ 0): within-arm learning has plateaued, so wV does
   little work; the real contrast is r (complexity) vs S (semantics).
-- **Recovery gate** (smoke counts, n_sim=40 — full counts pending): **PASSED**.
-  wS recovered accurately at 0/0.5/1.0/2.0 with tight CIs; wS=0 → CI covers 0 (no
-  false positive). Model confusion: bd-generated prefer-`full` 0.38, full-generated
-  1.00, **intrinsic-grammar-generated 0.00 with wS(full) = −0.09** (no spurious
-  positive). i.e. wS is estimable and not a relabelled intrinsic-grammar effect.
+- **Recovery gate** (full sims: 500 param-recovery, 50 confusion): **PASSED**.
+  wS recovered at 0/0.5/1.0/2.0 with tight CIs; **false-positive rate at wS=0 is
+  5.4%** (≈ nominal 5%). Model confusion: bd-generated prefer-`full` 0.20,
+  full-generated 1.00, **intrinsic-grammar-generated 0.00 with wS(full) = −0.07**
+  (no spurious positive). ⇒ wS is estimable and not a relabelled intrinsic-grammar
+  effect.
 - **Control arms** (informational, not gated): visited-arm mean dwell silent 14.3s
   > grammar 11.8s, vocalisation 16.8s — test-day avoidance of the grammar tones,
   vocalisation attractive (echoes the old experiment's D1 vocalisation anomaly).
@@ -58,32 +59,41 @@ day-2 secondary. CLI: `run_validation.py`. 9/9 unit tests pass.
   four 15-min blocks; slope **−0.11/block (p<.05)** = decay (extinction signature).
 
 ## Phase 2 — out-of-sample model comparison (day 1; 128 arm-blocks / 32 mice)
-PyMC NUTS proved impractical on this machine (no C compiler ⇒ pytensor runs in
-Python mode, pathologically slow). The spec prefers leave-one-mouse-out CV
-anyway, so Phase 2 is reported via the fast tested NumPy estimator:
-leave-one-mouse-out CV for model comparison + a cluster (over-mice) bootstrap for
-the wS interval. The exact PyMC `az.compare` LOO is wired and ready
-(`models.py` / `model_comparison.py`) for when a compiler is installed
-(`conda install -c conda-forge m2w64-toolchain`).
+The mingw compiler was installed, so the exact PyMC `az.compare` LOO ran
+(compiled NUTS, ~20–35 s/model); the frequentist leave-one-mouse-out CV agrees.
 
-- **Leave-one-mouse-out CV SSE (lower = better out-of-sample)**: intercept 11.063,
-  fluency 11.049, bd_baseline 11.054, **full 11.021**, **full_grammar 10.995**.
-  ⇒ **`full` beats `bd_baseline` out of sample**; `full_grammar` (adds the
-  grammar-identity nuisance) is marginally best — consistent with a *small*
-  intrinsic-grammar component sitting on top of the semantic one. Absolute
-  differences are small.
-- **wS**: point estimate 0.055; **cluster-bootstrap mean 0.054, 95% CI
-  [0.007, 0.100], P(wS>0) = 0.985** ⇒ reliably positive, EE>SC sign.
-- **wS leave-one-mouse-out stability**: range [0.048, 0.064], sign stable across
-  every dropped mouse ⇒ not driven by a few animals.
-- **Predicted arm pattern** (point weights): silent 0.159 > grammar-A 0.143 >
-  grammar-B 0.138 (silent highest, matching the observed sound-avoidance).
+- **LOO ranking** (elpd_loo, higher = better): `full` rank 0 (**903.99**, stacking
+  weight 0.61) > `fluency` (903.23) > `bd_baseline` (902.54) > `intercept`
+  (900.81). So **`full` ranks best and beats `bd_baseline`**, BUT Δelpd(full −
+  bd) ≈ 1.45 against dse ≈ 3.2 — the models are only **weakly separated out of
+  sample** (intercept-only even takes 0.35 stacking weight). The OOS gain from wS
+  is real in *direction* but small in *magnitude*.
+- **wS posterior**: mean **+0.078, 95% HDI [0.012, 0.140], P(wS>0) = 0.992** —
+  reliably positive, EE>SC sign. Leave-one-mouse-out wS 0.055, range
+  [0.048, 0.064], sign stable across all 32 drops ⇒ not driven by a few animals.
+- **MCMC caveat**: quick 2-chain / 750-draw run — rhat>1.01, low ESS, 32
+  divergences in one model. Directionally trustworthy; re-run with 4 chains /
+  higher `target_accept` / more draws before quoting as final.
 
-**Read**: the model-based layer agrees with the model-free result — a positive,
-mouse-stable semantic weight that improves out-of-sample fit over the B–D
-fluency baseline — but the absolute model-based gain is modest, so the
-**model-free EE−SC dwell effect remains the stronger headline**. The exact
-Bayesian LOO / HDI is a clean follow-up once a compiler is available.
+### Subtlety the (r,S) figure exposed (matters for interpretation)
+S is **not** uniformly EE-positive across tiers — its sign is set by the *overlap*
+between the two grammars' tier transitions:
+- **dominant**: A's dominant step (i→i+1) is only B's *secondary*, so a dominant
+  sequence is cleanly diagnostic ⇒ S strongly EE+ / SC−.
+- **secondary**: A's secondary step i→i+3 *is* B's *dominant* step, so a secondary
+  sequence looks like the other grammar ⇒ S **flips** (EE-secondary S<0).
+- **rare**: both grammars share identical rare transitions (i−1, i−2) ⇒
+  non-diagnostic ⇒ S ≈ 0.
+So the model predicts a clean semantic signal **only at the dominant tier** —
+exactly where the model-free EE−SC effect is significant (n.s. at
+secondary/rare). That convergence is itself supporting evidence; but it also
+means the single positive wS is carried by the dominant tier and partly
+*mis*-predicts secondary. A design talking point, not a bug.
+
+**Read**: model-free EE−SC + reliably-positive wS posterior + clean recovery all
+align; the LOO margin over baseline is modest. The **model-free EE−SC dwell
+effect remains the strongest single statement**, with the model-based layer
+corroborating direction, sign-reliability, and estimability.
 
 ## Caveats / open items
 - **Dominant-tier EE−SC is provisional** until the group split is confirmed fully

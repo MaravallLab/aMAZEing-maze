@@ -294,3 +294,36 @@ tests/                 reduction, latent-regressor, and recovery tests
 - **Behavioural validity only.** A positive `wS` says the brain is computing
   something S(t)-shaped. Neural/mechanistic validity (belief-state decoding, a
   dopaminergic signal tracking S) is the next tier and is *not* established here.
+
+---
+
+## 10. Figures — generating and interpreting them
+
+### How to generate
+
+```bash
+# easiest: add --figures to any run
+python analysis/auditory/model_validation/run_validation.py \
+    --results_dir "...\grammar" --out_dir "...\out" --day both --phase2 --figures
+
+# or generate from an already-finished out_dir (no re-analysis)
+python analysis/auditory/model_validation/figures.py  "C:\path\to\out_dir"
+```
+
+Figures read only `results.json` + `day1_arm_block_features.csv` from the out_dir
+and write 300-dpi PNGs back into it. Each figure is wrapped independently, so a
+missing input just skips that figure (figs 6–7 need a `--phase2` run; figs 5/8
+need recovery / `--day both`).
+
+### What each figure represents
+
+| File | Shows | How to read it |
+|---|---|---|
+| `fig1_ee_sc_by_tier_group.png` | EE vs SC mean dwell by tier, one panel per counterbalancing group | **The headline.** EE (blue) > SC (red) in *both* panels ⇒ semantic, not an intrinsic-grammar preference. The gradient (largest at *dominant*, fading by *rare*) is the predicted tier fingerprint. |
+| `fig2_per_mouse_pi.png` | Each mouse's EE−SC preference index, by group; group mean ± SEM | Most points above 0 in both groups ⇒ the effect is consistent across animals, not driven by a few. |
+| `fig3_six_cell_pattern.png` | Mean dwell for each (environment × tier) cell + vocalisation/silent reference arms | The raw behaviour the model must explain; shows where silence and vocalisation sit relative to the grammar arms. |
+| `fig4_latent_regressors_rS.png` | The six (group, env, tier) cells plotted in r vs S space | S separates EE (positive) from SC (negative); r separates the tiers; the two axes are ~orthogonal ⇒ fluency and semantics are separately identifiable. |
+| `fig5_recovery.png` | Recovered vs true wS with 95% CIs (identity line) + "prefer-full" rate per data generator | Points on the line and the wS=0 CI covering 0 ⇒ wS is estimable with no false positive; the confusion bars show the comparison isn't fooled by a baseline or an intrinsic-grammar generator. |
+| `fig6_model_comparison_wS.png` | LOO (elpd) per nested model + the wS posterior with a 0 line | `full` above `bd_baseline` and a wS posterior whose HDI excludes 0 ⇒ the semantic term earns its place out of sample. *(needs `--phase2`)* |
+| `fig7_posterior_predictive.png` | Model-predicted vs observed dwell pattern across arm types | Predicted bars matching observed ⇒ the model reproduces the preference pattern it is meant to explain. *(needs `--phase2`)* |
+| `fig8_block_timecourse.png` | Mean EE−SC PI across the four 15-min blocks, day 1 vs day 2 | A downward day-2 slope = the extinction signature; flat = a stable association. |

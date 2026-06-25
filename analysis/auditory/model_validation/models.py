@@ -84,11 +84,13 @@ def build_model(design: Design, model_name: str, *,
 
 
 def fit_model(design: Design, model_name: str, *, draws: int = 1000,
-              tune: int = 1000, chains: int = 4, cores: int = 1, seed: int = 0):
+              tune: int = 1000, chains: int = 4, cores: int = 1,
+              target_accept: float = 0.9, seed: int = 0):
     # cores=1 keeps sampling in-process (robust on Windows / no C compiler).
     pm, az = require_pymc()
     with build_model(design, model_name):
         idata = pm.sample(draws=draws, tune=tune, chains=chains, cores=cores,
+                          target_accept=target_accept,
                           random_seed=seed, progressbar=False,
                           idata_kwargs={"log_likelihood": True})
     return idata

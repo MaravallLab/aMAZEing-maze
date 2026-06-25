@@ -84,6 +84,10 @@ def main(argv=None) -> int:
     p.add_argument("--draws", type=int, default=500)
     p.add_argument("--tune", type=int, default=500)
     p.add_argument("--chains", type=int, default=2)
+    p.add_argument("--target-accept", type=float, default=0.9,
+                   help="NUTS target acceptance; raise toward 0.95-0.99 to clear divergences")
+    p.add_argument("--figures", action="store_true",
+                   help="generate PNG figures into out_dir after the run")
     args = p.parse_args(argv)
 
     cfg = cfgmod.validated_config()
@@ -147,7 +151,8 @@ def main(argv=None) -> int:
                   f"tune={args.tune}, chains={args.chains}) on "
                   f"{len(design.blocks)} blocks / {len(design.mice())} mice...")
             cmp = mc.compare_loo(design, draws=args.draws, tune=args.tune,
-                                 chains=args.chains, seed=args.seed)
+                                 chains=args.chains, target_accept=args.target_accept,
+                                 seed=args.seed)
             ppc = pp.posterior_predictive(cmp["idata"]["full"], design)
             ind = idf.loo_mouse_wS_stability(design)
             results["phase2"] = {
@@ -179,6 +184,10 @@ def main(argv=None) -> int:
     paths = rp.save_report(args.out_dir, results)
     print(f"[done] report -> {paths['report']}")
     print(f"[done] results -> {paths['results']}")
+
+    if args.figures:
+        from model_validation import figures as figs
+        figs.make_all(args.out_dir)
     return 0
 
 
