@@ -58,22 +58,69 @@ day-2 secondary. CLI: `run_validation.py`. 9/9 unit tests pass.
 - **Day-2 secondary** block time-course: PI 0.26 → 0.02 → −0.04 → −0.09 across the
   four 15-min blocks; slope **−0.11/block (p<.05)** = decay (extinction signature).
 
+## FINAL RESOLUTION — tier-restricted S + grain comparison (supersedes the per-block Phase 2 below)
+
+Two fixes landed after the per-block Phase 2: (1) **tier-restricted S emissions** —
+score transitions under the tier-restricted generative distributions, removing the
+i→i+3 secondary sign-flip (S is now correctly EE+/SC− at every tier); (2) **fit at
+the grain where the effect lives**, after diagnosing that the per-block Dirichlet
+fits BELOW the effect's grain (per-arm-block dwell noise swamps a real but small
+effect → all weights shrink → near-flat predictions).
+
+**Cohort:** 32 explorers. The 33rd (mouse 13672) is a non-explorer (0 s dwell, 0
+arms visited), excluded consistently — this resolves the long-standing 33-vs-32.
+
+**Grain comparison — wS by observation grain (tier-restricted S, wr,wV≥0):**
+
+| grain | wS mean | 95% HDI | P(wS>0) | within-grain LOO (full vs intercept) |
+|---|---|---|---|---|
+| A — per-block (anchor) | +0.049 | [−0.013, 0.108] | 0.94 | tied |
+| B — per-mouse cell-mean | +0.77 | [0.09, 1.70] | 1.00 | full wins (Δelpd≈17, wt 0.91) |
+| C — per-tier EE−SC PI | +0.15 | [0.10, 0.20] | 1.00 | full wins (Δelpd≈14.5, wt 1.0) |
+
+wS magnitudes are **not** comparable across grains (different links/parameterisation);
+what matters is the HDI **includes 0 at per-block, EXCLUDES 0 at both coarser grains**.
+At the cell grain `wr` is also reliably positive (+0.36, [0.03, 0.81]) — the fluency
+gradient recovers too. Leave-one-mouse-out wS (PI grain) is sign-stable across all 32
+drops (+0.16…+0.20). The cell-mean posterior-predictive now matches the observed
+7-arm pattern (EE-dominant peak, EE descending, SC low, silent high); SC-secondary is
+the one weak cell (residual i→i+3). Figures: `grainB_cellmean_ppc.png`,
+`grainC_tierPI_ppc.png`, `grain_weights_wS.png`; numbers in `grain_results.json`.
+
+**FRAMING (do not overclaim):** the cell/PI fit **re-expresses the model-free result
+as a process model** (4 weights → ~7 cell means / 3 PIs) — a **mechanistic
+illustration, NOT independent statistical validation**. The statistical weight remains
+the design-based model-free analysis. The per-block flatness was a **grain mismatch**,
+not absence of effect. **LOO is not compared across grains** (non-comparable
+observation models). A value-gates-fluency form is future work.
+
+**Bottom line:** robust model-free EE−SC effect; with correctly-signed (tier-restricted)
+S and fitting at the effect's grain, the generative model reproduces the full
+behavioural pattern and yields a reliably-positive semantic weight — a mechanistic
+illustration of the model-free result, with the per-block under-fit diagnosed as a
+grain mismatch.
+
+---
+
 ## Phase 2 — out-of-sample model comparison (day 1; 128 arm-blocks / 32 mice)
+*(This is the per-block GRAIN A anchor — kept for the comparison above; not the result.)*
 The mingw compiler was installed, so the exact PyMC `az.compare` LOO ran
 (compiled NUTS, ~20–35 s/model); the frequentist leave-one-mouse-out CV agrees.
 
-- **LOO ranking** (elpd_loo, higher = better): `full` rank 0 (**903.99**, stacking
-  weight 0.61) > `fluency` (903.23) > `bd_baseline` (902.54) > `intercept`
-  (900.81). So **`full` ranks best and beats `bd_baseline`**, BUT Δelpd(full −
-  bd) ≈ 1.45 against dse ≈ 3.2 — the models are only **weakly separated out of
-  sample** (intercept-only even takes 0.35 stacking weight). The OOS gain from wS
-  is real in *direction* but small in *magnitude*.
-- **wS posterior**: mean **+0.078, 95% HDI [0.012, 0.140], P(wS>0) = 0.992** —
-  reliably positive, EE>SC sign. Leave-one-mouse-out wS 0.055, range
-  [0.048, 0.064], sign stable across all 32 drops ⇒ not driven by a few animals.
-- **MCMC caveat**: quick 2-chain / 750-draw run — rhat>1.01, low ESS, 32
-  divergences in one model. Directionally trustworthy; re-run with 4 chains /
-  higher `target_accept` / more draws before quoting as final.
+- **LOO ranking** (elpd_loo, higher = better; B–D-constrained model wr,wV≥0):
+  `full` rank 0 (**901.87**, stacking weight 0.55) **≈ tied with `intercept`**
+  (901.19, weight 0.45) > `bd_baseline` (900.40) > `fluency` (899.85). So `full`
+  still ranks #1 but Δelpd ≈ 0.7 vs dse ≈ 4.3 — the predictors add **almost nothing
+  out of sample**. (Constraining wr,wV≥0 removed the earlier unconstrained run's
+  spurious negative-wr fluency edge, which is why fluency/bd fell below intercept.)
+- **wS posterior**: mean **+0.078, 95% HDI [0.014, 0.136], P(wS>0) = 0.994**,
+  R-hat 1.00, 0 divergences — reliably positive, EE>SC sign, stable across both the
+  constrained and unconstrained fits and across leave-one-mouse-out (range
+  [0.048, 0.064]) ⇒ a real S-aligned signal, not driven by a few animals.
+- **MCMC diagnostics (clean)**: after a non-centered random-intercept
+  reparameterization, the final fit (4 chains / 2000 tune / 1000 draws /
+  target_accept 0.95) has **R-hat = 1.00, ESS ≈ 4.2k–10k, 0 divergences**, and wS
+  reproduced (0.076–0.078) across three independent runs ⇒ quotable as final.
 
 ### Subtlety the (r,S) figure exposed (matters for interpretation)
 S is **not** uniformly EE-positive across tiers — its sign is set by the *overlap*
@@ -90,17 +137,39 @@ secondary/rare). That convergence is itself supporting evidence; but it also
 means the single positive wS is carried by the dominant tier and partly
 *mis*-predicts secondary. A design talking point, not a bug.
 
-**Read**: model-free EE−SC + reliably-positive wS posterior + clean recovery all
-align; the LOO margin over baseline is modest. The **model-free EE−SC dwell
-effect remains the strongest single statement**, with the model-based layer
-corroborating direction, sign-reliability, and estimability.
+**Read (final, B–D-constrained model)**: model-free EE−SC + reliably-positive wS
+posterior + clean recovery all align. The per-cell posterior-predictive (Fig 7 —
+NOTE: an earlier figure bug applied the fitted weights to *raw* features instead of
+the SD-standardized features used in the fit, shrinking the semantic effect ~20×
+and making the model look flat; fixed) shows the model **captures the dominant tier
+well**: predicted EE-dominant 0.149 vs SC-dominant 0.124 (observed 0.170 vs 0.121)
+— right sign, ~½ magnitude, and it reproduces the SC-dominant trough. It **flips at
+secondary** (predicts SC-sec > EE-sec; observed EE > SC) and is flat at rare.
+
+Per-tier decomposition of the semantic weight (Fig 9) makes it exact:
+
+| tier | wS fit on that tier alone |
+|---|---|
+| dominant | **+0.184** (strong) |
+| secondary | −0.025 (i→i+3 flip) |
+| rare | 0.000 (shared rare transitions) |
+| **joint (reported)** | **+0.055** |
+
+So the semantic effect is **strong and real at the clean dominant tier**; the
+reported joint wS is **diluted ~3×** because one weight must also fit secondary (S
+mis-aligned by the i→i+3 overlap) and rare (S uninformative). **Conclusion: a
+robust model-free EE−SC effect + a reliably-positive S-term that is strong at the
+dominant tier but diluted in the joint estimate by the grammar implementation** (we
+did NOT add an interaction or redefine S). The behaviour is the result; the B–D+S
+model captures it where S is well-defined, and the partiality is fully traced to
+the grammar's i→i+3 / shared-rare structure — not a mis-set weight.
 
 ## Caveats / open items
 - **Dominant-tier EE−SC is provisional** until the group split is confirmed fully
   clean — though the model-free result already shows it is consistent across both
   counterbalancing groups, which supports the semantic reading.
-- Recovery used **smoke-level sim counts (40)**; a full run (≈500–1000) is the next
-  step before quoting recovery as final.
+- Recovery was run at **full sim counts (500 param-recovery / 50 confusion)** and
+  passed (FP rate 5.4%); the Bayesian fit is final (clean diagnostics, constrained).
 - **Behavioural validity only.** A positive wS means the brain computes something
   S(t)-shaped; neural/mechanistic validity (belief-state decoding, a dopaminergic
   signal tracking S) is the next tier and is not established here.

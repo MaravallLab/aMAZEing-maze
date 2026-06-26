@@ -25,7 +25,7 @@ information (both grammars share a uniform tone marginal) and force S == 0.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -165,16 +165,44 @@ class ArmFeatures:
     n_transitions: int
 
 
+def tier_restricted_emissions(M: np.ndarray, tier: str, cfg: ValidatedConfig,
+                              eps: float = 1e-3) -> np.ndarray:
+    """Restrict a grammar matrix to its tier columns and renormalise (with eps
+    smoothing on out-of-tier transitions).
+
+    These emissions MATCH the generative process — the stimuli were drawn from
+    exactly these tier-restricted distributions. Scoring transitions this way
+    fixes the secondary-tier S sign-flip that the full matrix produces (a
+    secondary melody's i->i+3 / i->i+1 steps overlap the OTHER grammar's dominant
+    step, so under the full matrix a secondary melody looks like the wrong
+    grammar). Under tier-restricted emissions a melody is correctly most likely
+    under its own grammar's tier distribution.
+    """
+    prob = cfg.complexity_tiers[tier]
+    R = np.full_like(M, eps)
+    mask = np.abs(M - prob) < 1e-3
+    R[mask] = M[mask]
+    return R / R.sum(axis=1, keepdims=True)
+
+
 def arm_block_features(melodies: Sequence[str], group: int,
-                       cfg: ValidatedConfig) -> ArmFeatures:
+                       cfg: ValidatedConfig, tier: Optional[str] = None,
+                       emission: str = "full") -> ArmFeatures:
     """Summarise a grammar arm-block's delivered melodies into scalar features.
 
     `melodies` is the list of logged melody strings for this (mouse, block, ROI).
     Each melody is filtered independently from b0; per-melody means are averaged
     across melodies (the per-cell constant), and per-melody sums are accumulated
     (over-logging-sensitive).
+
+    `emission`: "full" scores transitions under the full learned grammar matrices;
+    "tier_restricted" scores them under the tier-restricted generative
+    distributions (requires `tier`) — this fixes the secondary-tier S sign-flip.
     """
     M_EE, M_SC = cfg.emission_matrices(group)
+    if emission == "tier_restricted" and tier in cfg.complexity_tiers:
+        M_EE = tier_restricted_emissions(M_EE, tier, cfg)
+        M_SC = tier_restricted_emissions(M_SC, tier, cfg)
     sym2idx = symbol_to_index(cfg)
 
     r_means: List[float] = []
@@ -212,7 +240,8 @@ def arm_block_features(melodies: Sequence[str], group: int,
 _CELL_POOL_CAP = 3000   # max melodies pooled per (group, environment, tier) cell
 
 
-def build_features(df, cfg: ValidatedConfig, pool_cap: int = _CELL_POOL_CAP):
+def build_features(df, cfg: ValidatedConfig, pool_cap: int = _CELL_POOL_CAP,
+                   emission: str = "full"):
     """Attach CANONICAL (group, environment, tier) cell features to every arm.
 
     The latent regressors are properties of the *stimulus*: within a
@@ -244,7 +273,9 @@ def build_features(df, cfg: ValidatedConfig, pool_cap: int = _CELL_POOL_CAP):
         if len(pooled) > pool_cap:                # unbiased deterministic subsample
             idx = np.linspace(0, len(pooled) - 1, pool_cap).astype(int)
             pooled = [pooled[i] for i in idx]
-        cell_feat[tuple(key)] = arm_block_features(pooled, int(grp), cfg)
+        tier = key[2]
+        cell_feat[tuple(key)] = arm_block_features(pooled, int(grp), cfg,
+                                                   tier=tier, emission=emission)
 
     # 2. assign cell features to each row
     cols = ["r_mean", "S_mean", "dV_mean", "n_melodies_logged", "n_cell_melodies"]

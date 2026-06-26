@@ -75,6 +75,10 @@ def main(argv=None) -> int:
     p.add_argument("--force", action="store_true",
                    help="continue past a failed sanity gate")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--emission", choices=["full", "tier_restricted"], default="full",
+                   help="HMM emission model for S: full grammar matrix, or the "
+                        "tier-restricted generative distributions (fixes the "
+                        "secondary-tier S sign-flip)")
     p.add_argument("--recovery-sims", type=int, default=200)
     p.add_argument("--confusion-sims", type=int, default=50)
     p.add_argument("--skip-recovery", action="store_true",
@@ -121,7 +125,7 @@ def main(argv=None) -> int:
     results["design"] = da.design_analysis(day1)
 
     # ---- features + collinearity ----
-    feats = lr.build_features(day1, cfg)
+    feats = lr.build_features(day1, cfg, emission=args.emission)
     results["collinearity"] = lr.feature_diagnostics(feats)
     # persist features (drop the list-valued melodies column for CSV)
     os.makedirs(args.out_dir, exist_ok=True)

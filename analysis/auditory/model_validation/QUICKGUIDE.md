@@ -173,19 +173,27 @@ python -m pip install --only-binary=:all: "pymc>=5.15,<5.20" "arviz>=0.18,<0.20"
 
 Then:
 
-```bash
-# Windows: force single-threaded BLAS or pytensor's Python-mode sampler thrashes.
+PyTensor needs a C compiler or NUTS crawls in Python mode. On this machine it was
+installed with `conda install -c conda-forge m2w64-toolchain`; you must then put
+the mingw bin on PATH **before** launching (and single-thread BLAS):
+
+```powershell
+# Windows reproducibility preamble for any --phase2 run:
+$env:PATH = "C:\Users\labuser\anaconda3\Library\mingw-w64\bin;C:\Users\labuser\anaconda3\Library\bin;" + $env:PATH
 $env:OMP_NUM_THREADS=1; $env:OPENBLAS_NUM_THREADS=1; $env:MKL_NUM_THREADS=1
 
-python analysis/auditory/model_validation/run_validation.py \
-    --results_dir "...\grammar" --out_dir "...\out" \
-    --day primary --skip-recovery --phase2 \
-    --draws 500 --tune 500 --chains 2
+# recommended settings (clean diagnostics): 4 chains, non-centered model is built in
+python analysis/auditory/model_validation/run_validation.py `
+    --results_dir "...\grammar" --out_dir "...\out" `
+    --day primary --skip-recovery --phase2 `
+    --draws 1000 --tune 2000 --chains 4 --target-accept 0.95 --figures
 ```
 
 `--skip-recovery` skips the (slow) Phase-1 recovery sims when you only want the
-Bayesian fit. If you have a working C compiler for pytensor (`conda install -c
-conda-forge m2w64-toolchain`), NUTS runs in seconds instead of minutes.
+Bayesian fit. With the compiler on PATH each model compiles + samples in ~1–2 min;
+the random intercept is non-centered, so the final fit comes out with R-hat≈1.00,
+ESS in the thousands, and 0 divergences. Raise `--target-accept` toward 0.99 if
+any divergences reappear.
 
 ### Run the tests
 
@@ -327,3 +335,40 @@ need recovery / `--day both`).
 | `fig6_model_comparison_wS.png` | LOO (elpd) per nested model + the wS posterior with a 0 line | `full` above `bd_baseline` and a wS posterior whose HDI excludes 0 ⇒ the semantic term earns its place out of sample. *(needs `--phase2`)* |
 | `fig7_posterior_predictive.png` | Model-predicted vs observed dwell pattern across arm types | Predicted bars matching observed ⇒ the model reproduces the preference pattern it is meant to explain. *(needs `--phase2`)* |
 | `fig8_block_timecourse.png` | Mean EE−SC PI across the four 15-min blocks, day 1 vs day 2 | A downward day-2 slope = the extinction signature; flat = a stable association. |
+| `fig9_wS_by_tier.png` | The semantic weight wS fit on each tier *alone* vs the joint estimate | Diagnostic of the per-tier S behaviour (under full-matrix S it flips at secondary via i→i+3; under tier-restricted S the sign is correct at every tier). |
+
+---
+
+## 11. Emission model + the grain comparison (the resolution)
+
+Two findings shaped the final analysis:
+
+**Use tier-restricted S.** The `--emission tier_restricted` mode scores tone
+transitions under the tier-restricted distributions the stimuli were actually drawn
+from. This removes the `i→i+3` secondary-tier sign-flip that the full grammar matrix
+produces (under which an SC-secondary melody looks EE-like). **Recommended for this
+grammar.** `--emission full` (the literal learned-matrix observer) stays available but
+is behaviorally wrong at the secondary tier.
+
+**Fit at the grain where the effect lives.** The per-arm-block Dirichlet model fits
+*below* the grain of the EE−SC effect, so per-block dwell noise swamps a real but small
+effect and the weights shrink (flat predictions). `grain_comparison.py` fits the SAME
+model at three grains and shows the recovery:
+
+```bash
+# needs the compiler preamble from §5 (PyMC)
+python analysis/auditory/model_validation/grain_comparison.py  "...\grammar"  "...\out"
+```
+
+Outputs into `out`: `grain_results.json` + three figures —
+
+| File | Shows |
+|---|---|
+| `grain_weights_wS.png` | wS (95% HDI) at per-block / cell-mean / PI grains: includes 0 at per-block, **excludes 0** at both coarser grains — the effect recovers as aggregation passes per-block noise. |
+| `grainB_cellmean_ppc.png` | Per-mouse cell-mean predicted vs observed across all 7 arms — the model reproduces the EE-dominant peak, EE descending gradient, low SC, high silent. |
+| `grainC_tierPI_ppc.png` | Predicted vs observed EE−SC preference index per tier (× group) — positive at dominant/secondary, ~0 at rare. |
+
+**Read the grain result as a mechanistic illustration**, not independent validation:
+the cell/PI fit re-expresses the design-based model-free result in process-model form.
+LOO is **not** comparable across grains (different observation models). Cohort = 32
+explorers (mouse 13672 excluded — non-explorer, 0 dwell).

@@ -10,8 +10,9 @@ intercept, so LOO is comparable across them:
   4. full          — w0, wr, wV, wS
   (+ full_grammar  — adds the intrinsic-grammar nuisance wg; see recovery.py)
 
-Priors are weakly-informative; the wS prior is centred at 0 (the null) so a
-positive posterior is evidence, not assumption.
+Priors are weakly-informative; wr and wV are half-normal (the Brielmann-Dayan
+non-negativity constraint on fluency and learning), and the wS prior is centred at
+0 (the null) so a positive posterior is evidence, not assumption.
 
 Requires `pymc` and `arviz` (not installed in the Phase-1 environment). Import is
 deferred so the rest of the package runs without them.
@@ -67,12 +68,18 @@ def build_model(design: Design, model_name: str, *,
 
     with pm.Model() as model:
         w0 = pm.Normal("w0", 0.0, 2.0) if "w0" in params else 0.0
-        wr = pm.Normal("wr", 0.0, 1.0) if "wr" in params else 0.0
-        wV = pm.Normal("wV", 0.0, 1.0) if "wV" in params else 0.0
+        # Brielmann-Dayan sign constraints: fluency r and learning ΔV contribute
+        # NON-NEGATIVELY to value (half-normal priors). wS stays null-centred, so
+        # a positive wS posterior is evidence, not an assumption.
+        wr = pm.HalfNormal("wr", 1.0) if "wr" in params else 0.0
+        wV = pm.HalfNormal("wV", 1.0) if "wV" in params else 0.0
         wS = pm.Normal("wS", 0.0, 1.0) if "wS" in params else 0.0   # null-centred
         wg = pm.Normal("wg", 0.0, 1.0) if "wg" in params else 0.0
         sd_mouse = pm.HalfNormal("sd_mouse", 1.0)
-        u = pm.Normal("u_mouse", 0.0, sd_mouse, shape=len(mice))
+        # non-centered random intercept (avoids the hierarchical funnel that
+        # otherwise produces divergences + low ESS when sd_mouse is small)
+        u_raw = pm.Normal("u_raw", 0.0, 1.0, shape=len(mice))
+        u = pm.Deterministic("u_mouse", u_raw * sd_mouse)
         kappa = pm.Gamma("kappa", mu=kappa_prior, sigma=kappa_prior)
 
         A = (w0 + wr * R + wV * DV + wS * S + wg * G) + u[m_idx][:, None]

@@ -30,10 +30,25 @@ def compare_loo(design: Design, model_names: Sequence[str] = _DEFAULT, **fit_kw)
     table = az.compare(idatas, ic="loo")
     summary = {}
     if "full" in idatas:
-        post = idatas["full"].posterior
+        full_id = idatas["full"]
+        post = full_id.posterior
         if "wS" in post:
             wS = post["wS"].values.reshape(-1)
             summary["wS_mean"] = float(wS.mean())
             summary["wS_hdi95"] = [float(x) for x in az.hdi(wS, hdi_prob=0.95)]
             summary["wS_p_positive"] = float((wS > 0).mean())
+        # convergence diagnostics over the weights (the inference targets)
+        try:
+            ss = az.summary(full_id, var_names=["w0", "wr", "wV", "wS", "sd_mouse", "kappa"])
+            if "wS" in ss.index:
+                summary["wS_rhat"] = float(ss.loc["wS", "r_hat"])
+                summary["wS_ess_bulk"] = float(ss.loc["wS", "ess_bulk"])
+            summary["max_rhat_weights"] = float(ss["r_hat"].max())
+            summary["min_ess_bulk_weights"] = float(ss["ess_bulk"].min())
+        except Exception as e:  # pragma: no cover
+            summary["diag_error"] = str(e)
+        try:
+            summary["n_divergences_full"] = int(full_id.sample_stats["diverging"].values.sum())
+        except Exception:
+            pass
     return {"compare_table": table, "wS_summary": summary, "idata": idatas}

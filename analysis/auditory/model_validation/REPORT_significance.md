@@ -167,13 +167,30 @@ uninterpretable.
 **Honest reading:** the strongest single statement is the model-free EE−SC effect.
 The model-based layer corroborates it — recognition weight reliably positive,
 mouse-stable, and improves fit in the right direction — but it does not, on its
-own, decisively beat the simpler model out of sample. (The MCMC here was a quick
-2-chain run with convergence warnings; a longer run is the clean follow-up.)
+own, decisively beat the simpler model out of sample. (The final fit used 4
+chains with a non-centered reparameterization: R-hat = 1.00, ESS > 4,000, 0
+divergences, and wₛ reproduced across three independent runs — so these numbers
+are solid, the modest out-of-sample margin is a real finding, not under-sampling.)
 
-### 7. Can the model reproduce the behaviour? (Fig 7)
-Predicted vs observed dwell pattern across arm types. The model reproduces the
-broad ordering; this is a reality check that the fitted weights actually generate
-the pattern they were meant to explain, rather than just fitting a number.
+### 7. Can the model reproduce the behaviour? (Fig 7 + Fig 9)
+The most informative pair — and one where an early figure bug had to be fixed (the
+predicted dwell must be computed with the SAME SD-standardized features the model
+was fit on; applying the weights to raw features shrank the semantic effect ~20×
+and made the model look flat). Corrected:
+- At the **dominant** tier the model fits well: predicted EE-dominant 0.149 vs
+  SC-dominant 0.124 (observed 0.170 vs 0.121) — right sign, ~½ the magnitude, and
+  it reproduces the SC-dominant trough.
+- At the **secondary** tier it **flips the wrong way** (predicts SC > EE; observed
+  EE > SC), and at **rare** it is flat.
+
+**Fig 9** makes the cause exact by fitting the semantic weight on each tier alone:
+**+0.18 at dominant** (strong), **−0.03 at secondary** (the i→i+3 flip), **0 at
+rare** — so the joint estimate (+0.055) is a ~3× *dilution* of a genuinely strong
+dominant-tier effect, forced by using one weight for all three tiers when S is only
+clean at one. The model **does** capture the behaviour where S is well-defined
+(dominant); its partiality is fully traced to the grammar implementation, not to a
+mis-set weight or a failure of the idea. We deliberately did **not** add an
+interaction term or redefine S.
 
 ### 8. Day 2 — is the association fading? (Fig 8)
 Within each test day, preference is tracked across the four 15-min blocks. On
@@ -185,6 +202,36 @@ deliberately *not* pooled with day 1.
 
 ---
 
+### 9. Why the model looked flat at first — and the fix (`grainB`/`grainC`/`grain_weights`)
+
+Two things were wrong, and both are now fixed:
+
+1. **S was sign-flipped at the secondary tier** (the `i→i+3` grammar overlap). Scoring
+   tones under the *tier-restricted* distributions the animals actually heard fixes it —
+   S now reads "this is my EE grammar" (+) vs "the other grammar" (−) at every tier.
+2. **We were fitting at too fine a grain.** The model was fit to each individual
+   arm-visit's dwell, where visit-to-visit and mouse-to-mouse noise is large, so a real
+   but modest preference is invisible and every weight shrinks toward zero (the flat
+   predictions). Re-fitting the **same** model to each mouse's *average* dwell per arm,
+   and to the EE−SC index per tier — the grain at which the effect lives — recovers it:
+
+   | grain fit at | semantic weight wS | reliably > 0? |
+   |---|---|---|
+   | per arm-visit (per-block) | +0.05, 95% CI [−0.01, 0.11] | no (CI crosses 0) |
+   | per-mouse cell-mean | +0.77, CI [0.09, 1.70] | **yes** |
+   | per-tier EE−SC index | +0.15, CI [0.10, 0.20] | **yes** (and sign-stable dropping any mouse) |
+
+   At the cell grain the fluency weight is also reliably positive, and the model now
+   reproduces the full **7-arm pattern** (EE-dominant peak, EE descending, low SC side,
+   high silent arm). The secondary tier remains the least-perfect cell (residual `i→i+3`).
+
+**How to read this:** it is a **mechanistic illustration, not a second independent
+result.** The model is re-describing, in process-model form, what the design-based
+analysis already established — "a system computing fluency + semantic recognition
+reproduces the behaviour." The statistical evidence is the model-free effect; the
+per-visit flatness was a **grain mismatch**, not absence of the effect. (LOO is not
+compared across grains — different observation models aren't on a common scale.)
+
 ## Bottom line
 
 - **You can say:** mice approach the grammar tied to their enriched environment;
@@ -193,19 +240,31 @@ deliberately *not* pooled with day 1.
   grammar, carried by most animals, and a computational recognition signal S(t)
   reconstructed from the stimuli carries a reliably positive weight that the
   method is demonstrably able to detect (and demonstrably does not fabricate).
-- **You should hedge:** the out-of-sample advantage of the recognition model over
-  a fluency-only baseline is modest on day 1; the dominant-tier result is the
-  cleanest and the secondary/rare tiers are weak (and the model predicts they
-  should be). Day 2 suggests the association extinguishes.
+- **You should hedge:** the *computational model* is a **mechanistic illustration,
+  not independent validation** — it re-expresses the model-free result as a process
+  model. With correctly-signed (tier-restricted) S and fit at the grain where the
+  effect lives (per-mouse cell-mean / per-tier PI; see §9), it reproduces the full
+  7-arm pattern and the semantic weight is reliably positive (95% interval excludes
+  0, sign-stable across mice). At the per-visit grain it looked flat purely because
+  the effect is small relative to visit-to-visit dwell noise — a diagnosed **grain
+  mismatch**, not absence of effect. Lead with the model-free effect as the
+  statistical evidence. The secondary tier stays the weakest cell (residual i→i+3).
+  Day 2 suggests the association extinguishes.
 - **You cannot yet say:** anything about *mechanism*. This is **behavioural**
   evidence that the brain computes something recognition-shaped. Showing that a
   neural signal (e.g. a belief-state representation, or dopamine tracking S(t))
   actually carries it is the next tier of work and is not established here.
 
 ## Clean next steps
-1. Re-run the Bayesian fit with 4 chains / more draws / higher `target_accept` to
-   firm up the LOO and the wS interval.
-2. Reinstate the light-artifact animal once its tracking is cleaned (one-line
-   change) and re-run.
-3. Treat the dominant-tier result as primary; report secondary/rare as the
-   model-predicted attenuation, not as failures.
+1. ✓ **Done** — fixed S (tier-restricted emissions, no secondary sign-flip) and the
+   grain mismatch (fit at per-mouse cell-mean and per-tier PI). The semantic weight is
+   reliably positive at those grains and the model reproduces the full 7-arm pattern
+   (§9); clean MCMC diagnostics (R-hat 1.00, 0 divergences); cohort resolved to 32
+   explorers. Present the generative model as a mechanistic illustration, model-free
+   as the statistical evidence.
+2. Reinstate the light-artifact animal (13533) once its tracking is cleaned (one-line
+   change in `EXCLUDED_ANIMALS`) and re-run.
+3. (Optional model structure) a value-gates-fluency form (rather than additive) is the
+   real structural improvement — post-poster work, not attempted here.
+4. (Optional, mechanistic) the natural next tier: test whether a neural signal —
+   a belief-state representation or a dopaminergic signal — tracks S(t).

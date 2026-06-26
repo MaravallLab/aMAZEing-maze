@@ -68,8 +68,11 @@ def build_design(feat_df) -> Design:
     # arm's structural 0 stays 0 (silent -> A = w0).
     scales = {}
     for c in ("r_mean", "dV_mean", "S_mean"):
-        sd = float(gram[c].std(ddof=1)) or 1.0
-        scales[c] = sd
+        sd = float(gram[c].std(ddof=1))
+        # guard near-zero variance (e.g. a single-tier subset where r is
+        # constant): a tiny SD would blow up feature/scale. Leave such a
+        # feature unscaled rather than dividing by ~0.
+        scales[c] = sd if sd > 1e-8 else 1.0
 
     blocks: List[Block] = []
     for (mouse, blk), sub in use.groupby(["mouse", "block"]):

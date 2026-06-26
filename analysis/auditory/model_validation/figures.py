@@ -224,33 +224,61 @@ def fig_model_comparison(results, out_dir, written):
 # Figure 7 — posterior-predictive arm pattern vs observed
 # ---------------------------------------------------------------------------
 def fig_posterior_predictive(results, feats, out_dir, written):
+    """Per-(environment x tier) posterior-predictive check.
+
+    Both predicted and observed are the SAME quantity — the fraction of a block's
+    dwell on ONE arm — so the bars are directly comparable (the earlier version
+    compared a per-arm mean against a per-category sum, which was apples-to-
+    oranges). Predicted = softmax of the fitted value over the block's arms
+    (the per-mouse intercept and w0 cancel inside the softmax, so only wr/wV/wS
+    matter). Observed = actual time fraction. Vocalisation is held out of the fit,
+    so it is excluded here to match the model's arm set.
+    """
     p2 = results.get("phase2", {})
-    pred = (p2.get("posterior_predictive") or {}).get("predicted_pattern")
-    if not pred:
-        print("  (skip fig7: no posterior predictive)"); return
-    # observed dwell shares by grammar/silent, per block, averaged
-    g = feats.copy()
-    key = {"A": "grammarA", "B": "grammarB"}
-    g["cat"] = g.apply(lambda r: key.get(r["grammar"], "silent")
-                       if r["arm_type"] in ("grammar", "silent") else None, axis=1)
-    g = g.dropna(subset=["cat"])
-    obs_share = {}
-    for (mouse, blk), sub in g.groupby(["mouse", "block"]):
+    w = (p2.get("posterior_predictive") or {}).get("weights_posterior_mean")
+    if not w or feats.empty:
+        print("  (skip fig7: no posterior-predictive weights)"); return
+    wr, wV, wS = w.get("wr", 0.0), w.get("wV", 0.0), w.get("wS", 0.0)
+
+    use = feats[feats["arm_type"].isin(["grammar", "silent"])].copy()
+    # CRITICAL: the weights were fit on features standardized by their SD over
+    # grammar arms (recovery.build_design). Apply the SAME scaling here, or the
+    # effect (esp. S, whose SD ~ 0.04) is shrunk ~20x and the model looks flat.
+    gram = use[use["arm_type"] == "grammar"]
+    sd = {c: (gram[c].std(ddof=1) or 1.0) for c in ("r_mean", "dV_mean", "S_mean")}
+    use["a"] = (wr * np.nan_to_num(use["r_mean"]) / sd["r_mean"]
+                + wV * np.nan_to_num(use["dV_mean"]) / sd["dV_mean"]
+                + wS * np.nan_to_num(use["S_mean"]) / sd["S_mean"])
+    pred, obs = {}, {}
+    for _, sub in use.groupby(["mouse", "block"]):
         tot = sub["time_spent_s"].sum()
-        if tot <= 0:
+        if tot <= 0 or len(sub) < 2:
             continue
-        for cat, s2 in sub.groupby("cat"):
-            obs_share.setdefault(cat, []).append(s2["time_spent_s"].sum() / tot)
-    cats = [c for c in ("grammarA", "grammarB", "silent") if c in pred]
-    fig, ax = plt.subplots(figsize=(6.5, 4.2))
-    x = np.arange(len(cats)); w = 0.38
-    ax.bar(x - w / 2, [pred[c] for c in cats], w, label="predicted",
-           color="#1565C0", edgecolor="white")
-    ax.bar(x + w / 2, [np.mean(obs_share.get(c, [0])) for c in cats], w,
-           label="observed", color="#F9A825", edgecolor="white")
-    ax.set_xticks(x); ax.set_xticklabels(cats)
-    ax.set_ylabel("dwell fraction within block")
-    ax.set_title("Posterior-predictive vs observed arm pattern", fontweight="bold")
+        a = sub["a"].values
+        ex = np.exp(a - a.max()); frac = ex / ex.sum()
+        of = sub["time_spent_s"].values / tot
+        for i, (_, row) in enumerate(sub.iterrows()):
+            cell = "silent" if row["arm_type"] == "silent" else f'{row["environment"]}-{row["tier"]}'
+            pred.setdefault(cell, []).append(float(frac[i]))
+            obs.setdefault(cell, []).append(float(of[i]))
+
+    order = ["EE-dominant", "EE-secondary", "EE-rare",
+             "SC-dominant", "SC-secondary", "SC-rare", "silent"]
+    cells = [c for c in order if c in pred]
+    pv = [np.mean(pred[c]) for c in cells]
+    ov = [np.mean(obs[c]) for c in cells]
+    osem = [_sem(obs[c]) for c in cells]
+
+    fig, ax = plt.subplots(figsize=(9.5, 4.6), constrained_layout=True)
+    x = np.arange(len(cells)); wbar = 0.4
+    ax.bar(x - wbar / 2, pv, wbar, label="model predicted", color="#1565C0", edgecolor="white")
+    ax.bar(x + wbar / 2, ov, wbar, yerr=osem, capsize=3, label="observed",
+           color="#F9A825", edgecolor="white")
+    ax.set_xticks(x); ax.set_xticklabels(cells, rotation=20, ha="right", fontsize=9)
+    ax.set_ylabel("dwell fraction within block (per arm)")
+    ax.set_title("Posterior-predictive vs observed, per (environment × tier) cell\n"
+                 "(per-block grain — underpowered; see grain_comparison for cell-mean / PI fit)",
+                 fontweight="bold")
     ax.legend()
     _save(fig, out_dir, "fig7_posterior_predictive.png", written)
 
@@ -281,6 +309,51 @@ def fig_block_timecourse(results, out_dir, written):
     _save(fig, out_dir, "fig8_block_timecourse.png", written)
 
 
+def fig_wS_by_tier(feats, out_dir, written):
+    """Semantic weight estimated on each tier alone vs the joint estimate.
+
+    Shows directly why the joint wS is modest: it is strong at the dominant tier
+    (where S is well-defined), flipped at secondary (i→i+3 overlap), and null at
+    rare (shared rare transitions), so the single joint weight is a dilution.
+    """
+    if feats.empty:
+        print("  (skip fig9: no features)"); return
+    try:
+        import os as _os, sys as _sys
+        _aud = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if _aud not in _sys.path:
+            _sys.path.insert(0, _aud)
+        from model_validation import recovery as rec
+    except Exception as e:  # pragma: no cover
+        print(f"  (skip fig9: recovery import failed: {e})"); return
+
+    def wS_for(df):
+        d = rec.build_design(df)
+        return rec.fit(d.blocks, "full")["wS"] if len(d.blocks) >= 2 else np.nan
+
+    sub = lambda t: feats[((feats["arm_type"] == "grammar") & (feats["tier"] == t))
+                          | (feats["arm_type"] == "silent")]
+    tiers = ["dominant", "secondary", "rare"]
+    vals = [wS_for(sub(t)) for t in tiers]
+    joint = wS_for(feats)
+
+    fig, ax = plt.subplots(figsize=(6.8, 4.6), constrained_layout=True)
+    colors = ["#2E7D32" if (v or 0) > 0 else "#B71C1C" for v in vals]
+    ax.bar(range(len(tiers)), vals, color=colors, edgecolor="white")
+    ax.axhline(0, color="grey", lw=0.8)
+    ax.axhline(joint, ls="--", color="#1565C0", lw=2,
+               label=f"joint wS = {joint:+.3f}")
+    for i, v in enumerate(vals):
+        ax.text(i, v + (0.005 if v >= 0 else -0.012), f"{v:+.3f}", ha="center", fontsize=9)
+    ax.set_xticks(range(len(tiers))); ax.set_xticklabels(tiers)
+    ax.set_ylabel("semantic weight wS (fit on that tier alone)")
+    ax.set_title("Semantic weight is strong at dominant, flipped at secondary "
+                 "(i→i+3), null at rare\n→ the joint estimate is a ~3× dilution, "
+                 "traced to the grammar implementation", fontweight="bold", fontsize=10)
+    ax.legend()
+    _save(fig, out_dir, "fig9_wS_by_tier.png", written)
+
+
 def make_all(out_dir: str) -> List[str]:
     """Generate every figure from a finished run's out_dir."""
     with open(os.path.join(out_dir, "results.json"), encoding="utf-8") as f:
@@ -298,6 +371,7 @@ def make_all(out_dir: str) -> List[str]:
         lambda: fig_model_comparison(results, out_dir, written),
         lambda: fig_posterior_predictive(results, feats, out_dir, written),
         lambda: fig_block_timecourse(results, out_dir, written),
+        lambda: fig_wS_by_tier(feats, out_dir, written),
     ):
         try:
             fn()
