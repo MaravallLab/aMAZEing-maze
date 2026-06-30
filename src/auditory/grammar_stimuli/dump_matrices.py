@@ -48,7 +48,10 @@ def _dump_matrix(name: str, out: TextIO) -> None:
     out.write(f"{'=' * 78}\n\n")
 
     # Column header: tone symbols + frequencies
-    out.write(f"{'from\\to':>10}")
+    # NB: keep the backslash out of the f-string expression itself -- a
+    # backslash inside ``{...}`` is a SyntaxError before Python 3.12.
+    header_label = "from\\to"
+    out.write(f"{header_label:>10}")
     for col_symbol in cfg.TONE_SYMBOLS:
         out.write(f"{col_symbol:>11}")
     out.write("\n")
