@@ -51,7 +51,7 @@ The system supports two main experimental paradigms:
 | Paradigm | Description |
 |---|---|
 | **Auditory Maze** | Multi-arm maze with auditory stimuli (pure tones, musical intervals, temporal envelope modulation, tone sequences, vocalisations). Real-time ROI tracking triggers sound playback when the mouse enters specific arms. |
-| **SimplerMaze** | Y-maze with servo-controlled moveable walls for reward-based navigation studies. |
+| **SimplerMaze** | 2-level binary decision tree with servo-controlled moveable walls for reward-based navigation studies. |
 
 ### Key Features
 
@@ -77,7 +77,7 @@ The system supports two main experimental paradigms:
   - USB camera (any OpenCV-compatible webcam)
   - Audio interface capable of 192 kHz output
   - Arduino Uno/Nano (for TTL sync)
-  - Raspberry Pi Pico with PCA9685 (for servo control)
+  - Adafruit PCA9685 (for servo control)
 
 ---
 
@@ -157,14 +157,14 @@ Set `experiment_mode` in `config.py` to one of:
 | `sequences` | Tone-pattern sequences (ABAB, AoAo, etc.) |
 | `vocalisation` | Each ROI plays a different vocalisation recording |
 
-### Running the SimplerMaze
+### Running the Tactile paradigm (SimplerMaze)
 
 ```bash
 cd src/simplermaze
 python simplerCode.py
 ```
 
-This runs the Y-maze paradigm with servo-controlled walls.
+This runs the tactile paradigm with servo-controlled gratings.
 
 ---
 
@@ -224,14 +224,14 @@ aMAZEing-maze/
 │   │       ├── tone_generator.py   # Pure-tone melody synthesis
 │   │       ├── run.py          #     Training-day playback CLI
 │   │       └── QUICKSTART.md   #     Step-by-step grammar experiment guide
-│   └── simplermaze/            # Y-maze with servos
+│   └── simplermaze/            # Tactile paradigm: 2- level binary decision tree with servos controlled gratings
 │       ├── simplerCode.py      #   Main script
 │       └── supFun.py           #   Support functions
 │
 ├── firmware/
 │   ├── ttl_bnc/                # Arduino TTL synchronisation sketch
 │   ├── arduino/                # Servo control sketches
-│   └── micropython/            # Pico PCA9685 servo driver
+│   └── micropython/            # Adafruit PCA9685 servo driver
 │
 ├── analysis/
 │   ├── auditory/               # Auditory experiment analysis notebooks
@@ -361,7 +361,7 @@ Key components:
 - **Moveable walls** with servo-driven cog mechanism
 - **Camera holder** mounted above the maze
 - **Electronics enclosure** for Arduino and driver boards
-- **Reward delivery chute** with servo-actuated gate
+- **Reward delivery chute** with servo-actuated gate depending on IR-detection of pellet delivery
 
 See `hardware/drawings/` for schematics and `hardware/photos/` for assembly reference.
 
