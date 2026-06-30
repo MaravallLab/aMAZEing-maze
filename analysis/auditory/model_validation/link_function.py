@@ -1,13 +1,13 @@
 """Link from per-arm aesthetic value A(t) to predicted behaviour.
 
 A(t) is instantaneous; the data are aggregate dwell, so the link is a real
-modelling commitment. Two are exposed; default is the matching law.
+modelling commitment. Two are exposed; default is the matching law::
 
     A_i = w0 + wr * r_i + wV * dV_i + wS * S_i           (per arm)
 
-  matching law : predicted dwell fraction of arm i within a block
-                 ∝ A_i / Σ_j A_j   over simultaneously available arms
-  softmax      : P(arm i) ∝ exp(beta * A_i)
+    matching law : predicted dwell fraction of arm i within a block
+                   ∝ A_i / Σ_j A_j   over simultaneously available arms
+    softmax      : P(arm i) ∝ exp(beta * A_i)
 
 The silent arm gets A = w0 (no tones, so r = dV = S = 0). The vocalisation arm
 is held out of fitting (positive control only). Predicted dwell fractions are

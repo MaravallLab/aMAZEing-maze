@@ -5,6 +5,7 @@ separate secondary question and the two are never accidentally pooled
 (`load_day`).
 
 REAL SCHEMA (the originally-assumed columns were wrong):
+
   * animal_id and day live in FOLDER NAMES, not columns. Parsed string-based.
   * EE/SC is logged directly as `environment_association` on each arm row; we do
     NOT re-derive it from counterbalancing group.
@@ -18,6 +19,7 @@ REAL SCHEMA (the originally-assumed columns were wrong):
     grain used by sanity checks.
 
 NAMED, AUDITABLE EXCLUSIONS (logged with a reason, never silent drops):
+
   * EXCLUDED_ANIMALS: mouse 13533 (light event triggered all ROIs on both test
     days; tracking artifact). Removing the id and re-running is the whole change
     needed once the artifact frames are cleaned.
@@ -25,6 +27,7 @@ NAMED, AUDITABLE EXCLUSIONS (logged with a reason, never silent drops):
   * duplicate filings of the same session (same mouse+day+timestamp under two
     parent folders, e.g. day_1/ and a cage folder) are de-duplicated keeping the
     first.
+
 PI is never computed from a regenerated sequence; if `symbols` are absent for a
 grammar arm the row is kept for PI (time-based) but flagged with empty melodies.
 """

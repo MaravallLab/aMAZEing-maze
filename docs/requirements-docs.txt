@@ -1,0 +1,17 @@
+# Documentation build toolchain.
+# Install into the same environment that has the project's runtime deps
+# (numpy, pandas, scipy, matplotlib, ...) so autodoc can import the modules:
+#
+#     pip install -r docs/requirements-docs.txt
+#
+# Then build from the docs/ directory with `make html` (or `make.bat html`).
+#
+# autodoc / autosummary / napoleon / viewcode / intersphinx ship with Sphinx,
+# so they need no separate package here.
+
+sphinx>=7.2
+myst-parser>=2.0
+myst-nb>=1.1
+sphinx-design>=0.6
+shibuya
+linkify-it-py>=2.0

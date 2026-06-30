@@ -145,6 +145,8 @@ dmypy.json
 
 # Sphinx build artifacts
 docs/build/
+# Auto-generated autosummary API stubs (regenerated on every build)
+docs/source/api/generated/
 
 # Data outputs (experiment recordings)
 # Keep config CSVs and test fixtures

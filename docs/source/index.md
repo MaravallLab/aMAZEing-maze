@@ -1,36 +1,59 @@
-# Mice Maze Documentation
+# The aMAZEing maze
 
-An open-source platform to study the neural basis of ethological behaviors over naturalistic timescales.
+```{image} _static/images/happy_mouse.png
+:alt: aMAZEing maze
+:width: 220px
+:align: right
+```
 
-## Getting Started
+**A modular, automated, sensory-engaging open-source platform for studying how
+sensory cues shape active exploration in rodents.**
 
-- **Introduction**: Overview of the Mice Maze project, its objectives, and significance.
-- **Installation**: Step-by-step guide to setting up the environment, including hardware and software prerequisites.
-- **Quick Start**: Instructions to run a basic experiment using the maze.
+The aMAZEing maze combines real-time video tracking, auditory stimulus delivery,
+and optional hardware control (servos, TTL synchronisation for photometry) into
+a single Python-driven platform. It supports two experimental paradigms:
 
-## User Guide
+- an **auditory maze** — a multi-arm maze where real-time ROI tracking triggers
+  sound playback (pure tones, musical intervals, temporal-envelope modulation,
+  tone sequences, vocalisations, and a Markov-grammar learning protocol); and
+- the **SimplerMaze** — a 2-level binary decision tree with servo-controlled
+  moveable walls for reward-based navigation studies.
 
-- **Hardware Components**: Detailed descriptions of maze components, including side panels, baseplate, maker beams, bolts, legs, camera, IR illuminator, and PC setup.
-- **Software Components**: Overview of software tools and scripts provided in the repository.
-- **Experiment Types**:
-  - **Tactile Experiments**: Procedures and protocols for conducting tactile-based experiments.
-  - **Auditory Experiments**: Procedures and protocols for conducting auditory-based experiments.
-- **Data Acquisition and Analysis**: Methods for collecting and analyzing data from experiments.
+```{note}
+This documentation is being built out. Narrative pages (installation, hardware
+setup, usage) are written in Markdown; the {doc}`API reference <api/index>` is
+generated automatically from the source docstrings.
+```
 
-## Contributor Guide
+```{toctree}
+:maxdepth: 2
+:caption: Getting started
 
-- **Contributing Guidelines**: Instructions for contributing to the project, including code standards and submission processes.
-- **Development Setup**: Guide to setting up a development environment for contributing to the project.
-- **Testing**: Information on existing tests and how to add new ones.
+getting_started/installation
+getting_started/hardware_setup
+```
 
-## Reference
+```{toctree}
+:maxdepth: 2
+:caption: User guide
 
-- **API Documentation**: Detailed documentation of the codebase, including functions, classes, and modules.
-- **Hardware Schematics**: Technical drawings and specifications of the maze components.
+user_guide/overview
+user_guide/auditory_experiment
+user_guide/simplermaze
+user_guide/analysis_pipeline
+user_guide/troubleshooting
+```
 
-## About
+```{toctree}
+:maxdepth: 2
+:caption: Reference
 
-- **Project Overview**: Background information on the project's development and goals.
-- **Team**: List of contributors and their roles.
-- **Acknowledgments**: Recognition of individuals and organizations that supported the project.
-- **Citations**: References to publications related to the project.
+api/index
+references
+```
+
+## Indices and tables
+
+- {ref}`genindex`
+- {ref}`modindex`
+- {ref}`search`
