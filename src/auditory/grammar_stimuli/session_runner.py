@@ -6,6 +6,7 @@ from ROI entries; here we focus only on producing the melodies, scheduling
 them on a fixed 4.4 s cycle, and writing a per-melody log.
 
 Use cases:
+
 - Training days: :meth:`run_training_session` emits one grammar (trained
   grammar for the animal's group+condition), dominant tier only, for
   ``session_duration_s`` seconds.

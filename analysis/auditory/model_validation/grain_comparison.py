@@ -1,18 +1,21 @@
 """Grain-comparison: fit the SAME model at three observation grains to show the
 EE-SC effect recovers as aggregation passes per-block dwell noise.
 
-  Grain A  per-block               (anchor; underpowered, near-flat)
-  Grain B  per-mouse cell-mean     (full 7-arm pattern; Dirichlet, per-mouse
-                                     selectivity beta_m — NOT a canceling intercept)
-  Grain C  per-tier EE-SC PI       (max-power semantic contrast; r,V cancel,
-                                     identifies wS only; per-mouse PI intercept)
+::
+
+    Grain A  per-block               (anchor; underpowered, near-flat)
+    Grain B  per-mouse cell-mean     (full 7-arm pattern; Dirichlet, per-mouse
+                                       selectivity beta_m — NOT a canceling intercept)
+    Grain C  per-tier EE-SC PI       (max-power semantic contrast; r,V cancel,
+                                       identifies wS only; per-mouse PI intercept)
 
 S uses tier-restricted emissions (fixes the i->i+3 secondary flip). w_r,w_V>=0
 (half-normal); w_S ~ Normal(0,1). No interaction term — the env x tier interaction
 is carried by the tier-dependence of S. Cell/PI grains RE-EXPRESS the model-free
 result as a process model: a mechanistic illustration, NOT independent validation.
 
-LOO is NOT comparable across grains (different observation models). Run standalone:
+LOO is NOT comparable across grains (different observation models). Run standalone::
+
     python grain_comparison.py <results_dir> <out_dir>
 """
 from __future__ import annotations

@@ -1,10 +1,11 @@
 """Pre-registered model-free test — independent of the HMM being correct.
 
-Primary model (per-arm dwell on grammar arms, day 1):
+Primary model (per-arm dwell on grammar arms, day 1)::
 
     log1p(dwell) ~ C(environment) * C(tier) * C(group) + (1 | mouse)
 
 Reports:
+
   * environment (EE vs SC) main effect      -> S(t) exists
   * tier (complexity) main effect           -> r(t)
   * the FORM of the environment x tier interaction, and specifically the
@@ -18,8 +19,10 @@ Reports:
     Grammar A regardless of association) flips or concentrates in one group.
     The dominant-tier EE-SC result is PROVISIONAL until this is clean.
 
-Secondary (day 2 + day-1 robustness): within-session block time-course
+Secondary (day 2 + day-1 robustness): within-session block time-course::
+
     PI ~ block + (1 | mouse)
+
 Monotonic decay across blocks (continuing into day 2) is the extinction
 signature; flat is a stable association.
 """

@@ -2,13 +2,13 @@
 
 Four nested models over arm-block behaviour, all sharing the softmax link and a
 Dirichlet observation on per-block dwell fractions, with a per-mouse random
-intercept, so LOO is comparable across them:
+intercept, so LOO is comparable across them::
 
-  1. intercept     — w0 only
-  2. fluency       — w0, wr
-  3. bd_baseline   — w0, wr, wV            (this is K=1, wS=0: Brielmann & Dayan)
-  4. full          — w0, wr, wV, wS
-  (+ full_grammar  — adds the intrinsic-grammar nuisance wg; see recovery.py)
+    1. intercept     — w0 only
+    2. fluency       — w0, wr
+    3. bd_baseline   — w0, wr, wV            (this is K=1, wS=0: Brielmann & Dayan)
+    4. full          — w0, wr, wV, wS
+    (+ full_grammar  — adds the intrinsic-grammar nuisance wg; see recovery.py)
 
 Priors are weakly-informative; wr and wV are half-normal (the Brielmann-Dayan
 non-negativity constraint on fluency and learning), and the wS prior is centred at

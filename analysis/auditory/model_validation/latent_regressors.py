@@ -107,9 +107,12 @@ def bd_updates(seq: np.ndarray, b_post: np.ndarray, cfg: ValidatedConfig,
     """Per-step ΔV(t) from the B-D system-state value, weighted by context belief.
 
     State per context k: X_k = N(mu_k, sigma2). Observation o at transition i is
-    the landing tone's log2-frequency. Update (after the filter posterior b):
+    the landing tone's log2-frequency. Update (after the filter posterior b)::
+
         mu_k <- mu_k + alpha * b_post_k * (o - mu_k)
-    Value:
+
+    Value::
+
         V(t) = Σ_k b_post_k * ( -KL( N(mu_k, sigma2) ‖ p_T ) )
         ΔV(t) = V(t) - V(t-1)
 
@@ -308,9 +311,9 @@ def feature_diagnostics(df) -> Dict[str, object]:
     """Between-arm variance, correlation matrix, and VIF for r_mean/dV_mean/S_mean.
 
     A feature with near-zero between-arm variance cannot explain preference and
-    that is stated, not hidden. High |corr(r, S)| is flagged loudly: it means the
-    design did not separate fluency from semantics in practice, and recovery will
-    confirm whether wS is estimable at all.
+    that is stated, not hidden. High ``|corr(r, S)|`` is flagged loudly: it means
+    the design did not separate fluency from semantics in practice, and recovery
+    will confirm whether wS is estimable at all.
     """
     import pandas as pd
 

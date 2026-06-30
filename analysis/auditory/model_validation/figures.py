@@ -5,9 +5,11 @@ out_dir and writes labelled 300-dpi PNGs into that same out_dir. Each figure is
 tied to a specific claim in the report; every figure is wrapped so one failure
 does not abort the rest.
 
-Run standalone:
+Run standalone::
+
     python -m model_validation.figures  <out_dir>
-or via the pipeline with `--figures`.
+
+or via the pipeline with ``--figures``.
 """
 
 from __future__ import annotations
