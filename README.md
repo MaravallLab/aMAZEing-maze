@@ -93,11 +93,11 @@ python -m venv venv
 source venv/bin/activate   # Linux/macOS
 venv\Scripts\activate      # Windows
 
-# Install dependencies
-pip install -r requirements.txt
+# Install the package (editable: edits under src/ take effect immediately)
+pip install -e .
 
-# For development (includes pytest)
-pip install -r requirements-dev.txt
+# Optional extras: post-hoc analysis pipelines under analysis/, and pytest
+pip install -e ".[analysis,dev]"
 ```
 
 ---
@@ -106,23 +106,22 @@ pip install -r requirements-dev.txt
 
 ### Running an Auditory Experiment
 
-1. Edit `src/auditory/config.py` to set your experiment parameters (mode, sample rate, device IDs, paths).
-2. Run the main script:
+1. Edit `src/amazeing/auditory/config.py` to set your experiment parameters (mode, sample rate, device IDs, paths).
+2. Run a session (the command works from any directory once the package is installed):
 
 ```bash
-cd src/auditory
-python main.py
+amaze-auditory
 ```
 
 For the grammar experiment, pass per-session flags on the command line:
 
 ```bash
 # Silent baseline (Day 1 — no audio, establishes location preference baseline)
-python main.py --grammar-mode silent_baseline --enriched-grammar A --day habituation
+amaze-auditory --grammar-mode silent_baseline --enriched-grammar A --day habituation
 
 # Audio test (Day 2 / Day 3)
-python main.py --grammar-mode test --enriched-grammar A --day day_1
-python main.py --grammar-mode test --enriched-grammar A --day day_2
+amaze-auditory --grammar-mode test --enriched-grammar A --day day_1
+amaze-auditory --grammar-mode test --enriched-grammar A --day day_2
 ```
 
 3. The system will:
@@ -160,8 +159,7 @@ Set `experiment_mode` in `config.py` to one of:
 ### Running the Tactile paradigm (SimplerMaze)
 
 ```bash
-cd src/simplermaze
-python simplerCode.py
+amaze-tactile
 ```
 
 This runs the tactile paradigm with servo-controlled gratings. It reads two
@@ -182,7 +180,7 @@ ROIs are drawn on first launch and stored as `rois1.csv` in the recordings folde
 All experiment parameters are defined in a single dataclass:
 
 ```python
-# src/auditory/config.py
+# src/amazeing/auditory/config.py
 @dataclass
 class ExperimentConfig:
     samplerate: int = 192000
@@ -204,10 +202,10 @@ Key settings to adjust for your setup:
 - `grammar_test_block_minutes` — list of 9 durations (min) for the 9-block cycle; even indices are silent blocks, odd are active; set silent entries to `0` to skip them
 - `grammar_apply_speaker_gain` — equalise the six grammar tones for the calibrated speaker (default `True`; set `False` to reproduce sessions recorded before this option existed)
 - `roi_csv_path` — where the ROI rectangles are stored; defaults to `<base_output_path>/rois1.csv` because ROIs belong to a rig, not to the code
-- `path_to_vocalisation_folder` — folder of `.wav` files for the all-vocalisation mode (defaults to `src/auditory/vocalisations/`, which is gitignored)
+- `path_to_vocalisation_folder` — folder of `.wav` files for the all-vocalisation mode (defaults to a `vocalisations/` folder next to the recordings folder, i.e. `~/Desktop/auditory_maze_experiments/vocalisations`)
 - `path_to_vocalisation_control` — the single `.wav` played on the vocalisation control arm of the mixed modes; leave empty for a silent arm
 
-The speaker frequency-response calibration CSV (`analysis/calibration/frequency_response_speaker.csv`) is loaded automatically — no path configuration needed.
+The speaker frequency-response calibration CSV (`src/amazeing/auditory/data/frequency_response_speaker.csv`) is loaded automatically — no path configuration needed.
 
 **Visits that straddle a block boundary** are closed at the block end, written to the visit log, and counted in `time_spent`. Data recorded before this fix either dropped such visits (this code base) or inflated them (the archived v1 script); the auditory analysis loader in `analysis/auditory/preference_analysis_config.py` documents the caps it applies to v1 data.
 
@@ -217,30 +215,32 @@ The speaker frequency-response calibration CSV (`analysis/calibration/frequency_
 
 ```
 aMAZEing-maze/
-├── src/
+├── pyproject.toml              # Package metadata, dependencies, CLI entry points
+├── src/amazeing/               # Installable package (`pip install -e .`)
 │   ├── auditory/               # Auditory maze experiment
-│   │   ├── config.py           #   Experiment configuration dataclass
-│   │   ├── main.py             #   Main experiment loop
-│   │   ├── run_analysis.py     #   Standalone per-session analysis CLI
-│   │   ├── run_summary_analysis.py # Cross-session summary analysis CLI (--day / --all)
-│   │   ├── vocalisations/      #   Drop your .wav stimuli here (gitignored)
-│   │   ├── modules/
-│   │   │   ├── audio.py        #   Sound generation, playback & speaker compensation
-│   │   │   ├── experiments.py  #   Trial structure factory (all experiment modes)
-│   │   │   ├── vision.py       #   ROI tracking (OpenCV binary threshold + debounce)
-│   │   │   ├── data_manager.py #   Session setup, visit & maze-entry logging
-│   │   │   ├── hardware.py     #   Arduino TTL & camera control
-│   │   │   ├── analysis.py     #   Per-session figure generation (SessionAnalyzer)
-│   │   │   └── summary_analysis.py # Cross-session figure generation (SummaryAnalyzer)
+│   │   ├── config.py           #   ExperimentConfig dataclass
+│   │   ├── main.py             #   Session loop              -> amaze-auditory
+│   │   ├── run_analysis.py     #   Per-session figures       -> amaze-analyse-session
+│   │   ├── run_summary_analysis.py # Cross-session figures   -> amaze-summary
+│   │   ├── run_summary_csv.py  #   Cross-session CSVs        -> amaze-summary-csv
+│   │   ├── audio.py            #   Sound generation, playback & speaker compensation
+│   │   ├── experiments.py      #   Trial structure factory (all experiment modes)
+│   │   ├── vision.py           #   ROI tracking (OpenCV binary threshold + debounce)
+│   │   ├── data_manager.py     #   Session setup, visit & maze-entry logging
+│   │   ├── hardware.py         #   Arduino TTL & camera control
+│   │   ├── analysis.py         #   Per-session figure generation (SessionAnalyzer)
+│   │   ├── summary_analysis.py #   Cross-session figure generation (SummaryAnalyzer)
+│   │   ├── data/frequency_response_speaker.csv  # Default speaker calibration curve
 │   │   └── grammar_stimuli/    #   Grammar learning stimulus package
 │   │       ├── config.py       #     Tone inventory, transition matrices, arm plan
 │   │       ├── sequence_sampler.py # Markov sampler with complexity tiers
 │   │       ├── tone_generator.py   # Pure-tone melody synthesis
-│   │       ├── run.py          #     Training-day playback CLI
+│   │       ├── run.py          #     Training-day playback   -> amaze-grammar
 │   │       └── QUICKSTART.md   #     Step-by-step grammar experiment guide
-│   └── simplermaze/            # Tactile paradigm: 2- level binary decision tree with servos controlled gratings
-│       ├── simplerCode.py      #   Main script
+│   └── simplermaze/            # Tactile paradigm: 2-level binary decision tree with servo-controlled gratings
+│       ├── simplerCode.py      #   Main script               -> amaze-tactile
 │       ├── supFun.py           #   Support functions
+│       ├── post_process_session.py # Per-trial video segments -> amaze-tactile-segments
 │       ├── grating_maps.csv    #   Servo commands per reward location (template)
 │       └── reward_sequences.csv #  Trial distribution per training stage (template)
 │
@@ -254,7 +254,7 @@ aMAZEing-maze/
 │   ├── simplermaze/            # SimplerMaze analysis & DLC pipeline
 │   │   ├── first_paper_exploratory_analysis/
 │   │   └── trials_segmentation/
-│   └── calibration/            # Speaker frequency-response calibration
+│   └── calibration/            # How the speaker calibration curve was measured
 │
 ├── hardware/
 │   ├── 3dmodels/               # FreeCAD & STL files for maze parts
@@ -267,9 +267,8 @@ aMAZEing-maze/
 │   └── legacy/                 #   Bonsai workflow & old segmentation
 │
 ├── docs/                       # Sphinx documentation source
-├── tests/                      # pytest test suite (harness); grammar tests live in src/auditory/grammar_stimuli/tests
-├── requirements.txt
-├── requirements-dev.txt
+├── tests/                      # pytest test suite (harness); grammar tests live in src/amazeing/auditory/grammar_stimuli/tests
+├── requirements.txt            # Thin shim: `-e .[analysis]`
 └── LICENSE                     # GPLv3
 ```
 
@@ -298,13 +297,11 @@ maze_recordings/grammar/day_2/time_2026-05-24_10_00_00_mouse1/
 Figures are generated **automatically at the end of every session** and saved inside the session folder alongside the CSVs. To regenerate them for sessions already collected:
 
 ```bash
-cd src/auditory
-
 # Single session
-python run_analysis.py "C:\path\to\session_folder"
+amaze-analyse-session "C:\path\to\session_folder"
 
 # Multiple sessions at once
-python run_analysis.py "C:\path\to\session1" "C:\path\to\session2"
+amaze-analyse-session "C:\path\to\session1" "C:\path\to\session2"
 ```
 
 | File | What it shows |
@@ -321,13 +318,11 @@ python run_analysis.py "C:\path\to\session1" "C:\path\to\session2"
 After running all mice for a day (or across multiple days), generate summary figures with `run_summary_analysis.py`. Saved into the folder you pass.
 
 ```bash
-cd src/auditory
-
 # All mice on one day
-python run_summary_analysis.py --day "C:\...\maze_recordings\grammar\day_1"
+amaze-summary --day "C:\...\maze_recordings\grammar\day_1"
 
 # All mice across all days collected so far
-python run_summary_analysis.py --all "C:\...\maze_recordings\grammar"
+amaze-summary --all "C:\...\maze_recordings\grammar"
 ```
 
 Silent-baseline sessions are automatically excluded — only active test-day sessions contribute.
@@ -357,10 +352,10 @@ The test suite covers audio generation, trial structure, ROI tracking, data mana
 
 ```bash
 # Run all tests (harness + grammar stimulus package)
-python -m pytest tests/ src/auditory/grammar_stimuli/tests -v
+python -m pytest tests/ src/amazeing/auditory/grammar_stimuli/tests -v
 
 # Run with coverage
-python -m pytest tests/ --cov=src/auditory/modules --cov-report=term-missing
+python -m pytest tests/ --cov=amazeing --cov-report=term-missing
 
 # Run a specific test file
 python -m pytest tests/test_audio.py -v

@@ -1,45 +1,20 @@
-"""Shared fixtures and mocks for the mice-maze test suite."""
+"""Shared fixtures and mocks for the aMAZEing-maze test suite.
+
+The package is imported as ``amazeing`` (install with ``pip install -e .``),
+so no sys.path manipulation is needed here. Hardware-facing third-party
+modules are stubbed before anything imports them, so the suite runs on a
+machine with no sound card, camera or Arduino.
+"""
 
 import sys
-import os
-import types
-import csv
 import numpy as np
 import pandas as pd
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# ── path setup ──────────────────────────────────────────────────────
-# Make the source directories importable without installing the package
-ROOT = Path(__file__).resolve().parent.parent
-AUDITORY_SRC = ROOT / "src" / "auditory"
-SIMPLERMAZE_SRC = ROOT / "src" / "simplermaze"
-ANALYSIS_SRC = ROOT / "analysis" / "simplermaze"
-
-# We need to add paths so that `from config import ExperimentConfig` etc. work
-# The modules/ dir must come FIRST so `from modules.audio import Audio` works
-# when experiments.py is imported from the modules/ directory itself.
-sys.path.insert(0, str(AUDITORY_SRC))
-sys.path.insert(0, str(AUDITORY_SRC / "modules"))
-sys.path.insert(0, str(SIMPLERMAZE_SRC))
-
-# Also create a 'modules' package alias so that
-# `from modules.audio import Audio` works when the CWD is updated_version
-_modules_dir = AUDITORY_SRC / "modules"
-if "modules" not in sys.modules:
-    import importlib
-    spec = importlib.util.spec_from_file_location(
-        "modules", str(_modules_dir / "__init__.py"),
-        submodule_search_locations=[str(_modules_dir)]
-    )
-    if spec:
-        _mod = importlib.util.module_from_spec(spec)
-        sys.modules["modules"] = _mod
-        # Don't exec — just need the search path registered
-
 # ── stub out hardware modules BEFORE any imports that touch them ────
-# sounddevice is not installed in CI and requires audio hardware
+# sounddevice needs PortAudio and an output device
 _sd_mock = MagicMock()
 _sd_mock.default = MagicMock()
 sys.modules.setdefault("sounddevice", _sd_mock)
@@ -68,12 +43,12 @@ def fixtures_dir():
 @pytest.fixture
 def mock_audio():
     """A lightweight Audio-like object that generates real waveforms without hardware."""
-    from config import ExperimentConfig
+    from amazeing.auditory.config import ExperimentConfig
     cfg = ExperimentConfig()
 
     # Patch the calibration CSV path so Audio.__init__ doesn't fail
     with patch("os.path.exists", return_value=False):
-        from audio import Audio
+        from amazeing.auditory.audio import Audio
         audio = Audio(cfg, calibration_gain_path=None)
     return audio
 
@@ -81,7 +56,7 @@ def mock_audio():
 @pytest.fixture
 def experiment_config():
     """Return a default ExperimentConfig for testing."""
-    from config import ExperimentConfig
+    from amazeing.auditory.config import ExperimentConfig
     cfg = ExperimentConfig()
     cfg.testing = True
     return cfg

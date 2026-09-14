@@ -25,7 +25,7 @@ class TestExperimentConfig:
         assert all(t < 3 for t in lengths)
 
     def test_trial_lengths_normal_mode(self):
-        from config import ExperimentConfig
+        from amazeing.auditory.config import ExperimentConfig
         cfg = ExperimentConfig(experiment_mode="simple_smooth")
         cfg.testing = False
         cfg.longer_middle_silence = False
@@ -36,7 +36,7 @@ class TestExperimentConfig:
         assert lengths == [15, 15, 2, 15, 2, 15, 2, 15, 2]
 
     def test_trial_lengths_longer_silence(self):
-        from config import ExperimentConfig
+        from amazeing.auditory.config import ExperimentConfig
         cfg = ExperimentConfig(experiment_mode="simple_smooth")
         cfg.testing = False
         cfg.longer_middle_silence = True
@@ -45,7 +45,7 @@ class TestExperimentConfig:
         assert lengths == [15, 15, 2, 15, 15, 15, 2, 15, 2]
 
     def test_trial_lengths_microcontroller(self):
-        from config import ExperimentConfig
+        from amazeing.auditory.config import ExperimentConfig
         cfg = ExperimentConfig(experiment_mode="simple_smooth")
         cfg.testing = False
         cfg.longer_middle_silence = False
@@ -55,7 +55,7 @@ class TestExperimentConfig:
         assert lengths == [15, 10, 2, 10, 2, 10, 2, 10, 2]
 
     def test_grammar_trial_lengths(self):
-        from config import ExperimentConfig
+        from amazeing.auditory.config import ExperimentConfig
         cfg = ExperimentConfig(experiment_mode="grammar", grammar_mode="test")
         assert len(cfg.get_trial_lengths()) == 9
         cfg.grammar_mode = "silent_baseline"
@@ -66,7 +66,7 @@ class TestExperimentConfig:
             cfg.get_trial_lengths()
 
     def test_roi_csv_path_defaults_next_to_recordings(self, tmp_path):
-        from config import ExperimentConfig
+        from amazeing.auditory.config import ExperimentConfig
         cfg = ExperimentConfig(base_output_path=str(tmp_path))
         assert cfg.roi_csv_path == str(tmp_path / "rois1.csv")
         cfg2 = ExperimentConfig(base_output_path=str(tmp_path), roi_csv_path="x.csv")
@@ -74,7 +74,7 @@ class TestExperimentConfig:
 
     def test_no_hard_coded_user_paths_in_defaults(self):
         """Defaults must not point at a specific lab machine."""
-        from config import ExperimentConfig
+        from amazeing.auditory.config import ExperimentConfig
         cfg = ExperimentConfig()
         for val in (cfg.path_to_vocalisation_folder, cfg.path_to_vocalisation_control,
                     cfg.base_output_path, cfg.calibration_gain_path):

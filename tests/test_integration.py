@@ -17,7 +17,7 @@ class TestSimpleSmoothIntegration:
     """Simulate a simple_smooth experiment: generate trials, verify CSV structure."""
 
     def test_full_trial_generation(self, mock_audio, experiment_config):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         experiment_config.experiment_mode = "simple_smooth"
         experiment_config.rois_number = 4
@@ -40,7 +40,7 @@ class TestSimpleSmoothIntegration:
 
     def test_csv_round_trip(self, mock_audio, experiment_config, tmp_path):
         """Trials can be saved to CSV and loaded back."""
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         experiment_config.experiment_mode = "simple_smooth"
         experiment_config.rois_number = 4
@@ -59,7 +59,7 @@ class TestSimpleSmoothIntegration:
 
     def test_npy_save_load(self, mock_audio, experiment_config, tmp_path):
         """Sound arrays can be saved/loaded via numpy."""
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         experiment_config.experiment_mode = "simple_smooth"
         experiment_config.rois_number = 4
@@ -77,7 +77,7 @@ class TestComplexIntervalsIntegration:
     """Simulate a complex_intervals experiment."""
 
     def test_w1day2_generates_correct_structure(self, mock_audio, experiment_config):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         experiment_config.experiment_mode = "complex_intervals"
         experiment_config.complex_interval_day = "w1day2"
@@ -97,7 +97,7 @@ class TestComplexIntervalsIntegration:
 
     def test_w1day4_no_controls(self, mock_audio, experiment_config):
         """w1day4 has no controls (no vocalisation, no silent)."""
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         experiment_config.experiment_mode = "complex_intervals"
         experiment_config.complex_interval_day = "w1day4"
@@ -115,7 +115,7 @@ class TestTEMIntegration:
     """Simulate a temporal_envelope_modulation experiment."""
 
     def test_tem_generates_all_types(self, mock_audio, experiment_config):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         experiment_config.experiment_mode = "temporal_envelope_modulation"
         experiment_config.rois_number = 8
@@ -135,13 +135,13 @@ class TestVisitLogIntegration:
 
     def test_visit_log_format(self, tmp_path):
         """Verify the CSV schema produced by DataManager.initialise_visit_log."""
-        from data_manager import DataManager
+        from amazeing.auditory.data_manager import DataManager
 
         mgr = DataManager(str(tmp_path))
         mgr.session_directory = str(tmp_path)
         mgr.mouseID = "mouse_test"
 
-        from config import ExperimentConfig
+        from amazeing.auditory.config import ExperimentConfig
         cfg = ExperimentConfig()
 
         log_path = mgr.initialise_visit_log(cfg)
@@ -164,7 +164,7 @@ class TestTrialAlternationPattern:
         ("simple_smooth", 4),
     ])
     def test_alternation(self, mock_audio, experiment_config, mode, rois_n):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         experiment_config.experiment_mode = mode
         experiment_config.rois_number = rois_n

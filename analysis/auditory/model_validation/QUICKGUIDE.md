@@ -7,7 +7,7 @@ README; this document is only about the `model_validation/` package.
 Everything here is **read-only** with respect to the experiment code and the
 recordings: it reads logged sessions from a results tree and writes only into an
 output directory you choose. It never regenerates a stimulus and never edits
-`src/auditory/` or the recordings.
+`src/amazeing/auditory/` or the recordings.
 
 ---
 

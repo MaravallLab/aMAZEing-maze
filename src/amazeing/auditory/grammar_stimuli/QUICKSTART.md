@@ -2,7 +2,7 @@
 
 Step-by-step operational guide. For the *why*, see `README.md`.
 
-All commands are run from `src/auditory/`.
+The package must be installed once (`pip install -e .` from the repo root); the `amaze-*` commands then work from any directory.
 
 ---
 
@@ -20,14 +20,14 @@ Split your mice ~half-and-half across these two options (this is the
 counterbalance).
 
 On test day you pass that choice as `--enriched-grammar A` or
-`--enriched-grammar B` to `python main.py`. The system uses it to
+`--enriched-grammar B` to `amaze-auditory`. The system uses it to
 decide which physical grammar plays on the EE-associated arms vs the
 SC-associated arms.
 
 ### Step 2. Verify the matrices look right
 
 ```bash
-python -m grammar_stimuli.dump_matrices grammars.txt --samples 10
+python -m amazeing.auditory.grammar_stimuli.dump_matrices grammars.txt --samples 10
 ```
 
 Open `grammars.txt`. At the bottom you should see "Empirical transition
@@ -37,7 +37,7 @@ If yes, the grammar is correctly encoded. You can delete `grammars.txt`.
 ### Step 3. (Optional) Quick dry-run to confirm audio works
 
 ```bash
-python -m grammar_stimuli.run --mode training \
+amaze-grammar --mode training \
     --grammar A \
     --duration-seconds 60 \
     --output-dir ./_test_audio
@@ -72,7 +72,7 @@ Use `--grammar A|B` to pick today's grammar directly, and list every
 cage being exposed (with its EE/SC status as a tag) in `--cage-ids`.
 
 ```bash
-python -m grammar_stimuli.run --mode training \
+amaze-grammar --mode training \
     --grammar A \
     --cage-ids "6224_EE,6225_SC" \
     --duration-seconds 14400 \
@@ -82,7 +82,7 @@ python -m grammar_stimuli.run --mode training \
 Tomorrow, swap each cage's status and switch the grammar:
 
 ```bash
-python -m grammar_stimuli.run --mode training \
+amaze-grammar --mode training \
     --grammar B \
     --cage-ids "6224_SC,6225_EE" \
     --duration-seconds 14400 \
@@ -134,16 +134,16 @@ per-mouse and per-day values come from the command line:
 
 ```bash
 # Mouse 6224 (EE→A), habituation day (silent baseline)
-python main.py --grammar-mode silent_baseline --enriched-grammar A --day habituation
+amaze-auditory --grammar-mode silent_baseline --enriched-grammar A --day habituation
 
 # Mouse 6224, first audio test day
-python main.py --grammar-mode test --enriched-grammar A --day day_1
+amaze-auditory --grammar-mode test --enriched-grammar A --day day_1
 
 # Mouse 6224, second audio test day
-python main.py --grammar-mode test --enriched-grammar A --day day_2
+amaze-auditory --grammar-mode test --enriched-grammar A --day day_2
 
 # Mouse 6225 (EE→B), habituation day
-python main.py --grammar-mode silent_baseline --enriched-grammar B --day habituation
+amaze-auditory --grammar-mode silent_baseline --enriched-grammar B --day habituation
 ```
 
 All CLI flags:
@@ -164,7 +164,7 @@ Anything you don't pass keeps the default from `config.py`.
 
 #### Customising the schedule
 
-Override these fields in `src/auditory/config.py` if needed:
+Override these fields in `src/amazeing/auditory/config.py` if needed:
 
 ```python
 grammar_silent_baseline_minutes: float = 45.0    # single trial duration
@@ -195,13 +195,13 @@ If you want to **re-draw** the ROIs (e.g. you moved the maze), pass
 the drawing prompt again.
 
 ```bash
-python main.py --grammar-mode silent_baseline --enriched-grammar A --draw-rois
+amaze-auditory --grammar-mode silent_baseline --enriched-grammar A --draw-rois
 ```
 
 ### Step 3. Start the maze session
 
 ```bash
-python main.py --grammar-mode <silent_baseline|test> --enriched-grammar <A|B> --day <habituation|day_1|day_2>
+amaze-auditory --grammar-mode <silent_baseline|test> --enriched-grammar <A|B> --day <habituation|day_1|day_2>
 ```
 
 ### Step 4. After the session ends
@@ -236,8 +236,7 @@ you whether each row was an EE-paired or SC-paired grammar arm (it's
 **If you need to regenerate the per-session figures later:**
 
 ```bash
-cd src/auditory
-python run_analysis.py "C:\path\to\session_folder"
+amaze-analyse-session "C:\path\to\session_folder"
 ```
 
 ### Step 4b. After the last mouse of a day — run the day summary
@@ -246,13 +245,11 @@ After you've run all mice for a given day, generate cross-mouse summary
 figures with:
 
 ```bash
-cd src/auditory
-
 # Summary for one day (all mice tested that day):
-python run_summary_analysis.py --day "C:\...\maze_recordings\grammar\day_1"
+amaze-summary --day "C:\...\maze_recordings\grammar\day_1"
 
 # Cross-day summary (all mice, all days collected so far):
-python run_summary_analysis.py --all "C:\...\maze_recordings\grammar"
+amaze-summary --all "C:\...\maze_recordings\grammar"
 ```
 
 Figures are saved into the folder you pass.
@@ -272,15 +269,15 @@ all summary figures — only test-day sessions contribute.
 
 ### Step 5. Run the next mouse / next day
 
-Just call `python main.py` again with the right flags. No need to edit
+Just call `amaze-auditory` again with the right flags. No need to edit
 `config.py`:
 
 ```bash
 # Next mouse, same day
-python main.py --grammar-mode silent_baseline --enriched-grammar B --day habituation
+amaze-auditory --grammar-mode silent_baseline --enriched-grammar B --day habituation
 
 # Same mouse, next test day
-python main.py --grammar-mode test --enriched-grammar A --day day_2
+amaze-auditory --grammar-mode test --enriched-grammar A --day day_2
 ```
 
 ---
@@ -289,13 +286,13 @@ python main.py --grammar-mode test --enriched-grammar A --day day_2
 
 | Problem | Fix |
 |---|---|
-| `python -m grammar_stimuli.run` says "No module named grammar_stimuli" | Make sure you're in `src/auditory/` |
+| `amaze-grammar` is not found | Install the package: `pip install -e .` from the repo root |
 | `main.py` raises `NotImplementedError` about training | You forgot `--grammar-mode test` (or `silent_baseline`) — the config default intentionally forces you to pass it |
-| `main.py` errors about `rois_number` | Set `rois_number: int = 8` in `src/auditory/config.py` |
+| `main.py` errors about `rois_number` | Set `rois_number: int = 8` in `src/amazeing/auditory/config.py` |
 | Baselines all 0 after calibration | The ROI coordinates in `rois1.csv` are likely stale — re-run with `--draw-rois` to redraw them |
 | Mouse not detected / no ROI ENTERED messages | Try raising `detection_sensitivity` from `0.5` to `0.7` in `config.py`, or redraw ROIs with `--draw-rois` |
 | No audio | Check `channel_id` in `config.py` — run `python -c "import sounddevice; print(sounddevice.query_devices())"` to list available devices |
-| "No gain" warning at startup | The calibration CSV was not found — check `calibration_gain_path` in `config.py` resolves to `analysis/calibration/frequency_response_speaker.csv` in the repo |
+| "No gain" warning at startup | The calibration CSV was not found — check `calibration_gain_path` in `config.py` resolves to `src/amazeing/auditory/data/frequency_response_speaker.csv` in the repo |
 | Audio plays but I want to verify what was played | Open `grammar_samples_<timestamp>.csv` and inspect the `symbols` and `tier` columns |
 | Want to reproduce the same melody draws | Re-run with `--seed N` using the same seed (otherwise check the CSV) |
-| Post-session figures not generated | Run `python run_analysis.py <session_folder>` manually; check the terminal for the traceback |
+| Post-session figures not generated | Run `amaze-analyse-session <session_folder>` manually; check the terminal for the traceback |

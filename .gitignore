@@ -149,11 +149,11 @@ docs/build/
 # Data outputs (experiment recordings)
 # Keep config CSVs and test fixtures
 *.csv
-!analysis/calibration/frequency_response_speaker.csv
+!src/amazeing/auditory/data/frequency_response_speaker.csv
 !tests/fixtures/*.csv
 # Tactile paradigm configuration (required to run simplerCode.py)
-!src/simplermaze/grating_maps.csv
-!src/simplermaze/reward_sequences.csv
+!src/amazeing/simplermaze/grating_maps.csv
+!src/amazeing/simplermaze/reward_sequences.csv
 
 # OS files
 Thumbs.db
@@ -165,5 +165,5 @@ Thumbs.db
 
 # Claude Code worktrees
 .claude/worktrees/
-/src/auditory/sessions
-/src/auditory/_test_audio
+/src/amazeing/auditory/sessions
+/src/amazeing/auditory/_test_audio

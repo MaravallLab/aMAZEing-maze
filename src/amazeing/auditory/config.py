@@ -11,13 +11,10 @@ from typing import List, Optional
 # Default base directory: ~/Desktop/auditory_maze_experiments/maze_recordings
 _DEFAULT_BASE = os.path.join(os.path.expanduser("~"), "Desktop", "auditory_maze_experiments", "maze_recordings")
 
-# Calibration CSV shipped with the repo (analysis/calibration/)
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-_DEFAULT_CALIBRATION = os.path.join(_REPO_ROOT, "analysis", "calibration", "frequency_response_speaker.csv")
-
-# Vocalisation .wav files are not tracked (see .gitignore); this folder is
-# where users are expected to drop them.
-_DEFAULT_VOCALISATION_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vocalisations")
+# Speaker calibration CSV shipped as package data (amazeing/auditory/data/).
+# Replace it with your own speaker's curve via ExperimentConfig.calibration_gain_path.
+_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+_DEFAULT_CALIBRATION = os.path.join(_PACKAGE_DIR, "data", "frequency_response_speaker.csv")
 
 @dataclass
 class ExperimentConfig:
@@ -115,16 +112,21 @@ class ExperimentConfig:
     # Leave empty to keep the old flat structure.
     experiment_day: str = ""
 
-    # Vocalisation stimuli. The folder defaults to src/auditory/vocalisations
-    # (gitignored — drop your .wav files there). The control file is the single
-    # recording used on the "vocalisation" arm of the mixed experiments; leave
-    # empty to make that arm silent (a warning is printed at session start).
-    path_to_vocalisation_folder: str = _DEFAULT_VOCALISATION_FOLDER
+    # Vocalisation stimuli. The folder defaults to a "vocalisations" directory
+    # next to the recordings folder (i.e. <parent of base_output_path>/vocalisations)
+    # so your .wav files live with your data, not inside the installed package.
+    # The control file is the single recording used on the "vocalisation" arm
+    # of the mixed experiments; leave empty to make that arm silent (a warning
+    # is printed at session start).
+    path_to_vocalisation_folder: str = ""
     path_to_vocalisation_control: str = ""
 
     def __post_init__(self):
         if not self.roi_csv_path:
             self.roi_csv_path = os.path.join(self.base_output_path, "rois1.csv")
+        if not self.path_to_vocalisation_folder:
+            self.path_to_vocalisation_folder = os.path.join(
+                os.path.dirname(os.path.normpath(self.base_output_path)), "vocalisations")
 
 
     def get_trial_lengths(self) -> List[float]:

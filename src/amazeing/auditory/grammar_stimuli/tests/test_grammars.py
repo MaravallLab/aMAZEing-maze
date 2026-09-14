@@ -9,7 +9,7 @@ import tempfile
 import numpy as np
 import pytest
 
-from grammar_stimuli import (
+from amazeing.auditory.grammar_stimuli import (
     COMPLEXITY_TIERS,
     GRAMMARS,
     GRAMMAR_A,
@@ -30,8 +30,8 @@ from grammar_stimuli import (
     novel_grammar_for,
     trained_grammar_for,
 )
-from grammar_stimuli import config as cfg
-from grammar_stimuli.run import main as run_main
+from amazeing.auditory.grammar_stimuli import config as cfg
+from amazeing.auditory.grammar_stimuli.run import main as run_main
 
 
 # ---------------------------------------------------------------------------

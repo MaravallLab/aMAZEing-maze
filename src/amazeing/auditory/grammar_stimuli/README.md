@@ -1,7 +1,7 @@
 # grammar_stimuli
 
 Acoustic stimulus generation for the mouse-maze grammar-learning experiment,
-integrated with the auditory harness in `src/auditory/`.
+integrated with the auditory harness in `src/amazeing/auditory/`.
 
 Two first-order Markov grammars (A and B) are defined over a six-tone
 inventory. Each mouse alternates daily between two cage environments
@@ -60,8 +60,7 @@ therefore cancel across counterbalance groups.
 To inspect the matrices and confirm all four probabilities are encoded:
 
 ```bash
-cd src/auditory
-python -m grammar_stimuli.dump_matrices grammars.txt --samples 20
+python -m amazeing.auditory.grammar_stimuli.dump_matrices grammars.txt --samples 20
 ```
 
 The output text file contains the numeric matrices, tier labels, sample
@@ -181,7 +180,7 @@ for baseline acoustic preference.
 | `tone_generator.py` | `generate_tone`, `generate_melody`, `generate_silence_gap` |
 | `sequence_sampler.py` | `MarkovSampler`, `get_tier_targets`, `compute_entropy_rate` |
 | `session_runner.py` | `SessionRunner` (standalone driver for training days) |
-| `run.py` | CLI entry: `python -m grammar_stimuli.run ...` |
+| `run.py` | CLI entry: `amaze-grammar ...` |
 | `dump_matrices.py` | Print matrices + sample melodies + empirical counts |
 
 ---
@@ -196,18 +195,16 @@ speaker; every cage in the room (EE-type and SC-type alike) hears the
 same audio stream.
 
 ```bash
-cd src/auditory
-
 # Day 1 (Grammar A): cage 6224 is in its EE-type cage,
 # cage 6225 is in its SC-type cage; both in the same room.
-python -m grammar_stimuli.run --mode training \
+amaze-grammar --mode training \
     --grammar A \
     --cage-ids "6224_EE,6225_SC" \
     --duration-seconds 14400 \
     --output-dir ./sessions/2026-05-12_grammarA
 
 # Day 2 (Grammar B): cages swap status.
-python -m grammar_stimuli.run --mode training \
+amaze-grammar --mode training \
     --grammar B \
     --cage-ids "6224_SC,6225_EE" \
     --duration-seconds 14400 \
@@ -240,35 +237,33 @@ Each mouse goes through three test sessions:
 | Day 2 | `"test"` | full grammar test | 60 min | `[4, 12, 2, 12, 2, 12, 2, 12, 2]` min |
 | Day 3 | `"test"` | full grammar test (new RNG draw) | 60 min | same as Day 2 |
 
-Driven by `src/auditory/main.py` — the full harness with camera, ROI
+Driven by `src/amazeing/auditory/main.py` — the full harness with camera, ROI
 monitor, video writer, and trial CSV.
 
-**Stable defaults** live in `src/auditory/config.py` (sample rate, ROI
+**Stable defaults** live in `src/amazeing/auditory/config.py` (sample rate, ROI
 count, timing schedule, output path, etc.). Set those once.
 **Per-mouse and per-day values** come from the command line so you
 don't have to edit the config file for each session.
 
 ```bash
-cd src/auditory
-
 # Day 1, silent baseline, mouse whose EE-grammar is A
-python main.py --grammar-mode silent_baseline --enriched-grammar A
+amaze-auditory --grammar-mode silent_baseline --enriched-grammar A
 
 # Day 2/3, audio test, same mouse
-python main.py --grammar-mode test --enriched-grammar A
+amaze-auditory --grammar-mode test --enriched-grammar A
 
 # Different mouse whose EE-grammar is B
-python main.py --grammar-mode test --enriched-grammar B
+amaze-auditory --grammar-mode test --enriched-grammar B
 
 # Re-draw the ROIs once at the start of the day
-python main.py --grammar-mode silent_baseline --enriched-grammar A --draw-rois
+amaze-auditory --grammar-mode silent_baseline --enriched-grammar A --draw-rois
 ```
 
 CLI flags:
 
 | Flag | Effect |
 |---|---|
-| `--grammar-mode {silent_baseline,test,training}` | Day of the protocol. `training` will refuse and point you at `grammar_stimuli.run`. |
+| `--grammar-mode {silent_baseline,test,training}` | Day of the protocol. `training` will refuse and point you at `amaze-grammar`. |
 | `--enriched-grammar {A,B}` | Which grammar this mouse heard in EE. Drives arm assignment on test day. |
 | `--seed N` | RNG seed for reproducible melody draws. |
 | `--draw-rois` | Force interactive ROI re-drawing (deletes `rois1.csv` first). |
@@ -324,8 +319,7 @@ To re-draw the ROIs (e.g. you moved the maze), set
 ### 7c. Inspect / verify the matrices
 
 ```bash
-cd src/auditory
-python -m grammar_stimuli.dump_matrices grammars.txt --samples 20
+python -m amazeing.auditory.grammar_stimuli.dump_matrices grammars.txt --samples 20
 ```
 
 Open `grammars.txt` — the bottom shows empirical transition counts
@@ -381,9 +375,9 @@ harness produces.
 
 ```bash
 # Matrix integrity + empirical transition counts
-python -m grammar_stimuli.dump_matrices
+python -m amazeing.auditory.grammar_stimuli.dump_matrices
 
 # Quick dry-run of 60 s of training (no audio device needed)
-python -m grammar_stimuli.run --mode training --grammar A \
+amaze-grammar --mode training --grammar A \
     --duration-seconds 60 --dry-run --output-dir ./_check
 ```

@@ -9,13 +9,13 @@ import os
 import sounddevice as sd
 
 # our modules from the subdirectory `modules`
-from config import ExperimentConfig
-from modules.hardware import ArduinoController, Camera
-from modules.vision import ROIMonitor
-from modules.audio import Audio
-from modules.experiments import ExperimentFactory, GrammarStimulus
-from modules.data_manager import DataManager
-from modules.analysis import SessionAnalyzer
+from amazeing.auditory.config import ExperimentConfig
+from amazeing.auditory.hardware import ArduinoController, Camera
+from amazeing.auditory.vision import ROIMonitor
+from amazeing.auditory.audio import Audio
+from amazeing.auditory.experiments import ExperimentFactory, GrammarStimulus
+from amazeing.auditory.data_manager import DataManager
+from amazeing.auditory.analysis import SessionAnalyzer
 
 
 def _parse_cli():

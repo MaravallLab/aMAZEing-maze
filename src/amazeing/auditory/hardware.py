@@ -3,7 +3,7 @@ import time
 import cv2 as cv
 import sounddevice as sd
 from typing import Optional, Tuple
-from config import ExperimentConfig
+from amazeing.auditory.config import ExperimentConfig
 
 #Class Arduino, define the commands for the TTL as functions (serial.write "H" to determine the onset of the TTL, serial.write "L" to determine the offset of the TTL)
 

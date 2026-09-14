@@ -20,7 +20,7 @@ def roi_monitor(tmp_path):
     csv_path = tmp_path / "rois.csv"
     df.to_csv(csv_path)
 
-    from vision import ROIMonitor
+    from amazeing.auditory.vision import ROIMonitor
     roi_names = ["entrance1", "entrance2", "ROI1", "ROI2"]
 
     # Patch out camera access for define_rois

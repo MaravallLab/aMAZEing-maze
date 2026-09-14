@@ -25,26 +25,26 @@ class TestGetStimulusString:
         })
 
     def test_known_stimulus(self):
-        from data_manager import DataManager
+        from amazeing.auditory.data_manager import DataManager
         df = self._make_df()
         result = DataManager.get_stimulus_string(df, 1, "ROI1")
         assert "frequency:10000" in result
         assert "sound_type:smooth" in result
 
     def test_silent_stimulus(self):
-        from data_manager import DataManager
+        from amazeing.auditory.data_manager import DataManager
         df = self._make_df()
         result = DataManager.get_stimulus_string(df, 1, "ROI2")
         assert "frequency:0" in result
 
     def test_unknown_roi_returns_unknown(self):
-        from data_manager import DataManager
+        from amazeing.auditory.data_manager import DataManager
         df = self._make_df()
         result = DataManager.get_stimulus_string(df, 1, "ROI_NONEXISTENT")
         assert result == "Unknown_Stimulus"
 
     def test_empty_df_returns_unknown(self):
-        from data_manager import DataManager
+        from amazeing.auditory.data_manager import DataManager
         df = pd.DataFrame(columns=["trial_ID", "ROIs", "frequency"])
         result = DataManager.get_stimulus_string(df, 1, "ROI1")
         assert result == "Unknown_Stimulus"
@@ -54,7 +54,7 @@ class TestLogIndividualVisit:
     """Test CSV visit logging."""
 
     def test_log_appends_row(self, tmp_path):
-        from data_manager import DataManager
+        from amazeing.auditory.data_manager import DataManager
 
         csv_path = tmp_path / "visits.csv"
         # Create the file with headers
@@ -74,7 +74,7 @@ class TestLogIndividualVisit:
         assert df.iloc[0]["time_spent_seconds"] == 10.0
 
     def test_log_multiple_visits(self, tmp_path):
-        from data_manager import DataManager
+        from amazeing.auditory.data_manager import DataManager
 
         csv_path = tmp_path / "visits.csv"
         with open(csv_path, "w", newline="") as f:
@@ -103,7 +103,7 @@ class TestCloseOpenVisits:
         return str(csv_path)
 
     def test_open_visit_is_logged_and_accumulated(self, tmp_path):
-        from data_manager import DataManager
+        from amazeing.auditory.data_manager import DataManager
 
         log = self._make_log(tmp_path)
         trials = pd.DataFrame({
@@ -127,7 +127,7 @@ class TestCloseOpenVisits:
         assert trials.loc[trials["ROIs"] == "2", "time_spent"].iloc[0] == pytest.approx(9.0)
 
     def test_nothing_open_logs_nothing(self, tmp_path):
-        from data_manager import DataManager
+        from amazeing.auditory.data_manager import DataManager
 
         log = self._make_log(tmp_path)
         trials = pd.DataFrame({"trial_ID": [1], "ROIs": ["1"],
@@ -146,7 +146,7 @@ class TestSetupSession:
     """
 
     def test_setup_creates_directory(self, tmp_path, experiment_config):
-        from data_manager import DataManager
+        from amazeing.auditory.data_manager import DataManager
 
         experiment_config.base_output_path = str(tmp_path)
         experiment_config.experiment_mode = "simple_smooth"

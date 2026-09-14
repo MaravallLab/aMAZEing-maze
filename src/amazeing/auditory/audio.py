@@ -5,7 +5,7 @@ import sounddevice as sd
 import soundfile as sf
 import pandas as pd
 import numpy as np
-from config import ExperimentConfig
+from amazeing.auditory.config import ExperimentConfig
 from scipy.signal import resample_poly
 from scipy.interpolate import interp1d
 from typing import List, Dict, Optional, Union, Tuple, Sequence

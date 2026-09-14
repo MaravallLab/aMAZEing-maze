@@ -136,8 +136,8 @@ class TestCalibration:
     def test_relative_gains_with_repo_curve(self, tmp_path):
         """With the shipped calibration CSV, gains equalise tones without clipping."""
         import os
-        from config import ExperimentConfig
-        from audio import Audio
+        from amazeing.auditory.config import ExperimentConfig
+        from amazeing.auditory.audio import Audio
 
         cfg = ExperimentConfig()
         assert os.path.exists(cfg.calibration_gain_path)
@@ -159,8 +159,8 @@ class TestCalibration:
 
     def test_grammar_melody_applies_gain(self, mock_audio):
         """generate_melody scales each tone by gain_fn(frequency)."""
-        from grammar_stimuli.tone_generator import generate_melody
-        from grammar_stimuli import config as gcfg
+        from amazeing.auditory.grammar_stimuli.tone_generator import generate_melody
+        from amazeing.auditory.grammar_stimuli import config as gcfg
 
         half = generate_melody(["A"], sample_rate=mock_audio.fs, amplitude=0.5,
                                gain_fn=lambda f: 0.5)

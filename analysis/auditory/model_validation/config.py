@@ -38,26 +38,16 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # Import the experiment's structural constants (single source of truth)
 # ---------------------------------------------------------------------------
-# This package lives at <repo>/analysis/auditory/model_validation/. The grammar
-# module lives at <repo>/src/auditory/grammar_stimuli/. Put src/auditory on the
-# path so `grammar_stimuli` is importable, then import the frozen constants.
-def _add_src_auditory_to_path() -> Path:
-    here = Path(__file__).resolve()
-    # parents[3] == <repo> (model_validation -> auditory -> analysis -> repo)
-    for cand in (here.parents[3] / "src" / "auditory",):
-        if (cand / "grammar_stimuli" / "config.py").is_file():
-            if str(cand) not in sys.path:
-                sys.path.insert(0, str(cand))
-            return cand
+# The grammar module ships with the installed ``amazeing`` package
+# (``pip install -e .`` from the repo root), so no path manipulation is needed.
+try:
+    import amazeing.auditory.grammar_stimuli.config as gcfg
+except ImportError as e:  # pragma: no cover
     raise ImportError(
-        "Could not locate src/auditory/grammar_stimuli relative to "
-        f"{here}. Expected <repo>/src/auditory/grammar_stimuli/config.py."
-    )
-
-
-_SRC_AUDITORY = _add_src_auditory_to_path()
-
-import grammar_stimuli.config as gcfg  # noqa: E402  (after sys.path setup)
+        "The 'amazeing' package is not installed. From the repository root run\n"
+        "    pip install -e .\n"
+        "so that amazeing.auditory.grammar_stimuli is importable."
+    ) from e
 
 
 # ---------------------------------------------------------------------------

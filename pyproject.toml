@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "amazeing-maze"
+version = "2.0.0a1"
+description = "aMAZEing maze: open-source platform for auditory and tactile rodent maze experiments (control, logging, analysis)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+authors = [
+    { name = "Alejandra Carriero" },
+    { name = "Maravall Lab, University of Sussex" },
+]
+keywords = ["neuroscience", "behaviour", "maze", "rodent", "auditory", "opencv"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+]
+
+# Runtime needs of the experiment harness (src/amazeing).
+dependencies = [
+    "numpy>=1.21",
+    "pandas>=1.3",
+    "opencv-python>=4.5",
+    "scipy>=1.7",
+    "sounddevice>=0.4",
+    "soundfile>=0.10",
+    "pyserial>=3.5",
+    "matplotlib>=3.4",
+    "imageio-ffmpeg>=0.4",
+]
+
+[project.optional-dependencies]
+# Post-hoc analysis pipelines under analysis/ (not part of the package yet).
+analysis = [
+    "plotly>=5.0",
+    "seaborn>=0.11",
+    "statsmodels>=0.13",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/MaravallLab/aMAZEing-maze"
+Issues = "https://github.com/MaravallLab/aMAZEing-maze/issues"
+
+# Command-line entry points. Each one wraps a function that already existed;
+# `python -m <module>` keeps working too.
+[project.scripts]
+amaze-auditory = "amazeing.auditory.main:main"
+amaze-analyse-session = "amazeing.auditory.run_analysis:main"
+amaze-summary = "amazeing.auditory.run_summary_analysis:main"
+amaze-summary-csv = "amazeing.auditory.run_summary_csv:main"
+amaze-grammar = "amazeing.auditory.grammar_stimuli.run:main"
+amaze-tactile = "amazeing.simplermaze:main"
+amaze-tactile-segments = "amazeing.simplermaze.post_process_session:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["*.tests", "*.tests.*"]
+
+[tool.setuptools.package-data]
+"amazeing.auditory" = ["data/*.csv"]
+"amazeing.simplermaze" = ["*.csv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/amazeing/auditory/grammar_stimuli/tests"]
+addopts = "-p no:cacheprovider"

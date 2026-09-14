@@ -17,7 +17,7 @@ import argparse
 import os
 import sys
 import traceback
-from modules.summary_analysis import SummaryAnalyzer
+from amazeing.auditory.summary_analysis import SummaryAnalyzer
 
 
 def main():

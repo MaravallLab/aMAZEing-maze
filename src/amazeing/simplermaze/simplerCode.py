@@ -3,7 +3,7 @@
 import numpy as np
 import cv2 as cv
 import pandas as pd
-import supFun as sf
+from amazeing.simplermaze import supFun as sf
 import time
 import serial
 import os

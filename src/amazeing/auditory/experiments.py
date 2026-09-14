@@ -8,13 +8,13 @@ import random
 import os
 from dataclasses import dataclass, field
 from typing import Tuple, List, Any, Dict, Union, Optional
-from modules.audio import Audio
-from config import ExperimentConfig
+from amazeing.auditory.audio import Audio
+from amazeing.auditory.config import ExperimentConfig
 
 # Grammar stimuli: samplers live at auditory/grammar_stimuli/.
-from grammar_stimuli import config as gcfg
-from grammar_stimuli.sequence_sampler import MarkovSampler
-from grammar_stimuli.tone_generator import generate_melody, generate_silence_gap
+from amazeing.auditory.grammar_stimuli import config as gcfg
+from amazeing.auditory.grammar_stimuli.sequence_sampler import MarkovSampler
+from amazeing.auditory.grammar_stimuli.tone_generator import generate_melody, generate_silence_gap
 
 #this will be the structure of the output of the trial generation. A dataframe containing all the trials information + the list of the sound sound_arrays
 TrialData = Tuple[pd.DataFrame, List[Any]]

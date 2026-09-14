@@ -2,7 +2,7 @@
 
 Public API::
 
-    from grammar_stimuli import (
+    from amazeing.auditory.grammar_stimuli import (
         GrammarSessionConfig,
         MarkovSampler,
         SessionRunner,

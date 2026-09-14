@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from typing import List, Dict, Optional, Tuple
 
-from modules.analysis import STIM_COLORS
+from amazeing.auditory.analysis import STIM_COLORS
 
 
 ENV_COLORS  = {"EE": "#1565C0",  "SC": "#B71C1C"}

@@ -16,7 +16,7 @@ class TestIntervalLookup:
     """Test the _get_interval helper."""
 
     def test_known_intervals(self):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         val, s = ExperimentFactory._get_interval("unison")
         assert val == pytest.approx(1.0)
@@ -31,7 +31,7 @@ class TestIntervalLookup:
         assert s == "3/2"
 
     def test_unknown_interval_raises(self):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
         with pytest.raises(KeyError):
             ExperimentFactory._get_interval("nonexistent")
 
@@ -40,7 +40,7 @@ class TestSimpleSmoothTrials:
     """Test _create_simple_trials_logic."""
 
     def test_output_shape(self, mock_audio):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = [f"ROI{i+1}" for i in range(4)]
         frequencies = [10000, 12000, 14000, 16000]
@@ -55,7 +55,7 @@ class TestSimpleSmoothTrials:
 
     def test_silent_trials_are_even(self, mock_audio):
         """Even-indexed trials (0, 2, 4...) should be silent (freq=0)."""
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = ["ROI1", "ROI2"]
         frequencies = [10000, 12000]
@@ -71,7 +71,7 @@ class TestSimpleSmoothTrials:
 
     def test_active_trial_has_correct_frequencies(self, mock_audio):
         """First active trial (trial_ID=2) preserves original frequency order."""
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = ["ROI1", "ROI2", "ROI3"]
         frequencies = [10000, 12000, 14000]
@@ -84,7 +84,7 @@ class TestSimpleSmoothTrials:
         assert list(trial_2["frequency"]) == frequencies
 
     def test_has_tracking_columns(self, mock_audio):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = ["ROI1", "ROI2"]
         df, _ = ExperimentFactory._create_simple_trials_logic(
@@ -95,7 +95,7 @@ class TestSimpleSmoothTrials:
             assert col in df.columns, f"Missing tracking column: {col}"
 
     def test_wave_arrays_are_numpy(self, mock_audio):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = ["ROI1", "ROI2"]
         df, wave_arrays = ExperimentFactory._create_simple_trials_logic(
@@ -110,7 +110,7 @@ class TestTEMTrials:
     """Test _create_tem_trials_logic."""
 
     def test_output_columns(self, mock_audio):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = ["ROI1", "ROI2"]
         frequencies = [10000, 20000]
@@ -131,7 +131,7 @@ class TestTEMTrials:
         assert set(df.columns) == expected_cols
 
     def test_silent_trials_marked(self, mock_audio):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = ["ROI1"]
         df, _ = ExperimentFactory._create_tem_trials_logic(
@@ -148,7 +148,7 @@ class TestComplexIntervalsTrials:
     """Test _create_complex_intervals_trials_logic."""
 
     def test_output_columns(self, mock_audio):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = ["ROI1", "ROI2"]
         s1 = mock_audio.generate_sound_data(15000)
@@ -171,7 +171,7 @@ class TestComplexIntervalsTrials:
 
     def test_silent_trials_use_tuple(self, mock_audio):
         """Silent trials store (0, 0) as wave_arrays."""
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = ["ROI1"]
         s = mock_audio.generate_sound_data(15000)
@@ -190,7 +190,7 @@ class TestSequenceTrials:
     """Test _create_sequence_trials_logic."""
 
     def test_sequence_output_shape(self, mock_audio):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = ["ROI1", "ROI2"]
         # Two patterns: one normal, one silence
@@ -209,7 +209,7 @@ class TestSequenceTrials:
         assert "pattern" in df.columns
 
     def test_vocalisation_sentinel(self, mock_audio):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = ["ROI1"]
         df, _ = ExperimentFactory._create_sequence_trials_logic(
@@ -226,14 +226,14 @@ class TestGenerateTrialsRouter:
     """Test that generate_trials dispatches correctly."""
 
     def test_unknown_mode_raises(self, mock_audio, experiment_config):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         experiment_config.experiment_mode = "nonexistent_mode"
         with pytest.raises(ValueError, match="Unknown experiment mode"):
             ExperimentFactory.generate_trials(experiment_config, mock_audio)
 
     def test_simple_smooth_mode(self, mock_audio, experiment_config):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         experiment_config.experiment_mode = "simple_smooth"
         experiment_config.rois_number = 4
@@ -250,7 +250,7 @@ class TestInfoHelpers:
     """Test the _get_info_*_hard_coded helpers."""
 
     def test_get_info_intervals_hard_coded(self):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         rois = ["ROI1", "ROI2", "ROI3", "ROI4", "ROI5", "ROI6", "ROI7", "ROI8"]
         tonal_centre = 10000
@@ -267,7 +267,7 @@ class TestInfoHelpers:
         assert freqs[-1] == [0, 0]
 
     def test_get_info_tem_hard_coded(self, mock_audio, tmp_path):
-        from experiments import ExperimentFactory
+        from amazeing.auditory.experiments import ExperimentFactory
 
         # Create a dummy WAV path (load_wav will return silence for missing files)
         dummy_voc = str(tmp_path / "dummy.wav")

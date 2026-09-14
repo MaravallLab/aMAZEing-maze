@@ -9,7 +9,7 @@ Figures are saved inside each session folder.
 
 import sys
 import os
-from modules.analysis import SessionAnalyzer
+from amazeing.auditory.analysis import SessionAnalyzer
 
 
 def main():
