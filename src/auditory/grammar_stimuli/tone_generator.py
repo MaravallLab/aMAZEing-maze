@@ -4,14 +4,16 @@ All functions return ``float32`` numpy arrays at ``config.SAMPLE_RATE``.
 Tones are ramped with a cosine-squared envelope (``RAMP_MS`` in/out) to
 avoid spectral splatter at onset/offset.
 
-Deliberately minimal: no speaker-response compensation here. If calibration
-is required, wrap the output of :func:`generate_tone` with the same gain
-curve used in ``code/auditory/updated_version/modules/audio.py``.
+Speaker-response compensation is optional: :func:`generate_melody` accepts a
+``gain_fn`` mapping frequency (Hz) to a linear gain, which is multiplied into
+the amplitude of each tone. The maze harness passes
+``Audio.relative_gains`` so the six tones are equalised for the calibrated
+speaker without exceeding full scale.
 """
 
 from __future__ import annotations
 
-from typing import Iterable, List
+from typing import Callable, Iterable, List, Optional
 
 import numpy as np
 
@@ -100,12 +102,23 @@ def generate_melody(
     symbols: Iterable[str],
     sample_rate: int = cfg.SAMPLE_RATE,
     amplitude: float = cfg.AMPLITUDE,
+    gain_fn: Optional[Callable[[float], float]] = None,
 ) -> np.ndarray:
-    """Concatenate tone units for the given sequence of tone symbols."""
-    units: List[np.ndarray] = [
-        generate_tone_unit(s, sample_rate=sample_rate, amplitude=amplitude)
-        for s in symbols
-    ]
+    """Concatenate tone units for the given sequence of tone symbols.
+
+    ``gain_fn(frequency_hz)`` returns a linear gain applied to that tone's
+    amplitude (speaker compensation). ``None`` plays every tone at
+    ``amplitude``. The caller is responsible for keeping
+    ``amplitude * gain`` within [-1, 1].
+    """
+    units: List[np.ndarray] = []
+    for s in symbols:
+        amp = amplitude
+        if gain_fn is not None:
+            if s not in cfg.TONES:
+                raise KeyError(f"Unknown tone symbol {s!r}. Known: {list(cfg.TONES)}")
+            amp = amplitude * float(gain_fn(cfg.TONES[s]))
+        units.append(generate_tone_unit(s, sample_rate=sample_rate, amplitude=amp))
     if not units:
         return np.zeros(0, dtype=cfg.DTYPE)
     return np.concatenate(units)

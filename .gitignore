@@ -151,6 +151,9 @@ docs/build/
 *.csv
 !analysis/calibration/frequency_response_speaker.csv
 !tests/fixtures/*.csv
+# Tactile paradigm configuration (required to run simplerCode.py)
+!src/simplermaze/grating_maps.csv
+!src/simplermaze/reward_sequences.csv
 
 # OS files
 Thumbs.db

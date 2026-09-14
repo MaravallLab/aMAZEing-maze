@@ -217,8 +217,10 @@ def create_trials(numTrials = 100, sessionStage = 2,nonRepeat=False):
         print("invalid session stage, defaulting to stage 1 - habituation")
         sessionStage=1
 
-    gratingMap = pd.read_csv("grating_maps.csv")
-    rewardSequences = pd.read_csv("reward_sequences.csv")
+    # Both CSVs ship next to this module (see README.md in this folder).
+    here = os.path.dirname(os.path.abspath(__file__))
+    gratingMap = pd.read_csv(os.path.join(here, "grating_maps.csv"))
+    rewardSequences = pd.read_csv(os.path.join(here, "reward_sequences.csv"))
 
     stage = rewardSequences[rewardSequences.sessionID=="Stage "+str(sessionStage)]
     #lenRewLoc = len(stage.rewloc)

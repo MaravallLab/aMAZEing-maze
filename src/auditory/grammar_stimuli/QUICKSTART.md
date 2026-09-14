@@ -183,7 +183,8 @@ then four 15-minute active blocks with no gaps between them (62 min total).
 
 ### Step 2b. (Optional) Draw or re-draw the ROIs
 
-If `rois1.csv` does not exist in `src/auditory/`, the script will
+If `rois1.csv` does not exist at `cfg.roi_csv_path` (default:
+`<base_output_path>/rois1.csv`), the script will
 automatically prompt you to draw the ROIs the first time you run it
 (using `cv.selectROI` — drag a rectangle, press Enter, repeat for each
 of the 10 ROIs in order: 2 entrances + ROIs 1–8). After that, the same

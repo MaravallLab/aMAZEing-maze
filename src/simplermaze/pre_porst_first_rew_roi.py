@@ -16,7 +16,12 @@ import matplotlib.patches as patches
 # CONFIGURATION
 
 
-base_path = r"C:/Users/shahd/Box/Awake Project/Maze data/simplermaze/mouse 6357/"
+# Data directory: set MAZE_DATA_DIR (the simplermaze root) or edit here.
+base_path = os.path.join(
+    os.environ.get("MAZE_DATA_DIR",
+                   os.path.join(os.path.expanduser("~"), "Box", "Awake Project",
+                                "Maze data", "simplermaze")),
+    "mouse 6357") + os.sep
 
 session_path = base_path+ r"2024-08-28_11_58_146357session3.6/"
 

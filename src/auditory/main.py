@@ -146,7 +146,9 @@ def main():
 
     # If cfg.draw_rois is True, force re-drawing by removing the existing CSV
     # so ROIMonitor's "missing → interactive draw" path fires.
-    roi_csv_path = "rois1.csv"
+    roi_csv_path = cfg.roi_csv_path
+    os.makedirs(os.path.dirname(roi_csv_path) or ".", exist_ok=True)
+    print(f"📐 ROI file: {roi_csv_path}")
     if cfg.draw_rois and os.path.exists(roi_csv_path):
         print(f"📐 draw_rois=True → removing existing {roi_csv_path} so you can re-draw.")
         os.remove(roi_csv_path)
@@ -295,7 +297,9 @@ def main():
 
                     # Grammar arm: sample a fresh melody on every entry
                     if isinstance(sound_clip, GrammarStimulus):
-                         wave = sound_clip.render(audio, roi=roi, trial_id=trial_idx)
+                         wave = sound_clip.render(
+                             audio, roi=roi, trial_id=trial_idx,
+                             apply_speaker_gain=cfg.grammar_apply_speaker_gain)
                          audio.play(wave)
                          duration = len(wave) / cfg.samplerate
                     # Handle Tuple (Intervals) vs Single Sound
@@ -376,9 +380,16 @@ def main():
                 trial_idx = unique_trials[-1] + 1 
                 break
 
+        # Close any visit still open at the block boundary so it is neither
+        # dropped nor carried into the next block (see DataManager.close_open_visits).
+        n_closed = DataManager.close_open_visits(
+            visit_log_path, trials_df, trial_idx, visit_start_times, time.time())
+        if n_closed:
+            print(f"   📝 Closed {n_closed} open visit(s) at end of trial {trial_idx}")
+
         # Save data after every trial (Safety)
         trials_df.to_csv(os.path.join(new_dir_path, f"{base_name}.csv"), index=False)
-        
+
         # Stop everything between trials
         audio.stop()
         arduino.trigger_off()

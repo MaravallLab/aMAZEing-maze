@@ -15,6 +15,10 @@ _DEFAULT_BASE = os.path.join(os.path.expanduser("~"), "Desktop", "auditory_maze_
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 _DEFAULT_CALIBRATION = os.path.join(_REPO_ROOT, "analysis", "calibration", "frequency_response_speaker.csv")
 
+# Vocalisation .wav files are not tracked (see .gitignore); this folder is
+# where users are expected to drop them.
+_DEFAULT_VOCALISATION_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vocalisations")
+
 @dataclass
 class ExperimentConfig:
 
@@ -90,18 +94,37 @@ class ExperimentConfig:
     rois_number: int = 8
     entrance_rois: List[str] = field(default_factory=lambda: ["entrance1", "entrance2"])
 
+    # Apply the speaker frequency-response compensation to the six grammar
+    # tones. Gains are normalised so the least-attenuated tone keeps its
+    # nominal amplitude and the others are boosted relative to it, then the
+    # whole set is scaled so nothing exceeds 1.0 (no clipping). Set False to
+    # reproduce sessions recorded before this option existed (uncompensated).
+    grammar_apply_speaker_gain: bool = True
+
     # PATHS — override these for your machine
     base_output_path: str = _DEFAULT_BASE
     calibration_gain_path: str = _DEFAULT_CALIBRATION
+
+    # Where the ROI rectangles are stored. ROIs belong to a rig, not to the
+    # code, so the default lives next to the recordings rather than in the
+    # source tree. Leave empty to use <base_output_path>/rois1.csv.
+    roi_csv_path: str = ""
 
     # Top-level day label inserted between base_output_path and experiment_mode.
     # Set via --day on the CLI (e.g. habituation, day_1, day_2).
     # Leave empty to keep the old flat structure.
     experiment_day: str = ""
 
-    # Path to vocalisation control files
-    path_to_vocalisation_folder: str = r"C:\Users\labuser\Downloads\vocalisationzzzzzz\trimmed_vocalisations"
-    path_to_vocalisation_control: str = r"c:\Users\labuser\Downloads\vocalisationzzzzzz\trimmed_vocalisations\run1_day2_male_w_female_oestrus.wav"
+    # Vocalisation stimuli. The folder defaults to src/auditory/vocalisations
+    # (gitignored — drop your .wav files there). The control file is the single
+    # recording used on the "vocalisation" arm of the mixed experiments; leave
+    # empty to make that arm silent (a warning is printed at session start).
+    path_to_vocalisation_folder: str = _DEFAULT_VOCALISATION_FOLDER
+    path_to_vocalisation_control: str = ""
+
+    def __post_init__(self):
+        if not self.roi_csv_path:
+            self.roi_csv_path = os.path.join(self.base_output_path, "rois1.csv")
 
 
     def get_trial_lengths(self) -> List[float]:

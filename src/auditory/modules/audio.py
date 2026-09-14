@@ -7,9 +7,8 @@ import pandas as pd
 import numpy as np
 from config import ExperimentConfig
 from scipy.signal import resample_poly
-from scipy.signal import resample_poly
 from scipy.interpolate import interp1d
-from typing import List, Dict, Optional, Union, Tuple
+from typing import List, Dict, Optional, Union, Tuple, Sequence
 
 class Audio:
     def __init__(self, cfg: ExperimentConfig,
@@ -60,7 +59,25 @@ class Audio:
 
         gain = 10** (-attenuation_db / 20)
         return gain
-    
+
+    def relative_gains(self, freqs_hz: Sequence[float]) -> Dict[float, float]:
+        """Per-frequency gains that equalise a *set* of tones without clipping.
+
+        ``compute_gain`` boosts each tone by the speaker's attenuation at that
+        frequency, so a tone in a -7 dB notch gets a gain of ~2.2 and clips at
+        playback. When several tones are played at a nominal amplitude that is
+        already near full scale (e.g. grammar melodies) it is safer to keep
+        the relative levels correct and scale the whole set down: the gains
+        returned here are ``compute_gain(f) / max(compute_gain)`` so the most
+        boosted tone lands at exactly 1.0 and every other tone is below it.
+        Without a calibration curve every gain is 1.0.
+        """
+        raw = {float(f): self.compute_gain(float(f)) for f in freqs_hz}
+        top = max(raw.values()) if raw else 1.0
+        if top <= 0:
+            return {f: 1.0 for f in raw}
+        return {f: g / top for f, g in raw.items()}
+
     def generate_sound_data(self, frequency: float, waveform= None, duration_s= None, volume= None, ramp_duration_s= None) -> np.ndarray:
         #function to generate sound data for a given frequency and waveform, with speaker compensation and ramping
 

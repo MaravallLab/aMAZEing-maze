@@ -27,12 +27,19 @@
 .EXAMPLE
   # Different dataset / models:
   .\run_pipeline.ps1 -InputDir E:\study2_out -ModelsDir E:\models -CalibrationDir E:\study2_out
+
+.EXAMPLE
+  # Set the paths once per terminal instead of passing them every time:
+  $env:AMAZE_SLEAP_INPUT = "D:\simplermaze_output"; $env:AMAZE_SLEAP_MODELS = "D:\sleap_models"
+  .\run_pipeline.ps1
 #>
 [CmdletBinding()]
 param(
-    [string]$InputDir       = "D:\simplermaze_output",
-    [string]$ModelsDir      = "C:\Users\shahd\OneDrive\Desktop\CROPPED_VIDEOS_FOR_SLEAP\models",
-    [string]$CalibrationDir = "D:\simplermaze_output",
+    # Defaults come from environment variables (AMAZE_SLEAP_INPUT,
+    # AMAZE_SLEAP_MODELS, AMAZE_SLEAP_CALIB) so no lab path is hard-coded.
+    [string]$InputDir       = $env:AMAZE_SLEAP_INPUT,
+    [string]$ModelsDir      = $env:AMAZE_SLEAP_MODELS,
+    [string]$CalibrationDir = $env:AMAZE_SLEAP_CALIB,
     [string]$Device         = "cuda",
     [string]$Python         = "$env:APPDATA\uv\tools\sleap-nn\Scripts\python.exe",
     [switch]$SkipInference,   # run only the filter stage
@@ -47,6 +54,11 @@ function Stamp { (Get-Date).ToString("yyyy-MM-dd HH:mm:ss") }
 function Section($msg) { Write-Host "`n========== $(Stamp)  $msg ==========" -ForegroundColor Cyan }
 
 # --- preflight checks -----------------------------------------------------
+if (-not $InputDir -or -not $ModelsDir) {
+    Write-Host "ERROR: -InputDir and -ModelsDir are required (or set AMAZE_SLEAP_INPUT / AMAZE_SLEAP_MODELS)." -ForegroundColor Red
+    exit 1
+}
+if (-not $CalibrationDir) { $CalibrationDir = $InputDir }
 if (-not (Test-Path $Python)) {
     Write-Host "ERROR: sleap-nn Python not found at:`n  $Python" -ForegroundColor Red
     Write-Host "Install it with:  uv tool install --python 3.13 `"sleap-nn[torch]`" --torch-backend auto"

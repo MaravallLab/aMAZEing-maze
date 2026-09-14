@@ -129,6 +129,52 @@ class TestCalibration:
         assert mock_audio.compute_gain(10000) == 1.0
         assert mock_audio.compute_gain(20000) == 1.0
 
+    def test_relative_gains_without_curve_are_unity(self, mock_audio):
+        gains = mock_audio.relative_gains([8000, 16000, 25398])
+        assert set(gains.values()) == {1.0}
+
+    def test_relative_gains_with_repo_curve(self, tmp_path):
+        """With the shipped calibration CSV, gains equalise tones without clipping."""
+        import os
+        from config import ExperimentConfig
+        from audio import Audio
+
+        cfg = ExperimentConfig()
+        assert os.path.exists(cfg.calibration_gain_path)
+        audio = Audio(cfg, calibration_gain_path=cfg.calibration_gain_path)
+        assert audio.gain_curve is not None
+
+        freqs = [8000.0, 10079.0, 12699.0, 16000.0, 20159.0, 25398.0]
+        gains = audio.relative_gains(freqs)
+
+        # Never above full scale, and the deepest notch (16 kHz on this speaker)
+        # is the reference at exactly 1.0.
+        assert max(gains.values()) == pytest.approx(1.0)
+        assert all(0 < g <= 1.0 + 1e-9 for g in gains.values())
+        assert gains[16000.0] == pytest.approx(1.0)
+        # Relative levels match the raw gain curve.
+        raw = {f: audio.compute_gain(f) for f in freqs}
+        for f in freqs:
+            assert gains[f] == pytest.approx(raw[f] / max(raw.values()))
+
+    def test_grammar_melody_applies_gain(self, mock_audio):
+        """generate_melody scales each tone by gain_fn(frequency)."""
+        from grammar_stimuli.tone_generator import generate_melody
+        from grammar_stimuli import config as gcfg
+
+        half = generate_melody(["A"], sample_rate=mock_audio.fs, amplitude=0.5,
+                               gain_fn=lambda f: 0.5)
+        full = generate_melody(["A"], sample_rate=mock_audio.fs, amplitude=0.5)
+        assert len(half) == len(full)
+        assert np.max(np.abs(half)) == pytest.approx(0.25, abs=1e-3)
+        assert np.max(np.abs(full)) == pytest.approx(0.5, abs=1e-3)
+
+        # Gain is looked up by the tone's frequency
+        seen = []
+        generate_melody(["A", "D"], sample_rate=mock_audio.fs,
+                        gain_fn=lambda f: seen.append(f) or 1.0)
+        assert seen == [gcfg.TONES["A"], gcfg.TONES["D"]]
+
     def test_defaults_resolve_correctly(self, mock_audio):
         """_resolve_params falls back to defaults when None is passed."""
         wf, dur, vol, ramp = mock_audio._resolve_params(None, None, None, None)

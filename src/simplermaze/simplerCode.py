@@ -34,8 +34,12 @@ videoInput = 0
 #"C:/Users/labadmin/Desktop/maze_recordings/2025-02-18_14_27_3389411/8941_2025-02-18_14_27_33.mp4"
 
 
+# The two configuration CSVs (grating_maps.csv, reward_sequences.csv) live
+# next to this script, so it can be launched from any working directory.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 #get the identification of each grating
-gratingID = pd.read_csv("grating_maps.csv",index_col=0)
+gratingID = pd.read_csv(os.path.join(SCRIPT_DIR, "grating_maps.csv"), index_col=0)
 #gratingID = [match for match in list(trialsIDs.keys()) if "motor" in match]
 
 
@@ -44,9 +48,10 @@ date_time = sf.get_current_time_formatted()
 
 
 if testing:
-    base_path = "C:/Users/labadmin/Desktop/maze_recordings/"
-    new_dir_path = "C:/Users/labadmin/Desktop/maze_recordings/"
-    #new_dir_path = "C:/Users/labadmin/Desktop/maze_recordings/"
+    base_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'maze_recordings')
+    sf.ensure_directory_exists(base_path)
+    new_dir_path = base_path
+    animal_ID, session_ID = "test", "0"
     experiment_phase = 2
     #create  trials and save them to csv (later this csv needs to go to the appropriate session folder)
     trials = sf.create_trials(numTrials = 100, sessionStage=experiment_phase, nonRepeat=True)
@@ -90,14 +95,15 @@ if serialOn:
     ser.flush()
 
 
-if drawRois:
+rois_path = os.path.join(base_path, "rois1.csv")
+if drawRois or not os.path.exists(rois_path):
+    if not drawRois:
+        print(f"No ROI file at {rois_path} — drawing ROIs now.")
     sf.define_rois(videoInput = videoInput,
                     roiNames = ["entrance1","entrance2",
                             "rewA","rewB","rewC","rewD"],
-                    outputName = base_path+"/"+"rois1.csv")
-    rois = pd.read_csv(base_path+ "/"+"rois1.csv",index_col=0)
-else:
-    rois = pd.read_csv(base_path+"/"+ "rois1.csv",index_col=0)
+                    outputName = rois_path)
+rois = pd.read_csv(rois_path, index_col=0)
     #rois_save = rois[:]
     #rois_save.to_csv(new_dir_path+"/"+"rois1.csv")
 #load ROI information

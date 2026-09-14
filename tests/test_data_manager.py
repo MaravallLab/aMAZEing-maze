@@ -91,6 +91,52 @@ class TestLogIndividualVisit:
         assert len(df) == 5
 
 
+class TestCloseOpenVisits:
+    """Visits still open at a block boundary must be logged, not dropped."""
+
+    def _make_log(self, tmp_path):
+        csv_path = tmp_path / "visits.csv"
+        with open(csv_path, "w", newline="") as f:
+            csv.writer(f).writerow(["trial_ID", "ROI_visited", "stimulus",
+                                    "sound_on_time", "sound_off_time",
+                                    "time_spent_seconds"])
+        return str(csv_path)
+
+    def test_open_visit_is_logged_and_accumulated(self, tmp_path):
+        from data_manager import DataManager
+
+        log = self._make_log(tmp_path)
+        trials = pd.DataFrame({
+            "trial_ID": [2, 2],
+            "ROIs": ["1", "2"],
+            "frequency": [10000, 0],
+            "time_spent": [np.nan, 4.0],
+        })
+        starts = {"entrance1": None, "1": 100.0, "2": 105.0}
+
+        n = DataManager.close_open_visits(log, trials, 2, starts, end_time=110.0)
+
+        assert n == 2
+        assert all(v is None for v in starts.values())
+        logged = pd.read_csv(log, dtype={"ROI_visited": str})
+        assert len(logged) == 2
+        assert set(logged["ROI_visited"]) == {"1", "2"}
+        assert logged.set_index("ROI_visited")["time_spent_seconds"]["1"] == pytest.approx(10.0)
+        # NaN time_spent becomes the visit duration; existing value accumulates
+        assert trials.loc[trials["ROIs"] == "1", "time_spent"].iloc[0] == pytest.approx(10.0)
+        assert trials.loc[trials["ROIs"] == "2", "time_spent"].iloc[0] == pytest.approx(9.0)
+
+    def test_nothing_open_logs_nothing(self, tmp_path):
+        from data_manager import DataManager
+
+        log = self._make_log(tmp_path)
+        trials = pd.DataFrame({"trial_ID": [1], "ROIs": ["1"],
+                               "frequency": [0], "time_spent": [np.nan]})
+        n = DataManager.close_open_visits(log, trials, 1, {"1": None}, 50.0)
+        assert n == 0
+        assert len(pd.read_csv(log)) == 0
+
+
 class TestSetupSession:
     """Test session directory creation.
 

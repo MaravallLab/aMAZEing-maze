@@ -260,7 +260,9 @@ class TestSessionRunner:
         )
         summary = SessionRunner(c).run_training_session()
         assert summary.mode == "training"
-        assert summary.trained_grammar == "A"
+        # group 1: EE <- A, SC <- B
+        assert summary.ee_grammar == "A"
+        assert summary.sc_grammar == "B"
         assert summary.n_melodies["training"] == 10
         path = summary.arm_logs["training"]
         assert os.path.exists(path)
@@ -277,8 +279,9 @@ class TestSessionRunner:
             session_duration_s=44.0 * len(TEST_ARM_PLAN),
         )
         summary = SessionRunner(c).run_test_session()
-        assert summary.trained_grammar == "A"
-        assert summary.novel_grammar == "B"
+        # group 2: EE <- B, SC <- A
+        assert summary.ee_grammar == "B"
+        assert summary.sc_grammar == "A"
         assert set(summary.arm_logs) == {a["arm_id"] for a in TEST_ARM_PLAN}
         # Grammar arms should have >0 melodies; voc and silent 0.
         for arm in TEST_ARM_PLAN:

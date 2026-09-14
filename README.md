@@ -4,7 +4,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-yellow.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-63%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-115%20passing-brightgreen.svg)](#testing)
 
 ---
 
@@ -164,7 +164,16 @@ cd src/simplermaze
 python simplerCode.py
 ```
 
-This runs the tactile paradigm with servo-controlled gratings.
+This runs the tactile paradigm with servo-controlled gratings. It reads two
+configuration CSVs that ship next to the script:
+
+| File | Contents |
+|---|---|
+| `grating_maps.csv` | One row per reward location (A–D); each `motor <name>` column holds the `<name> <angle>` command sent to that grating servo (see `firmware/arduino/README.md`). |
+| `reward_sequences.csv` | One row per (training stage, reward location): `portprob` (fraction of trials at that port), `rewprob` (probability a trial there is rewarded), `wrongallowed`. |
+
+The values in the repo are a **template**: check them against your rig before running.
+ROIs are drawn on first launch and stored as `rois1.csv` in the recordings folder.
 
 ---
 
@@ -193,9 +202,14 @@ Key settings to adjust for your setup:
 - `binary_threshold` — pixel threshold for IR camera detection (default 160; tune to your lighting)
 - `detection_sensitivity` — mouse detected when binary pixel sum drops below this fraction of the raw baseline (default 0.5)
 - `grammar_test_block_minutes` — list of 9 durations (min) for the 9-block cycle; even indices are silent blocks, odd are active; set silent entries to `0` to skip them
-- `path_to_vocalisation_control` — path to the `.wav` file played on the vocalisation control arm
+- `grammar_apply_speaker_gain` — equalise the six grammar tones for the calibrated speaker (default `True`; set `False` to reproduce sessions recorded before this option existed)
+- `roi_csv_path` — where the ROI rectangles are stored; defaults to `<base_output_path>/rois1.csv` because ROIs belong to a rig, not to the code
+- `path_to_vocalisation_folder` — folder of `.wav` files for the all-vocalisation mode (defaults to `src/auditory/vocalisations/`, which is gitignored)
+- `path_to_vocalisation_control` — the single `.wav` played on the vocalisation control arm of the mixed modes; leave empty for a silent arm
 
 The speaker frequency-response calibration CSV (`analysis/calibration/frequency_response_speaker.csv`) is loaded automatically — no path configuration needed.
+
+**Visits that straddle a block boundary** are closed at the block end, written to the visit log, and counted in `time_spent`. Data recorded before this fix either dropped such visits (this code base) or inflated them (the archived v1 script); the auditory analysis loader in `analysis/auditory/preference_analysis_config.py` documents the caps it applies to v1 data.
 
 ---
 
@@ -209,7 +223,7 @@ aMAZEing-maze/
 │   │   ├── main.py             #   Main experiment loop
 │   │   ├── run_analysis.py     #   Standalone per-session analysis CLI
 │   │   ├── run_summary_analysis.py # Cross-session summary analysis CLI (--day / --all)
-│   │   ├── rois1.csv           #   ROI coordinates (auto-created on first run)
+│   │   ├── vocalisations/      #   Drop your .wav stimuli here (gitignored)
 │   │   ├── modules/
 │   │   │   ├── audio.py        #   Sound generation, playback & speaker compensation
 │   │   │   ├── experiments.py  #   Trial structure factory (all experiment modes)
@@ -226,7 +240,9 @@ aMAZEing-maze/
 │   │       └── QUICKSTART.md   #     Step-by-step grammar experiment guide
 │   └── simplermaze/            # Tactile paradigm: 2- level binary decision tree with servos controlled gratings
 │       ├── simplerCode.py      #   Main script
-│       └── supFun.py           #   Support functions
+│       ├── supFun.py           #   Support functions
+│       ├── grating_maps.csv    #   Servo commands per reward location (template)
+│       └── reward_sequences.csv #  Trial distribution per training stage (template)
 │
 ├── firmware/
 │   ├── ttl_bnc/                # Arduino TTL synchronisation sketch
@@ -251,7 +267,7 @@ aMAZEing-maze/
 │   └── legacy/                 #   Bonsai workflow & old segmentation
 │
 ├── docs/                       # Sphinx documentation source
-├── tests/                      # pytest test suite (63 tests)
+├── tests/                      # pytest test suite (harness); grammar tests live in src/auditory/grammar_stimuli/tests
 ├── requirements.txt
 ├── requirements-dev.txt
 └── LICENSE                     # GPLv3
@@ -340,8 +356,8 @@ Silent-baseline sessions are automatically excluded — only active test-day ses
 The test suite covers audio generation, trial structure, ROI tracking, data management, configuration, and integration scenarios. All hardware dependencies are mocked.
 
 ```bash
-# Run all tests
-python -m pytest tests/ -v
+# Run all tests (harness + grammar stimulus package)
+python -m pytest tests/ src/auditory/grammar_stimuli/tests -v
 
 # Run with coverage
 python -m pytest tests/ --cov=src/auditory/modules --cov-report=term-missing

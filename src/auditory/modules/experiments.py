@@ -38,18 +38,29 @@ class GrammarStimulus:
     history: List[Dict[str, Any]] = field(default_factory=list)
 
     def render(self, audio: Audio, roi: str = "", trial_id: int = 0,
-               n_repeats: int = 20) -> np.ndarray:
+               n_repeats: int = 20, apply_speaker_gain: bool = True) -> np.ndarray:
         """Generate n_repeats consecutive melody cycles (melody + inter-melody gap).
 
         n_repeats=20 gives ~88 s of audio (20 × 4.4 s), which covers any
         realistic arm visit without the mouse sitting in silence.
+
+        ``apply_speaker_gain`` equalises the six tones for the calibrated
+        speaker using ``Audio.relative_gains`` (the tone in the deepest notch
+        of the response curve is played at full nominal amplitude, the others
+        are attenuated relative to it). Pass False to reproduce sessions
+        recorded before compensation existed.
         """
+        gain_fn = None
+        if apply_speaker_gain:
+            gains = audio.relative_gains(list(gcfg.TONES.values()))
+            gain_fn = lambda f: gains.get(float(f), 1.0)  # noqa: E731
+
         gap = generate_silence_gap(sample_rate=audio.fs)
         chunks = []
         for _ in range(n_repeats):
             meta = self.sampler.sample_melody(length=gcfg.MELODY_LENGTH)
             wave = generate_melody(meta.symbols, sample_rate=audio.fs,
-                                   amplitude=gcfg.AMPLITUDE)
+                                   amplitude=gcfg.AMPLITUDE, gain_fn=gain_fn)
             chunks.append(wave)
             chunks.append(gap)
             self.history.append({

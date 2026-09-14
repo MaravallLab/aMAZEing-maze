@@ -70,8 +70,13 @@ class ROIMonitor:
                  roiNames: List[str] = ["entrance1", "entrance2", "ROI1", "ROI2", "ROI3", "ROI4", "ROI5", "ROI6", "ROI7", "ROI8"],
                  enter_frames: int = 1,
                  exit_frames: int = 5,
-                 detection_sensitivity: float = 5.0,
+                 detection_sensitivity: float = 0.6,
                  debug_roi: str = ""):
+        # detection_sensitivity is the fraction of the empty-maze baseline
+        # below which an ROI counts as occupied (the mouse blocks IR light, so
+        # the pixel sum drops). It must be < 1; the old default of 5.0 flagged
+        # every ROI as occupied on every frame. ExperimentConfig passes its
+        # own value; this default only matters for direct callers.
         
 
         self.roiNames = roiNames

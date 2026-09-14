@@ -17,7 +17,7 @@ uv tool); this script calls that interpreter for you. Override anything via
 flags, e.g.:
 
     python run_pipeline.py --input_dir D:\simplermaze_output \
-        --models_dir "C:\Users\shahd\OneDrive\Desktop\CROPPED_VIDEOS_FOR_SLEAP\models"
+        --models_dir D:\sleap_models
 
     python run_pipeline.py --skip_inference     # only (re)run the filter
 """
@@ -32,11 +32,13 @@ REPO = Path(__file__).resolve().parent
 INFER = REPO / "analysis" / "sleap_batch_processing.py"
 FILT = REPO / "analysis" / "filter_in_maze.py"
 
-# Defaults for this dataset (override with flags).
+# Defaults come from environment variables so no lab-specific path is baked
+# into the repo. Set AMAZE_SLEAP_INPUT, AMAZE_SLEAP_MODELS and (optionally)
+# AMAZE_SLEAP_CALIB, or pass the flags explicitly.
 DEFAULT_PY = os.path.expandvars(r"%APPDATA%\uv\tools\sleap-nn\Scripts\python.exe")
-DEFAULT_INPUT = r"D:\simplermaze_output"
-DEFAULT_MODELS = r"C:\Users\shahd\OneDrive\Desktop\CROPPED_VIDEOS_FOR_SLEAP\models"
-DEFAULT_CALIB = r"D:\simplermaze_output"
+DEFAULT_INPUT = os.environ.get("AMAZE_SLEAP_INPUT", "")
+DEFAULT_MODELS = os.environ.get("AMAZE_SLEAP_MODELS", "")
+DEFAULT_CALIB = os.environ.get("AMAZE_SLEAP_CALIB", DEFAULT_INPUT)
 
 
 def stamp():
@@ -64,6 +66,13 @@ def main():
     a = ap.parse_args()
 
     # --- preflight ---------------------------------------------------------
+    if not a.input_dir or not a.models_dir:
+        print("ERROR: --input_dir and --models_dir are required (or set the\n"
+              "       AMAZE_SLEAP_INPUT / AMAZE_SLEAP_MODELS environment variables).",
+              file=sys.stderr)
+        return 1
+    if not a.calibration_dir:
+        a.calibration_dir = a.input_dir
     if not Path(a.python).exists():
         print(f"ERROR: sleap-nn Python not found at:\n  {a.python}\n"
               'Install it with:\n'

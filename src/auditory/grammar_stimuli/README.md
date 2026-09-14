@@ -313,8 +313,8 @@ followed by four nearly-uninterrupted active blocks.
 
 The first time you run `main.py`, you'll be prompted to draw all 10
 ROIs (2 entrances + ROIs 1–8) interactively using OpenCV's selectROI.
-The layout is saved to `src/auditory/rois1.csv` and reused for every
-subsequent session.
+The layout is saved to `cfg.roi_csv_path` (default
+`<base_output_path>/rois1.csv`) and reused for every subsequent session.
 
 To re-draw the ROIs (e.g. you moved the maze), set
 `draw_rois: bool = True` in `config.py` for the next run. The existing

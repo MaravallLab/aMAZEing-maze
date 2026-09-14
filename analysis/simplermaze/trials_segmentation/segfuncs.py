@@ -5,9 +5,12 @@ import numpy as np
 from pathlib import Path
 from typing import List, Tuple, Optional
 
-#  CONFIGURATION 
-# UPDATE THIS PATH TO YOUR DATA DIRECTORY
-BASE_DIR = r"C:/Users/shahd/Box/Awake Project/Maze data/simplermaze/"
+#  CONFIGURATION
+# Data directory: set the MAZE_DATA_DIR environment variable, or edit here.
+BASE_DIR = os.environ.get(
+    "MAZE_DATA_DIR",
+    os.path.join(os.path.expanduser("~"), "Box", "Awake Project", "Maze data", "simplermaze"),
+)
 
 REF_ROIS_FILE = "rois_reference.csv"
 ROI_NAMES = ["entrance1", "entrance2"]

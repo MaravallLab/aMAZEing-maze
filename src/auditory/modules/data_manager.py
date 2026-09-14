@@ -15,7 +15,7 @@ import csv
 import time
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 
 
 class DataManager:
@@ -185,6 +185,37 @@ class DataManager:
         with open(csv_path, 'a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([trial_id, roi, stimulus_str, sound_onset, sound_offset, duration])
+
+    @staticmethod
+    def close_open_visits(csv_path: str, trials_df: pd.DataFrame, trial_id: int,
+                          visit_start_times: Dict[str, Optional[float]],
+                          end_time: float) -> int:
+        """Log and account for every visit still open when a trial block ends.
+
+        Before this existed, a visit that straddled a block boundary was
+        silently dropped (v2) or its duration inflated (v1). Here the visit
+        is closed at ``end_time`` (the block end), written to the visit log
+        like any other visit, and its duration is added to ``time_spent`` for
+        the (trial, ROI) row. Entries in ``visit_start_times`` are reset to
+        None. Returns the number of visits closed.
+        """
+        closed = 0
+        for roi, start_t in list(visit_start_times.items()):
+            if start_t is None:
+                continue
+            visit_dur = max(0.0, end_time - start_t)
+            stim_info = DataManager.get_stimulus_string(trials_df, trial_id, roi)
+            DataManager.log_individual_visit(csv_path, trial_id, roi, stim_info,
+                                             start_t, end_time, visit_dur)
+            mask = (trials_df['trial_ID'] == trial_id) & (trials_df['ROIs'] == roi)
+            if mask.any():
+                current = trials_df.loc[mask, 'time_spent'].values[0]
+                trials_df.loc[mask, 'time_spent'] = (
+                    visit_dur if pd.isna(current) else current + visit_dur
+                )
+            visit_start_times[roi] = None
+            closed += 1
+        return closed
 
 
 

@@ -38,9 +38,9 @@ class TestROIMonitorCalibration:
     """Test baseline calibration."""
 
     def test_calibrate_sets_thresholds(self, roi_monitor):
-        """Calibration on a white frame sets non-zero thresholds."""
+        """Calibration on white frames sets non-zero thresholds."""
         white_frame = np.full((200, 200), 255, dtype=np.uint8)
-        roi_monitor.calibrate(white_frame)
+        roi_monitor.calibrate([white_frame] * 3)
 
         # All monitored ROIs should have a threshold
         for name in roi_monitor.roiNames:
@@ -52,8 +52,9 @@ class TestROIMonitorUpdate:
     """Test frame-by-frame occupancy detection and debouncing."""
 
     def _calibrate_with_white(self, monitor):
+        # calibrate() takes a list of raw frames and averages their ROI sums
         white = np.full((200, 200), 255, dtype=np.uint8)
-        monitor.calibrate(white)
+        monitor.calibrate([white] * 3)
 
     def test_empty_frame_no_entries(self, roi_monitor):
         """White frame (no mouse) should produce no entries."""
