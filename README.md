@@ -4,7 +4,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-yellow.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-115%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-135%20passing-brightgreen.svg)](#testing)
 
 ---
 
@@ -17,12 +17,16 @@
   - [System Requirements](#system-requirements)
   - [Installation](#installation)
   - [Usage](#usage)
+    - [The graphical application](#the-graphical-application)
     - [Running an Auditory Experiment](#running-an-auditory-experiment)
     - [Experiment Modes](#experiment-modes)
+    - [Session config files](#session-config-files)
     - [Running the SimplerMaze](#running-the-simplermaze)
   - [Configuration](#configuration)
   - [Repository Structure](#repository-structure)
+  - [Post-Session Analysis](#post-session-analysis)
   - [Testing](#testing)
+  - [Building the standalone application](#building-the-standalone-application)
   - [Hardware Build](#hardware-build)
   - [Analysis Pipeline](#analysis-pipeline)
     - [Prerequisites](#prerequisites)
