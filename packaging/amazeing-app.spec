@@ -49,7 +49,8 @@ a = Analysis(
     hiddenimports=hidden,
     hookspath=[],
     runtime_hooks=[],
-    excludes=["tkinter", "PyQt5", "PyQt6", "IPython", "notebook", "jupyter", "pytest"],
+    excludes=["tkinter", "PyQt5", "PyQt6", "IPython", "notebook", "jupyter", "pytest",
+              "numba", "llvmlite", "plotly", "statsmodels", "seaborn", "PIL.ImageQt"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)
