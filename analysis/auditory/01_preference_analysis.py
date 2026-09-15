@@ -1,5 +1,5 @@
 """
-01 — Auditory Preference Analysis: Batch PI, Complexity & Individual Differences
+01 - Auditory Preference Analysis: Batch PI, Complexity & Individual Differences
 =================================================================================
 
 Extends the preference index (PI) analysis from Parkes & Maravall to all
@@ -22,15 +22,15 @@ Preference Index (PI):
   Ranges: -1 (prefer silence) to +1 (prefer sound)
 
 Outputs (saved to BATCH_ANALYSIS/):
-  - preference_data.csv           — per-mouse per-session PI + metrics
-  - fig1_pi_trajectories.png/pdf  — individual mouse PI across days
-  - fig2_pi_by_day.png/pdf        — mean PI per day with CI
-  - fig3_pi_violins.png/pdf       — violin plots by day
-  - fig4_complexity_heatmap.png   — stimulus-type visit duration heatmap
-  - fig5_vocalisation_contrast.png — vocalisation vs other days
-  - fig6_re_vs_pi.png/pdf         — roaming entropy predicts PI
-  - fig7_icc_summary.png/pdf      — variance decomposition
-  - stats_report.txt              — all statistical test results
+  - preference_data.csv - per-mouse per-session PI + metrics
+  - fig1_pi_trajectories.png/pdf - individual mouse PI across days
+  - fig2_pi_by_day.png/pdf - mean PI per day with CI
+  - fig3_pi_violins.png/pdf - violin plots by day
+  - fig4_complexity_heatmap.png - stimulus-type visit duration heatmap
+  - fig5_vocalisation_contrast.png - vocalisation vs other days
+  - fig6_re_vs_pi.png/pdf - roaming entropy predicts PI
+  - fig7_icc_summary.png/pdf - variance decomposition
+  - stats_report.txt - all statistical test results
 """
 
 import os
@@ -63,7 +63,7 @@ def log_stat(msg):
     stats_lines.append(msg)
 
 
-# ── helper functions ─────────────────────────────────────
+# -- helper functions -------------------------------------
 
 def classify_stimulus(row, day_key):
     """Classify a trial row's stimulus type based on the experiment mode."""
@@ -187,7 +187,7 @@ def safe_read_csv(path):
         return None
 
 
-# ── 1. load all sessions and compute metrics ─────────────
+# -- 1. load all sessions and compute metrics -------------
 print("Discovering sessions...")
 all_sessions = discover_sessions()
 print(f"Found {len(all_sessions)} sessions across {len(EXPERIMENT_DAYS)} days")
@@ -351,7 +351,7 @@ print(f"\nPI analysis: {len(df_pi)} sessions across {PI_DAYS}")
 print(f"Unique mice: {df_pi['mouse_id'].nunique()}")
 
 
-# ── 2. Figure 1: Individual PI trajectories across days ─
+# -- 2. Figure 1: Individual PI trajectories across days ─
 print("\nPlotting Figure 1: PI trajectories...")
 
 # Only include mice with at least 3 sessions for trajectory plot
@@ -397,7 +397,7 @@ fig1.savefig(os.path.join(OUTPUT_DIR, "fig1_pi_trajectories.pdf"),
 print("  Saved fig1_pi_trajectories")
 
 
-# ── 3. Figure 2: Mean PI per day with CI ─────────────────
+# -- 3. Figure 2: Mean PI per day with CI -----------------
 print("Plotting Figure 2: Mean PI per day...")
 
 fig2, ax2 = plt.subplots(figsize=(10, 6))
@@ -440,7 +440,7 @@ fig2.savefig(os.path.join(OUTPUT_DIR, "fig2_pi_by_day.pdf"),
 print("  Saved fig2_pi_by_day")
 
 
-# ── 4. Figure 3: Violin plots by day ────────────────────
+# -- 4. Figure 3: Violin plots by day --------------------
 print("Plotting Figure 3: PI violins...")
 
 fig3, ax3 = plt.subplots(figsize=(12, 6))
@@ -475,7 +475,7 @@ fig3.savefig(os.path.join(OUTPUT_DIR, "fig3_pi_violins.pdf"),
 print("  Saved fig3_pi_violins")
 
 
-# ── 5. Figure 4: Stimulus complexity heatmap ─────────────
+# -- 5. Figure 4: Stimulus complexity heatmap -------------
 print("Plotting Figure 4: Complexity heatmap...")
 
 # Aggregate: mean visit duration per stimulus type per day
@@ -549,7 +549,7 @@ if len(df_stim) > 0:
     print("  Saved fig4_complexity_heatmap")
 
 
-# ── 6. Figure 5: Vocalisation vs other days ─────────────
+# -- 6. Figure 5: Vocalisation vs other days -------------
 print("Plotting Figure 5: Vocalisation contrast...")
 
 # Paired comparison: for mice that did vocalisations + at least one other day
@@ -558,7 +558,7 @@ non_voc_days = [d for d in PI_DAYS if d != "w2_vocalisations"]
 
 fig5, axes5 = plt.subplots(1, 2, figsize=(14, 6))
 
-# Panel A: paired PI — vocalisation day vs mean of other days
+# Panel A: paired PI - vocalisation day vs mean of other days
 paired_data = []
 for mouse in voc_mice:
     voc_pi = df_pi[(df_pi["mouse_id"] == mouse) &
@@ -640,7 +640,7 @@ fig5.savefig(os.path.join(OUTPUT_DIR, "fig5_vocalisation_contrast.pdf"),
 print("  Saved fig5_vocalisation_contrast")
 
 
-# ── 7. Figure 6: Roaming entropy vs PI ───────────────────
+# -- 7. Figure 6: Roaming entropy vs PI -------------------
 print("Plotting Figure 6: Roaming entropy vs PI...")
 
 df_re = df_pi.dropna(subset=["roaming_entropy", "preference_index"]).copy()
@@ -712,7 +712,7 @@ fig6.savefig(os.path.join(OUTPUT_DIR, "fig6_re_vs_pi.pdf"),
 print("  Saved fig6_re_vs_pi")
 
 
-# ── 8. Mixed models: variance decomposition ─────────────
+# -- 8. Mixed models: variance decomposition -------------
 print("\nFitting mixed-effects models...")
 log_stat("\n" + "=" * 60)
 log_stat("MIXED-EFFECTS MODELS")
@@ -808,7 +808,7 @@ if len(df_model) > 10 and df_model["mouse_id"].nunique() > 2:
             log_stat(f"\nModel 3 failed: {e}")
 
 
-# ── 9. Figure 7: Variance decomposition summary ─────────
+# -- 9. Figure 7: Variance decomposition summary ---------
 print("Plotting Figure 7: Variance decomposition...")
 
 fig7, axes7 = plt.subplots(1, 2, figsize=(12, 5))
@@ -856,7 +856,7 @@ fig7.savefig(os.path.join(OUTPUT_DIR, "fig7_icc_summary.pdf"),
 print("  Saved fig7_icc_summary")
 
 
-# ── 10. Complexity analysis: stats ───────────────────────
+# -- 10. Complexity analysis: stats -----------------------
 log_stat("\n" + "=" * 60)
 log_stat("SENSORY COMPLEXITY ANALYSIS")
 log_stat("=" * 60)
@@ -894,7 +894,7 @@ for day in DAY_ORDER:
         log_stat(f"  Kruskal-Wallis: H={stat:.2f}, p={p:.4f}")
 
 
-# ── 11. Per-day one-sample tests: is PI different from 0? 
+# -- 11. Per-day one-sample tests: is PI different from 0?
 log_stat("\n" + "=" * 60)
 log_stat("ONE-SAMPLE TESTS: PI vs 0")
 log_stat("=" * 60)
@@ -912,7 +912,7 @@ for d in PI_DAYS:
         log_stat(f"  {DAY_SHORT[d]}: n={len(vals)} (too few for test)")
 
 
-# ── 12. save stats report ────────────────────────────────
+# -- 12. save stats report --------------------------------
 stats_path = os.path.join(OUTPUT_DIR, "stats_report.txt")
 with open(stats_path, "w") as f:
     f.write("\n".join(stats_lines))

@@ -184,7 +184,7 @@ class MarkovSampler:
             # For single-tier subsets (secondary/rare), values within a row
             # are equal (q=q, r=r), so p_eff = 1/len(cols). For tier='all'
             # values differ (0.60 / 0.12 / 0.07 / 0.02), so p_eff is the
-            # actual matrix entry — giving genuine per-tier surprise.
+            # actual matrix entry - giving genuine per-tier surprise.
             p_eff = float(probs[np.where(cols == nxt)[0][0]])
         bits = float(-np.log2(p_eff)) if p_eff > 0 else 0.0
         bits = 0.0 if bits == 0.0 else bits  # collapse -0.0 to 0.0

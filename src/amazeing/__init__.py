@@ -1,4 +1,4 @@
-"""aMAZEing maze — experiment control, logging and analysis for rodent mazes.
+"""aMAZEing maze - experiment control, logging and analysis for rodent mazes.
 
 Sub-packages
 ------------

@@ -76,7 +76,7 @@ def main():
     args = _parse_cli()
     if args.config:
         cfg = load_config(args.config)
-        print(f"📄 Loaded session config: {args.config}")
+        print(f"Loaded session config: {args.config}")
     else:
         cfg = ExperimentConfig()
 
@@ -96,7 +96,7 @@ def main():
 
     if args.write_config:
         out = save_config(cfg, args.write_config)
-        print(f"📄 Wrote effective configuration to {out}")
+        print(f"Wrote effective configuration to {out}")
         return
 
     print(f"Session config: experiment_mode={cfg.experiment_mode!r}  "
@@ -121,14 +121,14 @@ def main():
     # Initialize the maze entry/exit log
     maze_log_path = data_mgr.init_maze_log(cfg.experiment_mode)
 
-    print(f"📂 Session Ready: {new_dir_path}")
+    print(f"Session Ready: {new_dir_path}")
 
     # ==========================================
     # 2. HARDWARE SETUP
     # ==========================================
-    print("\n--- 🔌 Hardware Setup ---")
+    print("\n--- Hardware Setup ---")
     
-    # Initialize Audio — pulls samplerate/device/defaults from cfg.
+    # Initialize Audio - pulls samplerate/device/defaults from cfg.
     audio = Audio(cfg, calibration_gain_path=cfg.calibration_gain_path)
     
     # Initialize Arduino (if enabled in config)
@@ -145,12 +145,12 @@ def main():
         rec_path = os.path.join(new_dir_path, rec_name)
         fourcc = cv.VideoWriter_fourcc(*'mp4v')
         video_writer = cv.VideoWriter(rec_path, fourcc, camera.fps, (camera.width, camera.height))
-        print(f"📹 Recording started: {rec_name}")
+        print(f"Recording started: {rec_name}")
 
     # ==========================================
     # 3. GENERATE TRIALS
     # ==========================================
-    print("\n--- 🧪 Generating Trials ---")
+    print("\n--- Generating Trials ---")
     
     # We pass 'audio' so the factory can generate the correct waveforms
     trials_df, sound_array = ExperimentFactory.generate_trials(cfg, audio)
@@ -192,12 +192,12 @@ def main():
     full_rois_list = cfg.entrance_rois + generic_rois
 
     # If cfg.draw_rois is True, force re-drawing by removing the existing CSV
-    # so ROIMonitor's "missing → interactive draw" path fires.
+    # so ROIMonitor's "missing -> interactive draw" path fires.
     roi_csv_path = cfg.roi_csv_path
     os.makedirs(os.path.dirname(roi_csv_path) or ".", exist_ok=True)
-    print(f"📐 ROI file: {roi_csv_path}")
+    print(f"ROI file: {roi_csv_path}")
     if cfg.draw_rois and os.path.exists(roi_csv_path):
-        print(f"📐 draw_rois=True → removing existing {roi_csv_path} so you can re-draw.")
+        print(f"draw_rois=True -> removing existing {roi_csv_path} so you can re-draw.")
         os.remove(roi_csv_path)
 
     # Initialize Tracker
@@ -209,7 +209,7 @@ def main():
         debug_roi=cfg.debug_roi
     )
 
-    print("\n Calibrating background — please keep the maze empty...")
+    print("\n Calibrating background - please keep the maze empty...")
     calib_frames = []
     for i in range(40):  # discard first 30 warmup frames, collect 10 raw frames
         valid, frame = camera.get_frame()
@@ -261,7 +261,7 @@ def main():
             # --- A. Capture ---
             valid, raw_frame = camera.get_frame()
             if not valid:
-                print("❌ Camera stream ended unexpectedly.")
+                print("Camera stream ended unexpectedly.")
                 break
                 
             if video_writer:
@@ -289,12 +289,12 @@ def main():
                 # --- Entrance/exit logic ---
                 if roi in ("entrance1", "entrance2"):
                     if roi == "entrance2" and last_entrance == "entrance1":
-                        # Passed through entrance1 → entrance2: entered maze
+                        # Passed through entrance1 -> entrance2: entered maze
                         maze_entry_time = time.time()
                         print("  [MAZE] Mouse ENTERED the maze")
                         DataManager.log_maze_event(maze_log_path, trial_idx, "entered", maze_entry_time, None)
                     elif roi == "entrance1" and last_entrance == "entrance2":
-                        # Passed through entrance2 → entrance1: left maze
+                        # Passed through entrance2 -> entrance1: left maze
                         now = time.time()
                         duration = (now - maze_entry_time) if maze_entry_time is not None else 0.0
                         total_maze_time += duration
@@ -319,7 +319,7 @@ def main():
                 # Check if we should play (ignore silence/control)
                 should_play = True
                 if isinstance(sound_clip, GrammarStimulus):
-                    pass  # always play — rendered live below
+                    pass  # always play - rendered live below
                 elif isinstance(sound_clip, (int, float)) and sound_clip == 0:
                     should_play = False
                 elif isinstance(sound_clip, (list, np.ndarray, tuple)):
@@ -376,7 +376,7 @@ def main():
                     stim_info = DataManager.get_stimulus_string(trials_df, trial_idx, roi)
                     DataManager.log_individual_visit(visit_log_path, trial_idx, roi, stim_info, start_t, end_t, visit_dur)
                     
-                    print(f"   📝 Visit Logged: {roi} ({visit_dur:.2f}s)")
+                    print(f"   Visit Logged: {roi} ({visit_dur:.2f}s)")
                     
                     # Reset timer
                     visit_start_times[roi] = None
@@ -417,7 +417,7 @@ def main():
 
             # --- H. Loop Checks ---
             if time.time() >= trial_end_time:
-                print("🛑 Trial Time Ended")
+                print("Trial Time Ended")
                 trial_running = False
                 
             if cv.waitKey(1) & 0xFF in [ord('q'), 27]: # q or ESC
@@ -432,7 +432,7 @@ def main():
         n_closed = DataManager.close_open_visits(
             visit_log_path, trials_df, trial_idx, visit_start_times, time.time())
         if n_closed:
-            print(f"   📝 Closed {n_closed} open visit(s) at end of trial {trial_idx}")
+            print(f"   Closed {n_closed} open visit(s) at end of trial {trial_idx}")
 
         # Save data after every trial (Safety)
         trials_df.to_csv(os.path.join(new_dir_path, f"{base_name}.csv"), index=False)
@@ -444,7 +444,7 @@ def main():
     # ==========================================
     # 6. CLEANUP & ANALYSIS
     # ==========================================
-    print("\n--- 🏁 Experiment Finished ---")
+    print("\n--- Experiment Finished ---")
 
     # If mouse was still inside the maze when the session ended, close that bout
     if maze_entry_time is not None:
@@ -471,7 +471,7 @@ def main():
     if grammar_rows:
         grammar_log = os.path.join(new_dir_path, f"grammar_samples_{data_mgr.timestamp}.csv")
         pd.DataFrame(grammar_rows).to_csv(grammar_log, index=False)
-        print(f"📝 Grammar samples logged: {grammar_log}")
+        print(f"Grammar samples logged: {grammar_log}")
 
     camera.release()
     if video_writer:

@@ -123,7 +123,7 @@ class ROIMonitor:
 
     def update(self, binary_frame: np.ndarray) -> List[str]:
         # Compare binary pixel sum in each ROI against the raw baseline.
-        # Mouse blocks IR → binary sum drops well below the raw baseline.
+        # Mouse blocks IR -> binary sum drops well below the raw baseline.
         just_entered_rois = []
 
         for name in self.roiNames:

@@ -60,11 +60,11 @@ The system supports two main experimental paradigms:
 - **Speaker frequency-response compensation** automatically loaded from the repo calibration CSV
 - **Musical interval system** using just-intonation ratios (consonant vs dissonant)
 - **Temporal envelope modulation** (constant AM and complex multi-frequency AM)
-- **Grammar learning experiment** — two first-order Markov grammars (A/B) over six pure tones, with three predictability tiers (dominant / secondary / rare), EE/SC environment counterbalancing, and a 4-block shuffled test protocol
+- **Grammar learning experiment** - two first-order Markov grammars (A/B) over six pure tones, with three predictability tiers (dominant / secondary / rare), EE/SC environment counterbalancing, and a 4-block shuffled test protocol
 - **Trial state machine** with 9-block silent/active alternation and unique-shuffle constraints
 - **Arduino TTL synchronisation** for photometry alignment
 - **MicroPython servo control** via PCA9685 PWM driver
-- **Automatic post-session analysis** — per-session figures generated at the end of every session; cross-session summary figures (per mouse, per day, group) via a single CLI command
+- **Automatic post-session analysis** - per-session figures generated at the end of every session; cross-session summary figures (per mouse, per day, group) via a single CLI command
 - **Fully configurable** from a single dataclass (`ExperimentConfig`) with per-session CLI overrides
 
 ---
@@ -116,7 +116,7 @@ amaze-auditory
 For the grammar experiment, pass per-session flags on the command line:
 
 ```bash
-# Silent baseline (Day 1 — no audio, establishes location preference baseline)
+# Silent baseline (Day 1 - no audio, establishes location preference baseline)
 amaze-auditory --grammar-mode silent_baseline --enriched-grammar A --day habituation
 
 # Audio test (Day 2 / Day 3)
@@ -150,14 +150,14 @@ Set `experiment_mode` in `config.py` to one of:
 
 | Mode | Description |
 |---|---|
-| `grammar` | Grammar learning test — two Markov grammars × three predictability tiers (dominant/secondary/rare) + vocalisation + silent control, shuffled across 4 active 15-min blocks |
+| `grammar` | Grammar learning test - two Markov grammars × three predictability tiers (dominant/secondary/rare) + vocalisation + silent control, shuffled across 4 active 15-min blocks |
 | `simple_smooth` | One pure tone per ROI arm |
 | `simple_intervals` | Two-tone chords (musical intervals) per ROI |
 | `temporal_envelope_modulation` | Smooth, constant-AM, and complex-AM sounds |
 | `complex_intervals` | Multi-day interval protocol with consonant/dissonant contrasts |
 | `sequences` | Tone-pattern sequences (ABAB, AoAo, etc.) |
 | `vocalisation` | Each ROI plays a different vocalisation recording |
-| `custom` | Your own stimulus per ROI (tone, AM tone, .wav file or silent), declared in the session config file — see below |
+| `custom` | Your own stimulus per ROI (tone, AM tone, .wav file or silent), declared in the session config file - see below |
 
 ### Session config files
 
@@ -215,7 +215,7 @@ configuration CSVs that ship next to the script:
 
 | File | Contents |
 |---|---|
-| `grating_maps.csv` | One row per reward location (A–D); each `motor <name>` column holds the `<name> <angle>` command sent to that grating servo (see `firmware/arduino/README.md`). |
+| `grating_maps.csv` | One row per reward location (A - D); each `motor <name>` column holds the `<name> <angle>` command sent to that grating servo (see `firmware/arduino/README.md`). |
 | `reward_sequences.csv` | One row per (training stage, reward location): `portprob` (fraction of trials at that port), `rewprob` (probability a trial there is rewarded), `wrongallowed`. |
 
 The values in the repo are a **template**: check them against your rig before running.
@@ -241,19 +241,19 @@ class ExperimentConfig:
 ```
 
 Key settings to adjust for your setup:
-- `channel_id` — your audio output device index
-- `arduino_port` — COM port for the Arduino (e.g. `"COM4"`); set `use_microcontroller = False` to disable
-- `video_input` — camera device index
-- `base_output_path` — where session data is saved (defaults to `~/Desktop/auditory_maze_experiments/maze_recordings`)
-- `binary_threshold` — pixel threshold for IR camera detection (default 160; tune to your lighting)
-- `detection_sensitivity` — mouse detected when binary pixel sum drops below this fraction of the raw baseline (default 0.5)
-- `grammar_test_block_minutes` — list of 9 durations (min) for the 9-block cycle; even indices are silent blocks, odd are active; set silent entries to `0` to skip them
-- `grammar_apply_speaker_gain` — equalise the six grammar tones for the calibrated speaker (default `True`; set `False` to reproduce sessions recorded before this option existed)
-- `roi_csv_path` — where the ROI rectangles are stored; defaults to `<base_output_path>/rois1.csv` because ROIs belong to a rig, not to the code
-- `path_to_vocalisation_folder` — folder of `.wav` files for the all-vocalisation mode (defaults to a `vocalisations/` folder next to the recordings folder, i.e. `~/Desktop/auditory_maze_experiments/vocalisations`)
-- `path_to_vocalisation_control` — the single `.wav` played on the vocalisation control arm of the mixed modes; leave empty for a silent arm
+- `channel_id` - your audio output device index
+- `arduino_port` - COM port for the Arduino (e.g. `"COM4"`); set `use_microcontroller = False` to disable
+- `video_input` - camera device index
+- `base_output_path` - where session data is saved (defaults to `~/Desktop/auditory_maze_experiments/maze_recordings`)
+- `binary_threshold` - pixel threshold for IR camera detection (default 160; tune to your lighting)
+- `detection_sensitivity` - mouse detected when binary pixel sum drops below this fraction of the raw baseline (default 0.5)
+- `grammar_test_block_minutes` - list of 9 durations (min) for the 9-block cycle; even indices are silent blocks, odd are active; set silent entries to `0` to skip them
+- `grammar_apply_speaker_gain` - equalise the six grammar tones for the calibrated speaker (default `True`; set `False` to reproduce sessions recorded before this option existed)
+- `roi_csv_path` - where the ROI rectangles are stored; defaults to `<base_output_path>/rois1.csv` because ROIs belong to a rig, not to the code
+- `path_to_vocalisation_folder` - folder of `.wav` files for the all-vocalisation mode (defaults to a `vocalisations/` folder next to the recordings folder, i.e. `~/Desktop/auditory_maze_experiments/vocalisations`)
+- `path_to_vocalisation_control` - the single `.wav` played on the vocalisation control arm of the mixed modes; leave empty for a silent arm
 
-The speaker frequency-response calibration CSV (`src/amazeing/auditory/data/frequency_response_speaker.csv`) is loaded automatically — no path configuration needed.
+The speaker frequency-response calibration CSV (`src/amazeing/auditory/data/frequency_response_speaker.csv`) is loaded automatically - no path configuration needed.
 
 **Visits that straddle a block boundary** are closed at the block end, written to the visit log, and counted in `time_spent`. Data recorded before this fix either dropped such visits (this code base) or inflated them (the archived v1 script); the auditory analysis loader in `analysis/auditory/preference_analysis_config.py` documents the caps it applies to v1 data.
 
@@ -355,11 +355,11 @@ amaze-analyse-session "C:\path\to\session1" "C:\path\to\session2"
 | File | What it shows |
 |------|--------------|
 | `fig1_arm_totals.png` | Total time (min) and visit count per arm, coloured by stimulus type |
-| `fig2_ee_vs_sc.png` | EE vs SC arms grouped by predictability tier — time and visits |
-| `fig3_block_evolution.png` | Time per stimulus category across active blocks — checks whether preference shifts |
+| `fig2_ee_vs_sc.png` | EE vs SC arms grouped by predictability tier - time and visits |
+| `fig3_block_evolution.png` | Time per stimulus category across active blocks - checks whether preference shifts |
 | `fig4_visit_duration.png` | Boxplot of individual visit durations per stimulus type |
 | `fig5_maze_time.png` | Total time inside the maze per trial block |
-| `fig6_location_preference.png` | Heatmap of time per arm per block with stimulus labels — distinguishes location bias from stimulus preference |
+| `fig6_location_preference.png` | Heatmap of time per arm per block with stimulus labels - distinguishes location bias from stimulus preference |
 
 ### Cross-session summary figures
 
@@ -373,13 +373,13 @@ amaze-summary --day "C:\...\maze_recordings\grammar\day_1"
 amaze-summary --all "C:\...\maze_recordings\grammar"
 ```
 
-Silent-baseline sessions are automatically excluded — only active test-day sessions contribute.
+Silent-baseline sessions are automatically excluded - only active test-day sessions contribute.
 
 **EE vs SC preference:**
 
 | File | What it shows |
 |------|--------------|
-| `summary_A_ee_sc_per_mouse.png` | EE vs SC total time — one pair of bars per mouse, one panel per day |
+| `summary_A_ee_sc_per_mouse.png` | EE vs SC total time - one pair of bars per mouse, one panel per day |
 | `summary_B_preference_index.png` | EE preference index (−1 to +1) per mouse; positive = EE preference |
 | `summary_C_group_summary.png` | Group mean ± SEM time and visit count on EE vs SC arms per day |
 | `summary_D_cross_day_pi.png` | PI trajectory per mouse + group mean ± SEM across days *(multi-day only)* |
@@ -390,7 +390,7 @@ Silent-baseline sessions are automatically excluded — only active test-day ses
 |------|--------------|
 | `summary_E_tier_breakdown_per_mouse.png` | Stacked bars per mouse: EE bar and SC bar each split by tier (dark → light = dominant → rare) |
 | `summary_F_group_tier_breakdown.png` | Group mean ± SEM for all 6 tier × environment combinations |
-| `summary_G_cross_day_tiers.png` | Per-tier preference across days — group mean ± SEM for each complexity level, EE and SC panels *(multi-day only)* |
+| `summary_G_cross_day_tiers.png` | Per-tier preference across days - group mean ± SEM for each complexity level, EE and SC panels *(multi-day only)* |
 
 ---
 

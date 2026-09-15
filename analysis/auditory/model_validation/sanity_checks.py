@@ -38,8 +38,8 @@ def run_sanity(df: pd.DataFrame,
 
     The GATE is the arm-index residual (a genuine spatial-confound check). The
     control-arm comparison (silent vs sound) is reported but does NOT gate:
-    test-day sound neophobia/avoidance — silence being *more* preferred than the
-    grammar arms — is a real, expected possibility in this paradigm, not a rig
+    test-day sound neophobia/avoidance - silence being *more* preferred than the
+    grammar arms - is a real, expected possibility in this paradigm, not a rig
     failure. Comparisons use visited arm-blocks only, so the 6-vs-1 arm count and
     unvisited (zero-dwell) arms do not distort the per-arm-type means.
     """
@@ -68,7 +68,7 @@ def run_sanity(df: pd.DataFrame,
         f"(<{min_arms_visited} arms or <{min_total_dwell_s}s total)."
     )
 
-    # ---- control arms (INFORMATIONAL — not a gate) ----
+    # ---- control arms (INFORMATIONAL - not a gate) ----
     by_type = visited.groupby("arm_type")["time_spent_s"].mean().to_dict()
     silent = by_type.get("silent", np.nan)
     grammar = by_type.get("grammar", np.nan)

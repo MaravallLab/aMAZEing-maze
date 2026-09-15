@@ -195,7 +195,7 @@ COUNTERBALANCE: Dict[int, Dict[str, str]] = {
 def grammar_for(group: int, environment: str) -> str:
     """Return 'A' or 'B' for a given counterbalance group and environment.
 
-    ``environment`` is 'EE' or 'SC' — the cage the mouse is in on this day
+    ``environment`` is 'EE' or 'SC' - the cage the mouse is in on this day
     (training) or the environment-association tag of the arm (test).
     """
     if group not in COUNTERBALANCE:
@@ -205,7 +205,7 @@ def grammar_for(group: int, environment: str) -> str:
     return COUNTERBALANCE[group][environment]
 
 
-# Back-compat aliases — older code referred to "trained" vs "novel".
+# Back-compat aliases - older code referred to "trained" vs "novel".
 def trained_grammar_for(group: int, condition: str) -> str:
     """Deprecated alias for ``grammar_for``; kept so older imports still work."""
     return grammar_for(group, condition)
@@ -278,7 +278,7 @@ class GrammarSessionConfig:
     group: int = 1                     # counterbalancing group (1 or 2)
     condition: str = "EE"              # 'EE' or 'SC'
 
-    # Cage IDs being exposed to this audio stream. Pure bookkeeping — affects
+    # Cage IDs being exposed to this audio stream. Pure bookkeeping - affects
     # only the output filename and JSON summary, not the audio. Use when a
     # single speaker covers multiple cages in the same room/condition.
     cage_ids: List[str] = field(default_factory=list)

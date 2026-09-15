@@ -1,4 +1,4 @@
-"""Pre-registered model-free test — independent of the HMM being correct.
+"""Pre-registered model-free test - independent of the HMM being correct.
 
 Primary model (per-arm dwell on grammar arms, day 1):
 

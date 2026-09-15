@@ -20,7 +20,7 @@ def main():
     for path in sys.argv[1:]:
         path = os.path.normpath(path)
         if not os.path.isdir(path):
-            print(f"Skipping — not a directory: {path}")
+            print(f"Skipping - not a directory: {path}")
             continue
         print(f"\nAnalysing: {path}")
         try:

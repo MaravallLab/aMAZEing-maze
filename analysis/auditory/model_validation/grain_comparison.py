@@ -3,12 +3,12 @@ EE-SC effect recovers as aggregation passes per-block dwell noise.
 
   Grain A  per-block               (anchor; underpowered, near-flat)
   Grain B  per-mouse cell-mean     (full 7-arm pattern; Dirichlet, per-mouse
-                                     selectivity beta_m — NOT a canceling intercept)
+                                     selectivity beta_m - NOT a canceling intercept)
   Grain C  per-tier EE-SC PI       (max-power semantic contrast; r,V cancel,
                                      identifies wS only; per-mouse PI intercept)
 
 S uses tier-restricted emissions (fixes the i->i+3 secondary flip). w_r,w_V>=0
-(half-normal); w_S ~ Normal(0,1). No interaction term — the env x tier interaction
+(half-normal); w_S ~ Normal(0,1). No interaction term - the env x tier interaction
 is carried by the tier-dependence of S. Cell/PI grains RE-EXPRESS the model-free
 result as a process model: a mechanistic illustration, NOT independent validation.
 
@@ -197,7 +197,7 @@ def _save(fig, out_dir, name, written):
 
 def ppc_cellmean(idata, R, DV, S, nM, sub=300):
     """Posterior-predictive mean composition = avg over posterior & mice of
-    softmax(beta_m * A). Using beta (not beta=1) is essential — beta_m and the
+    softmax(beta_m * A). Using beta (not beta=1) is essential - beta_m and the
     weight scale trade off, so softmax(A) alone over-peaks."""
     post = idata.posterior
     n = post.dims["chain"] * post.dims["draw"]
@@ -225,7 +225,7 @@ def fig_grainB_ppc(comp, pred, out_dir, written):
     ax.bar(x + wbar / 2, obs, wbar, label="observed", color="#F9A825", edgecolor="white")
     ax.set_xticks(x); ax.set_xticklabels(CELLS, rotation=20, ha="right", fontsize=9)
     ax.set_ylabel("dwell fraction (per-mouse cell-mean)")
-    ax.set_title("Grain B — per-mouse cell-mean: predicted vs observed", fontweight="bold")
+    ax.set_title("Grain B - per-mouse cell-mean: predicted vs observed", fontweight="bold")
     ax.legend()
     _save(fig, out_dir, "grainB_cellmean_ppc.png", written)
 
@@ -248,7 +248,7 @@ def fig_grainC_pi(df_pi, dS, wS_mean, out_dir, written):
     ax.axhline(0, ls="--", color="grey", lw=0.8)
     ax.set_xticks(x); ax.set_xticklabels(TIERS)
     ax.set_ylabel("EE−SC preference index")
-    ax.set_title(f"Grain C — per-tier PI: predicted vs observed (wS={wS_mean:+.3f})",
+    ax.set_title(f"Grain C - per-tier PI: predicted vs observed (wS={wS_mean:+.3f})",
                  fontweight="bold")
     ax.legend(fontsize=8)
     _save(fig, out_dir, "grainC_tierPI_ppc.png", written)
@@ -266,9 +266,9 @@ def fig_grain_weights(table, out_dir, written):
             ax.text(ws["mean"], i + 0.12, f"P>0={ws['p_pos']:.2f}", ha="center", fontsize=8)
     ax.axvline(0, ls="--", color="grey")
     ax.set_yticks(y); ax.set_yticklabels(grains)
-    ax.set_xlabel("wS (semantic weight) — 95% HDI")
+    ax.set_xlabel("wS (semantic weight) - 95% HDI")
     ax.set_title("Semantic weight recovers as grain coarsens\n"
-                 "(block → cell-mean → PI); effect real but small per-block",
+                 "(block -> cell-mean -> PI); effect real but small per-block",
                  fontweight="bold")
     _save(fig, out_dir, "grain_weights_wS.png", written)
 
@@ -292,7 +292,7 @@ def run(results_dir, out_dir, draws=1000, tune=2000, chains=4, seed=0):
         "n_analysis_cohort": len(cohort),
         "dropped": dropped,
         "reason": ("mouse 13672 is a non-explorer (0 s total dwell, 0 arms "
-                   "visited) — carries no preference info; excluded consistently."),
+                   "visited) - carries no preference info; excluded consistently."),
     }
     print("[cohort]", cohort_note)
 
@@ -355,7 +355,7 @@ def run(results_dir, out_dir, draws=1000, tune=2000, chains=4, seed=0):
         f"{table['A_per_block'].get('wS',{}).get('hdi')}; "
         f"cell-mean {wSb.get('mean'):+.3f} {wSb.get('hdi')}; "
         f"PI {wSc.get('mean'):+.3f} {wSc.get('hdi')} (P>0={wSc.get('p_pos')}). "
-        f"wS pulls away from 0 as the grain coarsens — the per-block flatness was a "
+        f"wS pulls away from 0 as the grain coarsens - the per-block flatness was a "
         f"grain mismatch, not absence of effect. Leave-one-mouse-out wS sign-stable "
         f"at the PI grain: {sign_stable}. The generative fit is a MECHANISTIC "
         f"ILLUSTRATION of the model-free result (it re-expresses ~7 cell means / 3 "

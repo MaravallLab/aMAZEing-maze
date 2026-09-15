@@ -11,12 +11,12 @@ import glob
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-# ── edit these ──────────────────────────────────────────────────────
+# -- edit these ------------------------------------------------------
 MOUSE_ID = "6357"
 BASE_PATH = os.path.join(
     os.path.expanduser("~"), "Box", "Awake Project", "Maze data", "simplermaze"
 )
-# ────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------
 
 MOUSE_DIR = os.path.join(BASE_PATH, f"mouse {MOUSE_ID}")
 
@@ -134,7 +134,7 @@ def _find_dlc_csv(mouse_dir: str, mouse_id: str,
     return matches[0] if matches else None
 
 
-# ── convenience ─────────────────────────────────────────────────────
+# -- convenience -----------------------------------------------------
 
 def get_sessions_with_dlc(mouse_dir: str = MOUSE_DIR,
                           mouse_id: str = MOUSE_ID) -> List[SessionInfo]:

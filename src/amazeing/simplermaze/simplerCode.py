@@ -98,7 +98,7 @@ if serialOn:
 rois_path = os.path.join(base_path, "rois1.csv")
 if drawRois or not os.path.exists(rois_path):
     if not drawRois:
-        print(f"No ROI file at {rois_path} — drawing ROIs now.")
+        print(f"No ROI file at {rois_path} - drawing ROIs now.")
     sf.define_rois(videoInput = videoInput,
                     roiNames = ["entrance1","entrance2",
                             "rewA","rewB","rewC","rewD"],

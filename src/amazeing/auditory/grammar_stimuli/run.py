@@ -55,7 +55,7 @@ def _parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--cage-ids", default="",
                    help="Comma-separated cage IDs being exposed to this stream "
-                        "(e.g. '6224,6235'). Pure bookkeeping — tagged into the "
+                        "(e.g. '6224,6235'). Pure bookkeeping - tagged into the "
                         "output filename and JSON summary; does not affect audio.")
     p.add_argument("--dry-run", action="store_true",
                    help="Do not play audio; still generate and log symbols")

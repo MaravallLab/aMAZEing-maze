@@ -53,7 +53,7 @@ import time
 from pathlib import Path
 
 # Reuse the CSV writer from the exporter (same folder) so inference can emit the
-# per-frame keypoints CSV in the same pass — no second script, no re-reading the
+# per-frame keypoints CSV in the same pass - no second script, no re-reading the
 # .slp. slp_export only pulls in cv2/sleap_io lazily, so this import is cheap.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from slp_export import export_csv  # noqa: E402
@@ -170,7 +170,7 @@ def predict_one(predictor, video_path, output_path, csv_path=None):
     provider for this video each call (safe to repeat across videos). If
     `csv_path` is given, also writes the per-frame keypoints CSV straight from
     the in-memory predictions. A CSV failure is logged but never fails the
-    video — the .slp is the authoritative output.
+    video - the .slp is the authoritative output.
     """
     predictor.make_pipeline(inference_object=str(video_path))
     labels = predictor.predict(make_labels=True)
@@ -217,10 +217,10 @@ def parse_args():
                         "if you have spare VRAM.")
     p.add_argument("--max_instances", type=int, default=DEFAULT_MAX_INSTANCES,
                    help="Maximum mouse instances per frame (default %(default)s "
-                        "— the maze is single-animal).")
+                        " - the maze is single-animal).")
     p.add_argument("--device", default=DEFAULT_DEVICE,
                    help="Torch device: auto/cuda/cpu/mps or cuda:0 "
-                        "(default %(default)s — picks cuda if available).")
+                        "(default %(default)s - picks cuda if available).")
     p.add_argument("--peak_threshold", type=float, default=DEFAULT_PEAK_THRESHOLD,
                    help="Confidence-map peak threshold (default %(default)s).")
     p.add_argument("--prediction_suffix", default=DEFAULT_PREDICTION_SUFFIX,
@@ -301,7 +301,7 @@ def main():
     )
 
     if args.dry_run:
-        print("\nDry run — would predict:")
+        print("\nDry run - would predict:")
         for i, v in enumerate(videos, start=1):
             out = v.parent / (v.stem + args.prediction_suffix)
             exists = out.exists()
@@ -329,7 +329,7 @@ def main():
 
         if args.skip_existing and output_path.exists():
             n_skip += 1
-            print(f"  [{i}/{total}] {video_path.name} — skipped (exists)")
+            print(f"  [{i}/{total}] {video_path.name} - skipped (exists)")
             rows.append({
                 "filename": str(rel).replace("\\", "/"),
                 "output_path": str(output_path),
@@ -340,7 +340,7 @@ def main():
             })
             continue
 
-        print(f"  [{i}/{total}] {video_path.name} — predicting...", flush=True)
+        print(f"  [{i}/{total}] {video_path.name} - predicting...", flush=True)
         t0 = time.time()
         try:
             n_frames = predict_one(predictor, video_path, output_path, csv_path)

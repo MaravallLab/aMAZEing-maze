@@ -1,4 +1,4 @@
-"""Tests for DataManager — session setup, metadata, visit logging.
+"""Tests for DataManager - session setup, metadata, visit logging.
 
 Note: DataManager currently has bugs (os.join.path, os.path.exist, etc.).
 These tests document the EXPECTED behaviour after bugfixes. Tests that

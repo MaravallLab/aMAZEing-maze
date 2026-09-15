@@ -17,7 +17,7 @@ from scipy.stats import entropy as shannon_entropy
 from typing import Dict, List, Optional, Tuple
 
 
-# ── trial data ──────────────────────────────────────────────────────
+# -- trial data ------------------------------------------------------
 
 def load_trials(csv_path: str) -> pd.DataFrame:
     """Load a trial CSV and normalise columns across formats."""
@@ -63,7 +63,7 @@ def has_entered_any_arm(row: pd.Series) -> bool:
     return False
 
 
-# ── DLC tracking ────────────────────────────────────────────────────
+# -- DLC tracking ----------------------------------------------------
 
 def load_dlc(csv_path: str, bodypart: str = "mid",
              likelihood_thresh: float = 0.8) -> pd.DataFrame:
@@ -90,7 +90,7 @@ def load_dlc(csv_path: str, bodypart: str = "mid",
                         index=df.index)
 
 
-# ── ROI loading ─────────────────────────────────────────────────────
+# -- ROI loading -----------------------------------------------------
 
 def load_rois(csv_path: str) -> Dict[str, Tuple[int, int, int, int]]:
     """
@@ -127,7 +127,7 @@ def assign_roi(x: float, y: float,
     return "corridor"
 
 
-# ── kinematics ──────────────────────────────────────────────────────
+# -- kinematics ------------------------------------------------------
 
 def compute_speed(x: np.ndarray, y: np.ndarray,
                   fps: int = 30, px_per_cm: float = 7.5,
@@ -170,7 +170,7 @@ def _interp_nans(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
-# ── spatial entropy ─────────────────────────────────────────────────
+# -- spatial entropy -------------------------------------------------
 
 def spatial_entropy(x: np.ndarray, y: np.ndarray,
                     grid_size: int = 20) -> float:
@@ -192,7 +192,7 @@ def spatial_entropy(x: np.ndarray, y: np.ndarray,
     return shannon_entropy(probs)
 
 
-# ── transition probabilities ───────────────────────────────────────
+# -- transition probabilities ---------------------------------------
 
 def compute_state_sequence(tracking: pd.DataFrame,
                            rois: Dict[str, Tuple[int, int, int, int]],

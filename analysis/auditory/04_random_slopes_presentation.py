@@ -67,7 +67,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
-# ─── experiment structure (kept in sync with 03_completers_lmm.py) ──────────
+# --- experiment structure (kept in sync with 03_completers_lmm.py) ----------
 PI_DAYS = ["w1_d1", "w1_d2", "w1_d3", "w2_sequences", "w2_vocalisations"]
 DAY_SHORT = {
     "w1_d1": "D1 (TEM)",
@@ -95,7 +95,7 @@ COLOUR_SCATTER_LOW  = "#0072B2"
 SINGULAR_TOL = 1e-6   # variance/eigenvalue threshold for "boundary" flag
 
 
-# ─── helpers ────────────────────────────────────────────────────────────────
+# --- helpers ------------------------------------------------------------
 
 
 def log(msg: str, lines: list[str]) -> None:
@@ -546,7 +546,7 @@ def per_mouse_blups(res) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-# ─── plotting: caterpillar of slopes ────────────────────────────────────────
+# --- plotting: caterpillar of slopes ----------------------------------------
 
 
 def plot_slope_caterpillar(blups_by_outcome: dict, output_dir: str) -> None:
@@ -598,7 +598,7 @@ def plot_slope_caterpillar(blups_by_outcome: dict, output_dir: str) -> None:
     print("  Saved fig_completers_random_slopes")
 
 
-# ─── plotting: 3 x 3 presentation panel ─────────────────────────────────────
+# --- plotting: 3 x 3 presentation panel -------------------------------------
 
 
 def _shared_ylim(df_completers: pd.DataFrame, outcome: str,
@@ -664,7 +664,7 @@ def plot_presentation_trajectories(df_c: pd.DataFrame,
         ymin, ymax = _shared_ylim(d, col, blups_by_outcome.get(col),
                                   sess_min=1, sess_max=len(PI_DAYS))
 
-        # ── Panel 1: spaghetti (raw) ───────────────────────────────────────
+        # -- Panel 1: spaghetti (raw) ---------------------------------------
         for mouse, g in d.groupby("mouse_id"):
             g = g.sort_values("session_disp")
             ax_sp.plot(g["session_disp"], g[col],
@@ -690,7 +690,7 @@ def plot_presentation_trajectories(df_c: pd.DataFrame,
         ax_sp.legend(loc="best", frameon=False)
         _strip_ax(ax_sp)
 
-        # ── Panel 2: fan plot (BLUP-fitted) ───────────────────────────────
+        # -- Panel 2: fan plot (BLUP-fitted) -------------------------------
         bdf = blups_by_outcome.get(col)
         fe_df = fe_by_outcome.get(col)
         # Population fixed effects
@@ -750,7 +750,7 @@ def plot_presentation_trajectories(df_c: pd.DataFrame,
         ax_fan.set_title("Model-estimated individual trajectories")
         _strip_ax(ax_fan)
 
-        # ── Panel 3: first vs last scatter ────────────────────────────────
+        # -- Panel 3: first vs last scatter --------------------------------
         first_day = PI_DAYS[0]
         last_day  = PI_DAYS[-1]
         # mean per mouse on each (in case there are multiple sessions on the same day)
@@ -805,7 +805,7 @@ def plot_presentation_trajectories(df_c: pd.DataFrame,
     print("  Saved fig_presentation_trajectories")
 
 
-# ─── reporting ──────────────────────────────────────────────────────────────
+# --- reporting ------------------------------------------------------------
 
 
 def report_outcome(label: str, outcome: str, res, info: dict,
@@ -1163,7 +1163,7 @@ def report_omnibus_re_lrt(label: str, lrt_dict: dict,
     log("", stats_lines)
 
 
-# ─── main ───────────────────────────────────────────────────────────────────
+# --- main ------------------------------------------------------------
 
 
 def main():
@@ -1294,7 +1294,7 @@ def main():
         if s_var is not None:
             all_var_rows.append(s_var)
 
-    # ── Omnibus random-effects LRT for Overall PI ──────────────────────────
+    # -- Omnibus random-effects LRT for Overall PI --------------------------
     print("=== Omnibus random-effects LRT for preference_index ===")
     omnibus = omnibus_re_lrt(df_c, outcome="preference_index")
     report_omnibus_re_lrt("Overall PI", omnibus, stats_lines)
@@ -1304,7 +1304,7 @@ def main():
         index=False)
     print("Saved completers_random_slopes_omnibus_lrt.csv")
 
-    # ── Crossed random-effects model for Overall PI ────────────────────────
+    # -- Crossed random-effects model for Overall PI ------------------------
     print("=== Crossed random-effects (mouse_id + session_id) "
           "for preference_index ===")
     crossed = fit_crossed_re(df_c, outcome="preference_index",

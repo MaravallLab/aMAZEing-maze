@@ -77,7 +77,7 @@ class SessionAnalyzer:
         self._session_title = os.path.basename(session_dir)
         self._load_data()
 
-    # ── data loading ──────────────────────────────────────────────────
+    # -- data loading --------------------------------------------------
 
     def _load_data(self):
         def _newest(pattern):
@@ -102,11 +102,11 @@ class SessionAnalyzer:
             and "grammar" in self.trials_df.columns
         )
 
-    # ── public entry point ────────────────────────────────────────────
+    # -- public entry point --------------------------------------------
 
     def generate_report(self):
         if self.trials_df is None:
-            print("  [analysis] No trials CSV found — skipping.")
+            print("  [analysis] No trials CSV found - skipping.")
             return
 
         figures: List[Tuple[str, plt.Figure]] = (
@@ -120,7 +120,7 @@ class SessionAnalyzer:
             plt.close(fig)
             print(f"  [analysis] Saved {fname}")
 
-    # ── grammar experiment figures ────────────────────────────────────
+    # -- grammar experiment figures ------------------------------------
 
     def _grammar_figures(self) -> List[Tuple[str, plt.Figure]]:
         df = self.trials_df.copy()
@@ -147,7 +147,7 @@ class SessionAnalyzer:
         figs.append(self._fig_location_preference(active))
         return figs
 
-    # ── Figure 1: total time and visit count per arm ──────────────────
+    # -- Figure 1: total time and visit count per arm ------------------
 
     def _fig_arm_totals(self, active: pd.DataFrame) -> Tuple[str, plt.Figure]:
         totals = (
@@ -163,7 +163,7 @@ class SessionAnalyzer:
                   for s in totals["stim_label"]]
 
         fig, (ax_t, ax_v) = plt.subplots(1, 2, figsize=(13, 5))
-        fig.suptitle(f"Arm summary — {self._session_title}", fontsize=10)
+        fig.suptitle(f"Arm summary - {self._session_title}", fontsize=10)
 
         ax_t.bar(rois, totals["time_min"], color=colors, edgecolor="white", linewidth=0.5)
         ax_t.set_xlabel("Arm (ROI)")
@@ -180,13 +180,13 @@ class SessionAnalyzer:
         plt.tight_layout()
         return ("fig1_arm_totals.png", fig)
 
-    # ── Figure 2: EE vs SC preference by tier ─────────────────────────
+    # -- Figure 2: EE vs SC preference by tier -------------------------
 
     def _fig_ee_vs_sc(self, active: pd.DataFrame) -> Tuple[str, plt.Figure]:
         grammar_rows = active[active["frequency"] == "grammar"].copy()
 
         fig, axes = plt.subplots(1, 2, figsize=(11, 5), sharey=False)
-        fig.suptitle(f"EE vs SC preference — {self._session_title}", fontsize=10)
+        fig.suptitle(f"EE vs SC preference - {self._session_title}", fontsize=10)
 
         for ax, metric, ylabel in zip(
             [axes[0], axes[1]],
@@ -217,7 +217,7 @@ class SessionAnalyzer:
         plt.tight_layout()
         return ("fig2_ee_vs_sc.png", fig)
 
-    # ── Figure 3: preference evolution across active blocks ───────────
+    # -- Figure 3: preference evolution across active blocks -----------
 
     def _fig_block_evolution(self, active: pd.DataFrame) -> Tuple[str, plt.Figure]:
         block_stim = (
@@ -231,7 +231,7 @@ class SessionAnalyzer:
         stim_order = [s for s in STIM_COLORS if s in present]
 
         fig, ax = plt.subplots(figsize=(10, 5))
-        fig.suptitle(f"Block-by-block evolution — {self._session_title}", fontsize=10)
+        fig.suptitle(f"Block-by-block evolution - {self._session_title}", fontsize=10)
 
         for stim in stim_order:
             sub = block_stim[block_stim["stim_label"] == stim].sort_values("trial_ID")
@@ -248,7 +248,7 @@ class SessionAnalyzer:
         plt.tight_layout()
         return ("fig3_block_evolution.png", fig)
 
-    # ── Figure 4: visit duration distribution per stimulus ────────────
+    # -- Figure 4: visit duration distribution per stimulus ------------
 
     def _fig_visit_duration(self, active: pd.DataFrame) -> Optional[Tuple[str, plt.Figure]]:
         visits = self.visits_df.copy()
@@ -283,7 +283,7 @@ class SessionAnalyzer:
         colors = [STIM_COLORS.get(s, "#999") for s in stims]
 
         fig, ax = plt.subplots(figsize=(11, 5))
-        fig.suptitle(f"Visit duration distribution — {self._session_title}", fontsize=10)
+        fig.suptitle(f"Visit duration distribution - {self._session_title}", fontsize=10)
 
         bp = ax.boxplot(data, patch_artist=True,
                         medianprops={"color": "black", "linewidth": 2},
@@ -298,7 +298,7 @@ class SessionAnalyzer:
         plt.tight_layout()
         return ("fig4_visit_duration.png", fig)
 
-    # ── Figure 5: time in maze per block ──────────────────────────────
+    # -- Figure 5: time in maze per block ------------------------------
 
     def _fig_maze_time(self) -> Optional[Tuple[str, plt.Figure]]:
         exits = self.maze_df[
@@ -310,7 +310,7 @@ class SessionAnalyzer:
         by_trial = exits.groupby("trial_ID")["time_in_maze_seconds"].sum() / 60
 
         fig, ax = plt.subplots(figsize=(8, 4))
-        fig.suptitle(f"Maze occupancy per block — {self._session_title}", fontsize=10)
+        fig.suptitle(f"Maze occupancy per block - {self._session_title}", fontsize=10)
 
         bar_colors = ["#90A4AE" if tid % 2 != 0 else "#455A64"
                       for tid in by_trial.index]
@@ -327,7 +327,7 @@ class SessionAnalyzer:
         plt.tight_layout()
         return ("fig5_maze_time.png", fig)
 
-    # ── Figure 6: location preference (arm × block heatmap) ──────────
+    # -- Figure 6: location preference (arm × block heatmap) ----------
 
     def _fig_location_preference(self, active: pd.DataFrame) -> Tuple[str, plt.Figure]:
         # Try to sort ROI labels numerically (they're "1"-"8")
@@ -352,12 +352,12 @@ class SessionAnalyzer:
                     time_matrix[ri, bi] = rows["time_spent"].sum() / 60
                     stim_matrix[ri][bi] = _abbrev_stim(rows["stim_label"].iloc[0])
 
-        # ── layout: heatmap (wide) + totals bar (narrow) ─────────────
+        # -- layout: heatmap (wide) + totals bar (narrow) -------------
         fig, (ax_h, ax_b) = plt.subplots(
             1, 2, figsize=(13, 5),
             gridspec_kw={"width_ratios": [3, 1]},
         )
-        fig.suptitle(f"Location preference — {self._session_title}", fontsize=10)
+        fig.suptitle(f"Location preference - {self._session_title}", fontsize=10)
 
         vmax = max(time_matrix.max(), 0.01)
         im = ax_h.imshow(time_matrix, aspect="auto", cmap="YlOrRd",
@@ -368,7 +368,7 @@ class SessionAnalyzer:
         ax_h.set_yticks(range(len(roi_order)))
         ax_h.set_yticklabels([f"Arm {r}" for r in roi_order])
         ax_h.set_xlabel("Active block")
-        ax_h.set_title("Time per arm per block (min)\n— cell label = stimulus assigned —")
+        ax_h.set_title("Time per arm per block (min)\n - cell label = stimulus assigned - ")
 
         for ri in range(len(roi_order)):
             for bi in range(len(block_order)):
@@ -392,7 +392,7 @@ class SessionAnalyzer:
         plt.tight_layout()
         return ("fig6_location_preference.png", fig)
 
-    # ── generic fallback (non-grammar experiments) ────────────────────
+    # -- generic fallback (non-grammar experiments) --------------------
 
     def _generic_figures(self) -> List[Tuple[str, plt.Figure]]:
         df = self.trials_df.copy()
@@ -402,7 +402,7 @@ class SessionAnalyzer:
         by_roi = active.groupby("ROIs")["time_spent"].sum().sort_index() / 60
 
         fig, ax = plt.subplots(figsize=(10, 5))
-        fig.suptitle(f"Arm summary — {self._session_title}", fontsize=10)
+        fig.suptitle(f"Arm summary - {self._session_title}", fontsize=10)
         ax.bar(by_roi.index.astype(str), by_roi.values, color="#607D8B")
         ax.set_xlabel("Arm (ROI)")
         ax.set_ylabel("Total time (min)")

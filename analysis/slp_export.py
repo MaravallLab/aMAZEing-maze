@@ -219,7 +219,7 @@ def parse_args():
     p.add_argument("--render_start", type=int, default=0,
                    help="First frame to render (default 0).")
     p.add_argument("--render_frames", type=int, default=None,
-                   help="How many frames to render (default: all — large!). "
+                   help="How many frames to render (default: all - large!). "
                         "Use e.g. 600 for a ~quick preview clip.")
     p.add_argument("--score_thresh", type=float, default=0.0,
                    help="Don't draw points below this confidence (default 0).")

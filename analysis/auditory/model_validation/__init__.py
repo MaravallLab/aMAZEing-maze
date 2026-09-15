@@ -1,4 +1,4 @@
-"""model_validation — behavioural validation of the extended aesthetic-value model.
+"""model_validation - behavioural validation of the extended aesthetic-value model.
 
 Tests whether a semantic value term S(t) (an HMM context-belief signal over the
 EE/SC grammar association) explains maze preference behaviour over and above the

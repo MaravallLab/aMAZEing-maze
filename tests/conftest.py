@@ -13,7 +13,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# ── stub out hardware modules BEFORE any imports that touch them ────
+# -- stub out hardware modules BEFORE any imports that touch them ----
 # sounddevice needs PortAudio and an output device
 _sd_mock = MagicMock()
 _sd_mock.default = MagicMock()
@@ -30,7 +30,7 @@ _serial_mock.Serial = MagicMock()
 sys.modules.setdefault("serial", _serial_mock)
 
 
-# ── fixtures: directories ──────────────────────────────────────────
+# -- fixtures: directories ------------------------------------------
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
@@ -39,7 +39,7 @@ def fixtures_dir():
     return FIXTURES_DIR
 
 
-# ── fixtures: Audio mock ───────────────────────────────────────────
+# -- fixtures: Audio mock -------------------------------------------
 @pytest.fixture
 def mock_audio():
     """A lightweight Audio-like object that generates real waveforms without hardware."""
@@ -62,7 +62,7 @@ def experiment_config():
     return cfg
 
 
-# ── fixtures: sample data ─────────────────────────────────────────
+# -- fixtures: sample data -----------------------------------------
 @pytest.fixture
 def sample_rois_csv(tmp_path):
     """Create a minimal ROIs CSV file."""
@@ -117,7 +117,7 @@ def sample_trials_df():
     })
 
 
-# ── fixtures: simplermaze support ─────────────────────────────────
+# -- fixtures: simplermaze support ---------------------------------
 @pytest.fixture
 def sample_grating_maps_csv(tmp_path):
     """Create a minimal grating_maps.csv for supFun tests."""

@@ -1,5 +1,5 @@
 """
-03 — Within-trial transition probabilities from DLC tracking.
+03 - Within-trial transition probabilities from DLC tracking.
 
 For each trial in sessions with DLC data:
   1. Assign each frame to an ROI (entrance1/2, rewA-D) or 'corridor'
@@ -8,11 +8,11 @@ For each trial in sessions with DLC data:
   4. Aggregate: Hit vs Miss comparison
 
 Outputs:
-  - transition_matrix_hit.png / .pdf   — average transition heatmap for Hits
-  - transition_matrix_miss.png / .pdf  — average transition heatmap for Misses
-  - transition_matrix_diff.png / .pdf  — Hit minus Miss difference
-  - transition_summary.csv             — per-trial metrics (perseveration, exploration entropy)
-  - transition_combined.png / .pdf     — side-by-side Hit / Miss / Diff
+  - transition_matrix_hit.png / .pdf - average transition heatmap for Hits
+  - transition_matrix_miss.png / .pdf - average transition heatmap for Misses
+  - transition_matrix_diff.png / .pdf - Hit minus Miss difference
+  - transition_summary.csv - per-trial metrics (perseveration, exploration entropy)
+  - transition_combined.png / .pdf - side-by-side Hit / Miss / Diff
 """
 
 import os
@@ -37,7 +37,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 STATE_LABELS = ["entrance1", "entrance2", "rewA", "rewB", "rewC", "rewD", "corridor"]
 
 
-# ── 1. compute per-trial transitions ───────────────────────────────
+# -- 1. compute per-trial transitions -------------------------------
 
 sessions = get_sessions_with_dlc()
 print(f"Processing transitions for {len(sessions)} sessions")
@@ -152,7 +152,7 @@ print(df_transitions.groupby("status")[
 ].mean().round(3))
 
 
-# ── 2. aggregate transition matrices ────────────────────────────────
+# -- 2. aggregate transition matrices --------------------------------
 
 def aggregate_matrices(matrices):
     """Sum raw count matrices and normalise rows."""
@@ -168,7 +168,7 @@ avg_miss = aggregate_matrices(miss_matrices)
 diff = avg_hit - avg_miss
 
 
-# ── 3. plot transition heatmaps ─────────────────────────────────────
+# -- 3. plot transition heatmaps -------------------------------------
 
 short_labels = ["ent1", "ent2", "rewA", "rewB", "rewC", "rewD", "corr"]
 
@@ -200,7 +200,7 @@ axes[2].set_title("Difference (Hit - Miss)", fontsize=12)
 axes[2].set_xlabel("To")
 axes[2].set_ylabel("From")
 
-plt.suptitle(f"Mouse {MOUSE_ID} — Transition probabilities", fontsize=14, y=1.02)
+plt.suptitle(f"Mouse {MOUSE_ID} - Transition probabilities", fontsize=14, y=1.02)
 plt.tight_layout()
 fig.savefig(os.path.join(OUTPUT_DIR, "transition_combined.png"),
             dpi=200, bbox_inches="tight")
@@ -208,7 +208,7 @@ fig.savefig(os.path.join(OUTPUT_DIR, "transition_combined.pdf"),
             bbox_inches="tight")
 
 
-# ── 4. perseveration / exploration comparison ───────────────────────
+# -- 4. perseveration / exploration comparison -----------------------
 
 fig2, axes2 = plt.subplots(1, 3, figsize=(14, 5))
 palette = {"Hit": "#2CA02C", "Miss": "#D62728"}
@@ -241,14 +241,14 @@ for ax, (col, label) in zip(axes2, compare_metrics):
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
-plt.suptitle(f"Mouse {MOUSE_ID} — Exploration metrics", fontsize=13, y=1.02)
+plt.suptitle(f"Mouse {MOUSE_ID} - Exploration metrics", fontsize=13, y=1.02)
 plt.tight_layout()
 fig2.savefig(os.path.join(OUTPUT_DIR, "exploration_metrics.png"),
              dpi=200, bbox_inches="tight")
 fig2.savefig(os.path.join(OUTPUT_DIR, "exploration_metrics.pdf"),
              bbox_inches="tight")
 
-# ── 5. ROI-only transitions (corridor removed) ─────────────────────
+# -- 5. ROI-only transitions (corridor removed) ---------------------
 # Instead of frame-by-frame, we just look at which ROI the mouse goes
 # to after leaving another ROI (skipping corridor entirely).
 
@@ -344,7 +344,7 @@ axes3[2].set_title("Difference (Hit - Miss)", fontsize=12)
 axes3[2].set_xlabel("To")
 axes3[2].set_ylabel("From")
 
-plt.suptitle(f"Mouse {MOUSE_ID} — ROI-to-ROI transitions (corridor removed)",
+plt.suptitle(f"Mouse {MOUSE_ID} - ROI-to-ROI transitions (corridor removed)",
              fontsize=14, y=1.02)
 plt.tight_layout()
 fig3.savefig(os.path.join(OUTPUT_DIR, "transition_roi_only.png"),

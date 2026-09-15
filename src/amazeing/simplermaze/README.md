@@ -5,13 +5,13 @@
 `simplerCode.py` needs two CSVs that sit next to it (they are resolved relative
 to the script, so you can launch it from any directory):
 
-- **`grating_maps.csv`** — index column is the reward location (`A`–`D`); every
+- **`grating_maps.csv`** - index column is the reward location (`A` - `D`); every
   other column is named `motor <servo>` and holds the `<servo> <angle>` string
   sent to the Arduino as `grt<servo> <angle>` (servo names match
   `firmware/arduino/servo_control/servo_control.ino`: `L`, `R`, `LL`, `LR`,
   `RL`, `RR`, …). At the start of every trial all servos are first sent to
   angle 0, then the row for the trial's reward location is applied.
-- **`reward_sequences.csv`** — columns `sessionID` (`Stage 1`…`Stage 4`),
+- **`reward_sequences.csv`** - columns `sessionID` (`Stage 1`…`Stage 4`),
   `rewloc`, `portprob` (fraction of the session's trials at that port),
   `rewprob` (probability a trial at that port is rewarded), `wrongallowed`.
   `create_trials()` in `supFun.py` samples the trial list from this table.
@@ -19,7 +19,7 @@ to the script, so you can launch it from any directory):
 The files in the repo are **templates** reconstructed from what the code expects.
 Replace them with the values used on your rig before collecting data.
 
-ROIs (`entrance1`, `entrance2`, `rewA`–`rewD`) are drawn interactively on the
+ROIs (`entrance1`, `entrance2`, `rewA` - `rewD`) are drawn interactively on the
 first run and saved as `rois1.csv` in the recordings folder
 (`~/Desktop/maze_recordings`); set `drawRois = True` to redraw them.
 

@@ -1,4 +1,4 @@
-"""Phase 2 — out-of-sample model comparison (PyMC LOO + leave-one-mouse-out).
+"""Phase 2 - out-of-sample model comparison (PyMC LOO + leave-one-mouse-out).
 
 The claim is supported iff `full` beats `bd_baseline` out of sample AND the wS
 posterior is reliably positive with the EE>SC sign. In-sample likelihood does

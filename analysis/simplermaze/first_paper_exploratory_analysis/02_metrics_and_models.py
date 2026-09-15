@@ -1,5 +1,5 @@
 """
-02 — P1/P2 behavioural metrics + statistical models.
+02 - P1/P2 behavioural metrics + statistical models.
 
 For sessions with DLC data (3.6, 3.7, 3.8):
   - Splits each trial into Phase 1 (entry -> first ROI) and Phase 2 (ROI -> exit)
@@ -46,7 +46,7 @@ OUTPUT_DIR = os.path.join(MOUSE_DIR, f"MOUSE_{MOUSE_ID}_TOTAL_ANALYSIS")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-# ── helper: process kinematics (matches legacy af.process_kinematics) ─
+# -- helper: process kinematics (matches legacy af.process_kinematics) ─
 
 def process_kinematics(tracking, fps, px_per_cm,
                        smooth_window=7, smooth_poly=3):
@@ -81,7 +81,7 @@ def process_kinematics(tracking, fps, px_per_cm,
     return df
 
 
-# ── 1. compute per-trial metrics ────────────────────────────────────
+# -- 1. compute per-trial metrics ------------------------------------
 
 sessions = get_sessions_with_dlc()
 print(f"Processing {len(sessions)} sessions with DLC data")
@@ -137,11 +137,11 @@ for sess in sessions:
             continue
         target = str(target_str).strip()
 
-        # ── get trial tracking data ──
+        # -- get trial tracking data --
         # Use .loc for label-based slicing (matches legacy script)
         trial_track = tracking.loc[f_start:f_end].copy()
 
-        # ── trim to first visible frame (legacy behaviour) ──
+        # -- trim to first visible frame (legacy behaviour) --
         is_visible = trial_track["likelihood"] >= LIKELIHOOD_THRESH
         if is_visible.any():
             first_visible_idx = is_visible.idxmax()
@@ -150,7 +150,7 @@ for sess in sessions:
         if len(trial_track) < 1:
             continue
 
-        # ── find split point using smoothed coordinates + buffer ──
+        # -- find split point using smoothed coordinates + buffer --
         # Case-insensitive ROI matching (legacy behaviour)
         roi_match = next(
             (name for name in rois if str(name).lower() == target.lower()),
@@ -174,18 +174,18 @@ for sess in sessions:
         p1 = trial_track.iloc[:split_idx]
         p2 = trial_track.iloc[split_idx:]
 
-        # ── compute initial P1 metrics ──
+        # -- compute initial P1 metrics --
         p1_duration_s = len(p1) / FPS
         p1_mean_speed = p1["speed"].mean() if not p1.empty else 0
         p1_entropy = spatial_entropy(
             p1["x_smooth"].values, p1["y_smooth"].values
         ) if not p1.empty else 0
 
-        # ── skip Miss trials with zero speed (tracking failure) ──
+        # -- skip Miss trials with zero speed (tracking failure) --
         if status == "Miss" and p1_mean_speed == 0:
             continue
 
-        # ── Hit trials with zero speed: use calibrated distances ──
+        # -- Hit trials with zero speed: use calibrated distances --
         if status == "Hit" and p1_mean_speed == 0:
             time_to_reward_ms = row.get("time_to_reward", pd.NA)
             if pd.notna(time_to_reward_ms) and float(time_to_reward_ms) > 0:
@@ -196,7 +196,7 @@ for sess in sessions:
                     p1_duration_s = time_s
                     p1_entropy = np.nan  # no valid DLC for entropy
 
-        # ── P2 metrics ──
+        # -- P2 metrics --
         p2_duration_s = len(p2) / FPS
         p2_mean_speed = p2["speed"].mean() if not p2.empty else 0
         p2_entropy = spatial_entropy(
@@ -223,7 +223,7 @@ print(f"\nComputed metrics for {len(df_all)} trials across {len(sessions)} sessi
 print(df_all.groupby("status").size())
 
 
-# ── 2. violin plots ─────────────────────────────────────────────────
+# -- 2. violin plots -------------------------------------------------
 
 metrics = ["p1_duration_s", "p1_mean_speed", "p1_entropy",
            "p2_duration_s", "p2_mean_speed", "p2_entropy"]
@@ -282,13 +282,13 @@ for i, (m, label) in enumerate(zip(metrics, metric_labels)):
         "LMM_p": p_lmm, "LMM_sig": sig_lmm,
     })
 
-plt.suptitle(f"Mouse {MOUSE_ID} — Hit vs Miss (pooled sessions)", fontsize=14, y=1.01)
+plt.suptitle(f"Mouse {MOUSE_ID} - Hit vs Miss (pooled sessions)", fontsize=14, y=1.01)
 plt.tight_layout()
 fig.savefig(os.path.join(OUTPUT_DIR, "violin_plots.png"), dpi=200, bbox_inches="tight")
 fig.savefig(os.path.join(OUTPUT_DIR, "violin_plots.pdf"), bbox_inches="tight")
 
 
-# ── 3. Gamma GLMM via rpy2 ──────────────────────────────────────────
+# -- 3. Gamma GLMM via rpy2 ------------------------------------------
 
 print("\n--- Gamma GLMM (speed & duration via lme4) ---")
 
@@ -301,7 +301,7 @@ try:
     lme4 = importr("lme4")
     HAS_RPY2 = True
 except Exception as e:
-    print(f"rpy2/R not available ({e}) — skipping Gamma GLMM")
+    print(f"rpy2/R not available ({e}) - skipping Gamma GLMM")
 
 if HAS_RPY2:
     for m in ["p1_mean_speed", "p2_mean_speed", "p1_duration_s", "p2_duration_s"]:
@@ -349,7 +349,7 @@ if HAS_RPY2:
             print(f"  Gamma GLMM failed for {m}: {e}")
 
 
-# ── 4. save stats report ────────────────────────────────────────────
+# -- 4. save stats report --------------------------------------------
 
 stats_df = pd.DataFrame(stats_summary)
 stats_df.to_csv(os.path.join(OUTPUT_DIR, "stats_report.csv"), index=False)

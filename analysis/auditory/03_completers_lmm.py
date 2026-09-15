@@ -100,7 +100,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
-# ─── experiment structure (kept in-sync with preference_analysis_config.py) ──
+# --- experiment structure (kept in-sync with preference_analysis_config.py) --
 DAY_ORDER = ["w1_d1", "w1_d2", "w1_d3", "w1_d4", "w2_sequences", "w2_vocalisations"]
 PI_DAYS   = ["w1_d1", "w1_d2", "w1_d3", "w2_sequences", "w2_vocalisations"]
 DAY_SHORT = {
@@ -118,7 +118,7 @@ OUTCOMES = [
 ]
 
 
-# ─── helpers ────────────────────────────────────────────────────────────────
+# --- helpers ------------------------------------------------------------
 
 
 def log(msg, lines):
@@ -318,7 +318,7 @@ def fit_models(df_outcome: pd.DataFrame, outcome: str) -> dict:
     return out
 
 
-# ─── plotting ───────────────────────────────────────────────────────────────
+# --- plotting ------------------------------------------------------------
 
 
 def plot_caterpillar(model_results: dict, df_completers: pd.DataFrame,
@@ -557,7 +557,7 @@ def plot_spaghetti(df_completers: pd.DataFrame, output_dir: str):
     print("  Saved fig_completers_spaghetti")
 
 
-# ─── main ───────────────────────────────────────────────────────────────────
+# --- main ------------------------------------------------------------
 
 
 def main():
@@ -657,7 +657,7 @@ def main():
 
     for out_col, label, scale in OUTCOMES:
         if out_col not in df_c.columns:
-            log(f"\n[skip] outcome '{out_col}' not in CSV — skipping.", stats_lines)
+            log(f"\n[skip] outcome '{out_col}' not in CSV - skipping.", stats_lines)
             continue
         n_obs = df_c[out_col].notna().sum()
         if n_obs < 6:

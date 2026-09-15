@@ -1,6 +1,6 @@
-"""Integration tests — simulate a short experiment run end-to-end.
+"""Integration tests - simulate a short experiment run end-to-end.
 
-These tests verify that the full pipeline (config → trial generation →
+These tests verify that the full pipeline (config -> trial generation ->
 CSV output) produces structurally correct output without requiring any
 physical hardware.
 """

@@ -4,10 +4,10 @@ Run after the last mouse of the day (or at any point to update the figures).
 
 Usage
 -----
-# Summary for one day — all mice tested that day:
+# Summary for one day - all mice tested that day:
     python run_summary_analysis.py --day path/to/grammar/day_1
 
-# Cross-day summary — all mice across all days:
+# Cross-day summary - all mice across all days:
     python run_summary_analysis.py --all path/to/grammar/
 
 Figures are saved into the folder you pass (day folder or grammar folder).

@@ -13,14 +13,14 @@ in the new frame.
 
 Workflow:
 
-  Stage 1 — Calibration (--calibrate):
+  Stage 1 - Calibration (--calibrate):
       The user clicks all 24 corners of the maze outline (clockwise from
       the top-left) on the middle frame of one video. The script saves
       the 24 points, the chosen patch size, and the unannotated frame to
       calibration.json + calibration_frame.png. (An annotated copy is
       also saved as calibration_frame_annotated.png for reference.)
 
-  Stage 2 — Batch processing (no --calibrate):
+  Stage 2 - Batch processing (no --calibrate):
       For every video the script:
         - builds a per-pixel median reference frame across
           --n_median_frames evenly-spaced frames (collapses the moving
@@ -160,7 +160,7 @@ def sample_median_frame(cap, n_samples=DEFAULT_N_MEDIAN_FRAMES):
     """
     Return a per-pixel median across `n_samples` frames evenly spaced
     through the video. The mouse is in a different place in each frame,
-    so the median collapses to the empty maze — giving a clean,
+    so the median collapses to the empty maze - giving a clean,
     mouse-free image for landmark detection.
 
     Falls back to the middle frame if only one frame is readable.
@@ -630,7 +630,7 @@ def refine_with_homography(new_gray, patches, canonical_pts, H,
     landmark should sit in the new frame, then re-runs template matching
     in a tight window around that predicted position.
 
-    "Non-inlier" means: not a RANSAC inlier — either truly unmatched OR
+    "Non-inlier" means: not a RANSAC inlier - either truly unmatched OR
     a template match that RANSAC rejected as inconsistent with H (i.e.,
     the template most likely locked onto a wrong nearby corner). Both
     cases get the same treatment: re-search around the predicted
@@ -684,12 +684,12 @@ def detect_via_template(new_frame, calibration, patches, search_radius, match_th
                         search_centers=None):
     """
     Match all 24 landmarks. Returns:
-        detected_pts  (24, 2) float32 — NaN for points where no patch
+        detected_pts  (24, 2) float32 - NaN for points where no patch
                                         was extractable
-        scores        (24,)   float32 — peak correlation per point (0
+        scores        (24,)   float32 - peak correlation per point (0
                                         if patch missing or region too
                                         small)
-        matched_mask  (24,)   bool    — score >= match_threshold AND
+        matched_mask  (24,)   bool - score >= match_threshold AND
                                         patch was extractable
 
     If `search_centers` is given (Nx2 float), it is used as the center of
@@ -795,8 +795,8 @@ def empty_detection_record(video_path, rel, dst_size):
         "fps": None,
         "detected_pts": None,    # (24, 2) NaN-filled for unmatched
         "match_scores": None,    # (24,)
-        "matched_mask": None,    # (24,) bool — template-matched points
-        "inlier_mask": None,     # (24,) bool — RANSAC inliers (subset of matched)
+        "matched_mask": None,    # (24,) bool - template-matched points
+        "inlier_mask": None,     # (24,) bool - RANSAC inliers (subset of matched)
         "calibration_landmarks": None,
         "H": None,
         "dst_size": dst_size,
@@ -911,7 +911,7 @@ def detect_one(video_path, input_dir, calibration, patches, canonical_pts, dst_s
         return rec
     # Map the local inlier mask (over only the matched subset) back to a
     # global (24,) mask over all landmarks. Note: we do NOT demote
-    # outliers from `matched` — they're template-matched but just don't
+    # outliers from `matched` - they're template-matched but just don't
     # fit the homography tightly. Tracking them separately lets us
     # report num_matched honestly while computing reproj over the
     # RANSAC-consistent subset.
@@ -927,7 +927,7 @@ def detect_one(video_path, input_dir, calibration, patches, canonical_pts, dst_s
     # landmark (RANSAC outliers + truly unmatched) from the current H,
     # re-search in a tight window around the prediction, re-solve.
     # Handles the case where the initial template match locked onto a
-    # wrong nearby corner — the homography from the inliers points us
+    # wrong nearby corner - the homography from the inliers points us
     # at the right spot, which the re-search can then snap to.
     refine_radius = getattr(args, "refine_radius", DEFAULT_REFINE_RADIUS)
     refine_threshold = getattr(args, "refine_threshold", DEFAULT_REFINE_THRESHOLD)
@@ -1044,7 +1044,7 @@ def save_review_image(rec, review_path):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),
                         2, cv2.LINE_AA)
     else:
-        # No detection at all — just show the calibration positions in red.
+        # No detection at all - just show the calibration positions in red.
         for i, p in enumerate(calib):
             cv2.circle(img, (int(p[0]), int(p[1])), 8, (0, 0, 255), 2)
 
@@ -1451,7 +1451,7 @@ def run_batch(args, calibration_path):
                     "confidence": "skipped",
                     "output_path": str(existing_output),
                 })
-                print(f"  [{i}/{total}] {video_path.name} — skipped "
+                print(f"  [{i}/{total}] {video_path.name} - skipped "
                       f"(already cropped)")
                 continue
 
@@ -1460,10 +1460,10 @@ def run_batch(args, calibration_path):
         if manual_path.exists() and not force_redo:
             try:
                 manual_landmarks = load_video_landmarks(manual_path)
-                print(f"  [{i}/{total}] {video_path.name} — using saved manual "
+                print(f"  [{i}/{total}] {video_path.name} - using saved manual "
                       f"landmarks: {manual_path.name}")
             except Exception as e:
-                print(f"  [{i}/{total}] {video_path.name} — could not read "
+                print(f"  [{i}/{total}] {video_path.name} - could not read "
                       f"{manual_path.name}: {e}; falling back to auto.")
                 manual_landmarks = None
 
@@ -1480,7 +1480,7 @@ def run_batch(args, calibration_path):
                 cand = empty_detection_record(video_path, rel, cset["dst_size"])
                 cand["error"] = f"exception: {e}"
             cand["calibration_used"] = cset["calibration"].get("name", "?")
-            # Manual landmarks are calibration-independent — first try wins.
+            # Manual landmarks are calibration-independent - first try wins.
             if manual_landmarks is not None:
                 d = cand
                 break
@@ -1504,13 +1504,13 @@ def run_batch(args, calibration_path):
         if d["status"] == "ok":
             mean_s = d["mean_match_score"]
             mean_str = "n/a" if not np.isfinite(mean_s) else f"{mean_s:.2f}"
-            print(f"  [{i}/{total}] {video_path.name} — {d['source']}: "
+            print(f"  [{i}/{total}] {video_path.name} - {d['source']}: "
                   f"matched {d['num_matched']}/{NUM_LANDMARKS} "
                   f"(inliers {d['num_inliers']}){shift_str}{calib_str}, "
                   f"mean_score {mean_str}, "
                   f"reproj {d['reprojection_error']:.2f} px, {d['confidence']}")
         else:
-            print(f"  [{i}/{total}] {video_path.name} — failed{shift_str}{calib_str}: "
+            print(f"  [{i}/{total}] {video_path.name} - failed{shift_str}{calib_str}: "
                   f"{d['error']}")
 
     # ----------------------------------------------------------------------
@@ -1530,7 +1530,7 @@ def run_batch(args, calibration_path):
                 d.get("mean_match_score", np.nan), d.get("error"),
                 calibration_used=calib_used,
             ))
-            print(f"  [{i}/{total}] {d['filename']} — confidence: failed")
+            print(f"  [{i}/{total}] {d['filename']} - confidence: failed")
             continue
 
         try:
@@ -1557,7 +1557,7 @@ def run_batch(args, calibration_path):
             })
             mean_s = d["mean_match_score"]
             mean_str = "n/a" if not np.isfinite(mean_s) else f"{mean_s:.2f}"
-            print(f"  [{i}/{total}] {d['filename']} — confidence: {d['confidence']} "
+            print(f"  [{i}/{total}] {d['filename']} - confidence: {d['confidence']} "
                   f"(matched {d['num_matched']}/{NUM_LANDMARKS}, "
                   f"inliers {d['num_inliers']}, "
                   f"mean_score {mean_str}, "
@@ -1568,7 +1568,7 @@ def run_batch(args, calibration_path):
                 d.get("mean_match_score", np.nan), str(e),
                 calibration_used=calib_used,
             ))
-            print(f"  [{i}/{total}] {d['filename']} — confidence: failed ({e})")
+            print(f"  [{i}/{total}] {d['filename']} - confidence: failed ({e})")
 
     # Re-attach the skipped rows so the summary CSV still reflects the
     # full set of videos discovered under --input_dir.

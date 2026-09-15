@@ -1,5 +1,5 @@
 """
-01 — Choice accuracy across sessions.
+01 - Choice accuracy across sessions.
 
 For each session, recomputes trial outcomes from
 first_reward_area_visited[-1] vs rew_location (sanity-checking the
@@ -24,7 +24,7 @@ from config import (MOUSE_ID, MOUSE_DIR, discover_sessions)
 from utils import load_trials, classify_trial, has_entered_any_arm
 
 
-# ── 1. load & classify ──────────────────────────────────────────────
+# -- 1. load & classify ----------------------------------------------
 
 sessions = discover_sessions()
 print(f"Found {len(sessions)} sessions for mouse {MOUSE_ID}")
@@ -46,7 +46,7 @@ for sess in sessions:
 
 all_trials = pd.DataFrame(rows)
 
-# ── 2. summary counts ───────────────────────────────────────────────
+# -- 2. summary counts -----------------------------------------------
 
 # sort sessions in logical order (hab, 3.1, 3.2, ...)
 def session_sort_key(sid):
@@ -76,7 +76,7 @@ for sid in session_order:
 summary_df = pd.DataFrame(summary)
 print("\n" + summary_df.to_string(index=False))
 
-# ── 3. plot (line plot) ──────────────────────────────────────────────
+# -- 3. plot (line plot) ----------------------------------------------
 
 fig, ax = plt.subplots(figsize=(10, 5))
 
@@ -98,7 +98,7 @@ ax.fill_between(x, incorrect_vals, alpha=0.08, color="#D62728")
 
 ax.set_xlabel("Session", fontsize=12)
 ax.set_ylabel("Number of trials", fontsize=12)
-ax.set_title(f"Mouse {MOUSE_ID} — Choice accuracy across sessions", fontsize=13)
+ax.set_title(f"Mouse {MOUSE_ID} - Choice accuracy across sessions", fontsize=13)
 ax.set_xticks(x)
 ax.set_xticklabels(session_order)
 ax.yaxis.set_major_locator(ticker.MaxNLocator(integer=True))
@@ -117,7 +117,7 @@ fig.savefig(os.path.join(OUTPUT_DIR, "choice_accuracy_across_sessions.pdf"))
 summary_df.to_csv(os.path.join(OUTPUT_DIR, "choice_accuracy_summary.csv"), index=False)
 print(f"\nSaved to {OUTPUT_DIR}")
 
-# ── 4. binomial GLMM ────────────────────────────────────────────────
+# -- 4. binomial GLMM ------------------------------------------------
 # correct ~ session + (1 | mouse_id)
 # For a single mouse this is just a logistic regression, but the
 # structure generalises when you add more mice.

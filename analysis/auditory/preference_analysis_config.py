@@ -31,7 +31,7 @@ SILENT_TRIAL_IDS = {3, 5, 7, 9}
 # Override with VISIT_CLIP_MS env var.  Set to 0 to disable.
 INDIVIDUAL_VISIT_CLIP_MS = int(os.environ.get("VISIT_CLIP_MS", "10000"))  # 10 s
 
-# ── paths ─────────────────────────────────────────────────────────────
+# -- paths ------------------------------------------------------------
 
 # Override with MAZE_DATA_DIR env var if running on a different machine.
 # e.g. MAZE_DATA_DIR="D:\data\8_arms_w_voc" python 01_preference_analysis.py
@@ -42,7 +42,7 @@ BASE_PATH = os.environ.get("MAZE_DATA_DIR", os.path.join(
 
 OUTPUT_DIR = os.path.join(BASE_PATH, "BATCH_ANALYSIS")
 
-# ── experiment structure ──────────────────────────────────────────────
+# -- experiment structure ----------------------------------------------
 
 # Each day maps to a folder name and an experiment mode.
 # Sound types within each day are extracted from the stimulus field.
@@ -100,7 +100,7 @@ PI_DAYS = ["w1_d1", "w1_d2", "w1_d3", "w2_sequences", "w2_vocalisations"]
 DAY_ORDER = ["w1_d1", "w1_d2", "w1_d3", "w1_d4", "w2_sequences", "w2_vocalisations"]
 DAY_SHORT = {d: EXPERIMENT_DAYS[d]["short"] for d in DAY_ORDER}
 
-# ── session discovery ─────────────────────────────────────────────────
+# -- session discovery -------------------------------------------------
 
 
 @dataclass
@@ -181,7 +181,7 @@ def get_mice_with_min_sessions(sessions: List[SessionInfo],
     return {m for m, c in day_counts.items() if c >= min_sessions}
 
 
-# ── safe IO helpers ───────────────────────────────────────────────────
+# -- safe IO helpers ---------------------------------------------------
 
 def _is_file_locally_available(path):
     """Skip Box Drive / OneDrive cloud-only files (would block on read)."""
@@ -211,7 +211,7 @@ def safe_read_csv(path):
         return None
 
 
-# ── visit-data loader (DV-first, capped trials.csv fallback) ──────────
+# -- visit-data loader (DV-first, capped trials.csv fallback) ----------
 
 def load_session_visits(sess: "SessionInfo") -> Tuple[Optional[pd.DataFrame], str]:
     """Load a session's per-(trial, ROI) visit aggregates with corruption fixes.
@@ -313,7 +313,7 @@ def load_session_visits(sess: "SessionInfo") -> Tuple[Optional[pd.DataFrame], st
     return df, "trials_raw"
 
 
-# ── first-minute roaming entropy ─────────────────────────────────────
+# -- first-minute roaming entropy -------------------------------------
 
 def compute_first_minute_re(sess: "SessionInfo", n_rois: int = 8) -> float:
     """Compute roaming entropy from the first 60 s of habituation (trial 1).
@@ -374,7 +374,7 @@ def compute_first_minute_re(sess: "SessionInfo", n_rois: int = 8) -> float:
     return shannon_entropy(props, base=2) / np.log2(n_rois)
 
 
-# ── run as standalone to verify ───────────────────────────────────────
+# -- run as standalone to verify ---------------------------------------
 
 if __name__ == "__main__":
     sessions = discover_sessions()

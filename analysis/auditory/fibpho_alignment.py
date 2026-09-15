@@ -18,10 +18,10 @@ Usage:
     python fibpho_alignment.py
 
 Outputs (saved to OUTPUT_DIR):
-    - fibpho_aligned_overview.png/.pdf   — full-session delta F/F with TTLs
-    - fibpho_trial_panels.png/.pdf       — per-trial zoomed panels
-    - fibpho_peri_event.png/.pdf         — peri-event average (PETH)
-    - alignment_report.csv               — matched TTL ↔ CSV events
+    - fibpho_aligned_overview.png/.pdf - full-session delta F/F with TTLs
+    - fibpho_trial_panels.png/.pdf - per-trial zoomed panels
+    - fibpho_peri_event.png/.pdf - peri-event average (PETH)
+    - alignment_report.csv - matched TTL ↔ CSV events
 """
 
 import os
@@ -46,7 +46,7 @@ def safe_savefig(fig, path, **kwargs):
 from scipy.signal import savgol_filter
 from scipy.ndimage import uniform_filter1d
 
-# ── configuration ─────────────────────────────────────────────────────
+# -- configuration -----------------------------------------------------
 
 # TDT tank path
 TANK_PATH = os.path.join(
@@ -105,7 +105,7 @@ STIM_COLOURS = {
     "unknown":                            "#888888",  # dark grey
 }
 
-# ── helper functions ──────────────────────────────────────────────────
+# -- helper functions --------------------------------------------------
 
 
 def extract_stim_name(stimulus_str):
@@ -147,16 +147,16 @@ def compute_delta_f_over_f(signal_465, signal_405, fs,
 
     Parameters
     ----------
-    signal_465 : array — GCaMP calcium-dependent signal
-    signal_405 : array — isosbestic reference signal
-    fs : float — sampling rate (Hz)
-    smooth_win : int — Savitzky-Golay smoothing window
-    baseline_pct : float — percentile for F0 estimation
+    signal_465 : array - GCaMP calcium-dependent signal
+    signal_405 : array - isosbestic reference signal
+    fs : float - sampling rate (Hz)
+    smooth_win : int - Savitzky-Golay smoothing window
+    baseline_pct : float - percentile for F0 estimation
 
     Returns
     -------
-    dff : array — delta F/F (dimensionless)
-    time : array — time vector (seconds)
+    dff : array - delta F/F (dimensionless)
+    time : array - time vector (seconds)
     """
     # ensure same length
     n = min(len(signal_465), len(signal_405))
@@ -200,7 +200,7 @@ def compute_delta_f_over_f(signal_465, signal_405, fs,
     return dff, time
 
 
-# ── 1. load TDT data ─────────────────────────────────────────────────
+# -- 1. load TDT data -------------------------------------------------
 
 print("Loading TDT block...")
 try:
@@ -228,7 +228,7 @@ ttl_offsets = data.epocs[EPOC_TTL].offset
 print(f"  TTL events: {len(ttl_onsets)} onsets")
 
 
-# ── 2. load visit CSV ────────────────────────────────────────────────
+# -- 2. load visit CSV ------------------------------------------------
 
 print("\nLoading visit CSV...")
 df_visits = pd.read_csv(VISIT_CSV)
@@ -249,7 +249,7 @@ df_trials = pd.read_csv(TRIALS_CSV)
 print(f"  {len(df_trials.trial_ID.unique())} trials from trials CSV")
 
 
-# ── 3. align clocks ──────────────────────────────────────────────────
+# -- 3. align clocks --------------------------------------------------
 
 print("\nAligning TDT and CSV clocks...")
 
@@ -307,7 +307,7 @@ print(f"  Residuals: mean={np.mean(residuals)*1000:.1f}ms, "
       f"max={np.max(np.abs(residuals))*1000:.1f}ms")
 
 
-# ── 4. compute delta F/F ─────────────────────────────────────────────
+# -- 4. compute delta F/F ---------------------------------------------
 
 print("\nComputing delta F/F...")
 dff, time_dff = compute_delta_f_over_f(sig_465, sig_405, fs)
@@ -319,7 +319,7 @@ fs_ds = fs / DOWNSAMPLE
 print(f"  dF/F computed: {len(dff)} samples -> {len(dff_ds)} (downsampled {DOWNSAMPLE}x)")
 
 
-# ── 5. convert trial boundaries to TDT time ──────────────────────────
+# -- 5. convert trial boundaries to TDT time --------------------------
 
 # Get unique trial start/end times from the trials CSV
 trial_boundaries = []
@@ -348,7 +348,7 @@ for _, tb in df_trial_bounds.iterrows():
           f"{tb['end_tdt']:.1f}s ({label})")
 
 
-# ── 6. plot 1: full-session overview ──────────────────────────────────
+# -- 6. plot 1: full-session overview ----------------------------------
 
 print("\nPlotting full-session overview...")
 
@@ -379,7 +379,7 @@ if stable_mask.any():
     ax1.set_ylim(y_lo - y_margin, y_hi + y_margin)
 
 ax1.set_ylabel("ΔF/F", fontsize=12)
-ax1.set_title("Mouse K30_5 — Fiber Photometry (465nm GCaMP, "
+ax1.set_title("Mouse K30_5 - Fiber Photometry (465nm GCaMP, "
               "motion-corrected via 405nm isosbestic)\n"
               "Coloured bars = stimulus presentations",
               fontsize=13)
@@ -423,7 +423,7 @@ safe_savefig(fig, os.path.join(OUTPUT_DIR, "fibpho_aligned_overview.pdf"),
 print("  Saved fibpho_aligned_overview.png/.pdf")
 
 
-# ── 7. plot 2: per-trial zoomed panels ────────────────────────────────
+# -- 7. plot 2: per-trial zoomed panels --------------------------------
 
 print("Plotting per-trial panels...")
 
@@ -469,7 +469,7 @@ for ax, (_, tb) in zip(axes2, active_trials.iterrows()):
                 alpha=0.7, zorder=3)
 
     ax.set_ylabel("ΔF/F", fontsize=10)
-    ax.set_title(f"Trial {tid} (Active) — "
+    ax.set_title(f"Trial {tid} (Active) - "
                  f"{len(trial_events)} sound events", fontsize=11)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -485,7 +485,7 @@ for ax, (_, tb) in zip(axes2, active_trials.iterrows()):
 axes2[-1].set_xlabel("Time (seconds from TDT recording start)",
                      fontsize=11)
 
-plt.suptitle("Mouse K30_5 — Per-trial ΔF/F with stimulus events",
+plt.suptitle("Mouse K30_5 - Per-trial ΔF/F with stimulus events",
              fontsize=14, y=1.01)
 plt.tight_layout()
 fig2.savefig(os.path.join(OUTPUT_DIR, "fibpho_trial_panels.png"),
@@ -495,7 +495,7 @@ safe_savefig(fig2, os.path.join(OUTPUT_DIR, "fibpho_trial_panels.pdf"),
 print("  Saved fibpho_trial_panels.png/.pdf")
 
 
-# ── 8. plot 3: peri-event time histogram (PETH) ──────────────────────
+# -- 8. plot 3: peri-event time histogram (PETH) ----------------------
 
 print("Plotting peri-event average (PETH)...")
 
@@ -552,7 +552,7 @@ ax3.axvline(0, color="black", linestyle="--", alpha=0.5, linewidth=1,
 ax3.axhline(0, color="grey", linestyle="-", alpha=0.3, linewidth=0.5)
 ax3.set_xlabel("Time relative to sound onset (s)", fontsize=12)
 ax3.set_ylabel("ΔF/F (mean ± SEM)", fontsize=12)
-ax3.set_title("Mouse K30_5 — Peri-event ΔF/F by vocalisation type",
+ax3.set_title("Mouse K30_5 - Peri-event ΔF/F by vocalisation type",
               fontsize=13)
 ax3.legend(loc="upper right", fontsize=8, framealpha=0.9)
 ax3.spines["top"].set_visible(False)
@@ -567,13 +567,13 @@ safe_savefig(fig3, os.path.join(OUTPUT_DIR, "fibpho_peri_event.pdf"),
 print("  Saved fibpho_peri_event.png/.pdf")
 
 
-# ── 9. plot 4: combined PETH (all stimuli pooled) ────────────────────
+# -- 9. plot 4: combined PETH (all stimuli pooled) --------------------
 
 print("Plotting pooled PETH...")
 
 all_traces = []
 for stim_name, info in peth_data.items():
-    # We need the raw traces, not just mean — recompute
+    # We need the raw traces, not just mean - recompute
     pass
 
 # Recompute pooled
@@ -603,7 +603,7 @@ if pooled_traces:
     ax4.axhline(0, color="grey", linestyle="-", alpha=0.3, linewidth=0.5)
     ax4.set_xlabel("Time relative to sound onset (s)", fontsize=12)
     ax4.set_ylabel("ΔF/F (mean ± SEM)", fontsize=12)
-    ax4.set_title(f"Mouse K30_5 — Pooled peri-event ΔF/F "
+    ax4.set_title(f"Mouse K30_5 - Pooled peri-event ΔF/F "
                   f"(n={len(pooled_traces)} events)", fontsize=13)
     ax4.legend(fontsize=10, framealpha=0.9)
     ax4.spines["top"].set_visible(False)
@@ -618,7 +618,7 @@ if pooled_traces:
     print("  Saved fibpho_peri_event_pooled.png/.pdf")
 
 
-# ── 10. summary ───────────────────────────────────────────────────────
+# -- 10. summary -------------------------------------------------------
 
 print(f"\n{'='*60}")
 print(f"Alignment summary")

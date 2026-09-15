@@ -1,5 +1,5 @@
 """
-02 — Within-Trial Preference: Sound vs Silent Visit Duration
+02 - Within-Trial Preference: Sound vs Silent Visit Duration
 =============================================================
 
 For each mouse × experiment day, computes average visit duration
@@ -16,7 +16,7 @@ Output figure:
   y = mean sound-arm visit duration (ms)
   Each dot = one mouse (averaged across trials 2, 4, 6, 8).
   Dashed diagonal = y = x (no preference).
-  Points above the line → mouse prefers sound.
+  Points above the line -> mouse prefers sound.
 
 Outputs (saved to BATCH_ANALYSIS/):
   within_trial_preference.csv            per-mouse per-day metrics
@@ -43,7 +43,7 @@ from preference_analysis_config import (
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-# ── stimulus classifier (same as 01_preference_analysis.py) ──────────
+# -- stimulus classifier (same as 01_preference_analysis.py) ----------
 
 def classify_stimulus(row, day_key):
     """Classify a trial-CSV row as 'silent' or a stimulus label."""
@@ -103,7 +103,7 @@ def classify_stimulus(row, day_key):
     return "unknown"
 
 
-# ── helpers ──────────────────────────────────────────────────────────
+# -- helpers ----------------------------------------------------------
 
 def _is_file_locally_available(path):
     try:
@@ -139,7 +139,7 @@ def safe_savefig(fig, path, **kwargs):
         print(f"  WARNING: could not write {os.path.basename(path)} (file locked)")
 
 
-# ── main ─────────────────────────────────────────────────────────────
+# -- main ------------------------------------------------------------
 
 print("Discovering sessions...")
 all_sessions = discover_sessions()
@@ -222,7 +222,7 @@ df_mouse.to_csv(os.path.join(OUTPUT_DIR, "within_trial_preference.csv"), index=F
 print(f"Saved within_trial_preference.csv ({len(df_mouse)} rows)")
 
 
-# ── figure: one panel per day ────────────────────────────────────────
+# -- figure: one panel per day ----------------------------------------
 
 days_with_data = [d for d in DAY_ORDER if d in df_mouse["day"].values]
 n_days = len(days_with_data)
@@ -321,7 +321,7 @@ safe_savefig(fig, os.path.join(OUTPUT_DIR, "fig_within_trial_preference.pdf"),
 print("Saved fig_within_trial_preference")
 
 
-# ── interactive Plotly figure ───────────────────────────────────────
+# -- interactive Plotly figure ---------------------------------------
 
 try:
     import plotly.graph_objects as go
@@ -391,7 +391,7 @@ try:
         title=dict(
             text=(
                 "Within-trial preference: sound vs silent-arm visit duration<br>"
-                "<sup>Hover over points to identify mice — each point = one mouse, "
+                "<sup>Hover over points to identify mice - each point = one mouse, "
                 "averaged across trials 2, 4, 6, 8</sup>"
             ),
             x=0.5,
@@ -405,7 +405,7 @@ try:
     print(f"Saved interactive Plotly figure: {plotly_path}")
 
 except ImportError:
-    print("  (Plotly not installed — skipping interactive figure)")
+    print("  (Plotly not installed - skipping interactive figure)")
 except Exception as e:
     print(f"  WARNING: Plotly figure failed: {e}")
 

@@ -89,13 +89,13 @@ amaze-grammar --mode training \
     --output-dir ./sessions/<date>_grammarB
 ```
 
-`--cage-ids` is bookkeeping only — it tags the output filename and JSON
+`--cage-ids` is bookkeeping only - it tags the output filename and JSON
 summary; it does not change the audio. You can use any format for the
 cage tags (e.g. `"6224_EE"`, `"6224-EE"`, `"6224:EE"`); the script just
 stores them as strings.
 
 > If different cages in the room ever need *different* grammars
-> simultaneously, you'd need two speakers and two processes — but your
+> simultaneously, you'd need two speakers and two processes - but your
 > schedule (one grammar per day for everyone in the room) avoids that.
 
 ### Step 3. Confirm it's running
@@ -152,15 +152,15 @@ All CLI flags:
 |---|---|
 | `--grammar-mode {silent_baseline,test}` | Which day of the protocol (overrides `cfg.grammar_mode`) |
 | `--enriched-grammar {A,B}` | Which grammar this mouse heard in EE (overrides `cfg.enriched_grammar`) |
-| `--day LABEL` | Parent folder in the output path — e.g. `habituation`, `day_1`, `day_2` |
+| `--day LABEL` | Parent folder in the output path - e.g. `habituation`, `day_1`, `day_2` |
 | `--seed N` | RNG seed for reproducible melody draws (overrides `cfg.grammar_seed`) |
 | `--draw-rois` | Force interactive ROI re-drawing (overrides `cfg.draw_rois`) |
 
 Anything you don't pass keeps the default from `config.py`.
 
 **Current schedule:**
-- `silent_baseline` — one 45-minute trial, no audio
-- `test` — four 15-minute active blocks, no silent gaps between them (60 min total)
+- `silent_baseline` - one 45-minute trial, no audio
+- `test` - four 15-minute active blocks, no silent gaps between them (60 min total)
 
 #### Customising the schedule
 
@@ -186,8 +186,8 @@ then four 15-minute active blocks with no gaps between them (62 min total).
 If `rois1.csv` does not exist at `cfg.roi_csv_path` (default:
 `<base_output_path>/rois1.csv`), the script will
 automatically prompt you to draw the ROIs the first time you run it
-(using `cv.selectROI` — drag a rectangle, press Enter, repeat for each
-of the 10 ROIs in order: 2 entrances + ROIs 1–8). After that, the same
+(using `cv.selectROI` - drag a rectangle, press Enter, repeat for each
+of the 10 ROIs in order: 2 entrances + ROIs 1-8). After that, the same
 layout is reused for every subsequent session.
 
 If you want to **re-draw** the ROIs (e.g. you moved the maze), pass
@@ -225,7 +225,7 @@ maze_recordings/grammar/day_1/time_2026-05-23_14_30_00_mouse1/
 | `<mouseID>_grammar_detailed_visits.csv` | One row per visit: ROI, stimulus string, entry/exit times, duration |
 | `<mouseID>_grammar_maze_entries.csv` | Maze entry and exit events with timestamps |
 | `<mouseID>_<timestamp>_metadata.csv` | Mouse metadata (ID, DOB, sex, ear marks) |
-| `grammar_samples_<timestamp>.csv` | One row per melody played — grammar, tier, symbol sequence (test days only) |
+| `grammar_samples_<timestamp>.csv` | One row per melody played - grammar, tier, symbol sequence (test days only) |
 | `trials_<timestamp>.npy` | Raw audio arrays (for debugging sounds) |
 | `fig1_arm_totals.png` … `fig6_location_preference.png` | Per-session analysis figures (auto-generated) |
 
@@ -239,7 +239,7 @@ you whether each row was an EE-paired or SC-paired grammar arm (it's
 amaze-analyse-session "C:\path\to\session_folder"
 ```
 
-### Step 4b. After the last mouse of a day — run the day summary
+### Step 4b. After the last mouse of a day - run the day summary
 
 After you've run all mice for a given day, generate cross-mouse summary
 figures with:
@@ -256,16 +256,16 @@ Figures are saved into the folder you pass.
 
 | Figure | What it shows |
 |--------|---------------|
-| `summary_A_ee_sc_per_mouse.png` | EE vs SC total time — one pair of bars per mouse per day |
+| `summary_A_ee_sc_per_mouse.png` | EE vs SC total time - one pair of bars per mouse per day |
 | `summary_B_preference_index.png` | EE preference index (−1 to +1) per mouse per day |
 | `summary_C_group_summary.png` | Group mean ± SEM time and visits on EE vs SC arms |
 | `summary_D_cross_day_pi.png` | PI trajectory per mouse + group mean across days *(multi-day only)* |
 | `summary_E_tier_breakdown_per_mouse.png` | Stacked bars showing dominant / secondary / rare time on EE and SC arms per mouse |
 | `summary_F_group_tier_breakdown.png` | Group mean ± SEM for all 6 tier × environment combinations |
-| `summary_G_cross_day_tiers.png` | Per-tier preference across days — group mean ± SEM for each complexity level *(multi-day only)* |
+| `summary_G_cross_day_tiers.png` | Per-tier preference across days - group mean ± SEM for each complexity level *(multi-day only)* |
 
 Silent-baseline sessions (no audio) are automatically excluded from
-all summary figures — only test-day sessions contribute.
+all summary figures - only test-day sessions contribute.
 
 ### Step 5. Run the next mouse / next day
 
@@ -287,12 +287,12 @@ amaze-auditory --grammar-mode test --enriched-grammar A --day day_2
 | Problem | Fix |
 |---|---|
 | `amaze-grammar` is not found | Install the package: `pip install -e .` from the repo root |
-| `main.py` raises `NotImplementedError` about training | You forgot `--grammar-mode test` (or `silent_baseline`) — the config default intentionally forces you to pass it |
+| `main.py` raises `NotImplementedError` about training | You forgot `--grammar-mode test` (or `silent_baseline`) - the config default intentionally forces you to pass it |
 | `main.py` errors about `rois_number` | Set `rois_number: int = 8` in `src/amazeing/auditory/config.py` |
-| Baselines all 0 after calibration | The ROI coordinates in `rois1.csv` are likely stale — re-run with `--draw-rois` to redraw them |
+| Baselines all 0 after calibration | The ROI coordinates in `rois1.csv` are likely stale - re-run with `--draw-rois` to redraw them |
 | Mouse not detected / no ROI ENTERED messages | Try raising `detection_sensitivity` from `0.5` to `0.7` in `config.py`, or redraw ROIs with `--draw-rois` |
-| No audio | Check `channel_id` in `config.py` — run `python -c "import sounddevice; print(sounddevice.query_devices())"` to list available devices |
-| "No gain" warning at startup | The calibration CSV was not found — check `calibration_gain_path` in `config.py` resolves to `src/amazeing/auditory/data/frequency_response_speaker.csv` in the repo |
+| No audio | Check `channel_id` in `config.py` - run `python -c "import sounddevice; print(sounddevice.query_devices())"` to list available devices |
+| "No gain" warning at startup | The calibration CSV was not found - check `calibration_gain_path` in `config.py` resolves to `src/amazeing/auditory/data/frequency_response_speaker.csv` in the repo |
 | Audio plays but I want to verify what was played | Open `grammar_samples_<timestamp>.csv` and inspect the `symbols` and `tier` columns |
 | Want to reproduce the same melody draws | Re-run with `--seed N` using the same seed (otherwise check the CSV) |
 | Post-session figures not generated | Run `amaze-analyse-session <session_folder>` manually; check the terminal for the traceback |

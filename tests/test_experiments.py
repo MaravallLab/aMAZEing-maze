@@ -1,4 +1,4 @@
-"""Tests for ExperimentFactory — trial generation for all experiment modes."""
+"""Tests for ExperimentFactory - trial generation for all experiment modes."""
 
 import numpy as np
 import pandas as pd
@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import patch
 
 
-# ── Expected DataFrame columns per experiment type ─────────────────
+# -- Expected DataFrame columns per experiment type -----------------
 COMMON_TRACKING_COLS = {"time_spent", "visitation_count", "time_in_maze_ms",
                         "trial_start_time", "end_trial_time"}
 COMMON_TRIAL_COLS = {"trial_ID", "ROIs", "wave_arrays"}

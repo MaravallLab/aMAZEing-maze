@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Batch Auditory Preference Analysis — Portable Runner
+Batch Auditory Preference Analysis - Portable Runner
 =====================================================
 
 Self-contained script that computes preference metrics for all mice
@@ -11,13 +11,13 @@ Quick start
 -----------
     python run_batch_preference.py  "D:\data\8_arms_w_voc"
 
-    # Or without arguments — it prompts for the path interactively:
+    # Or without arguments - it prompts for the path interactively:
     python run_batch_preference.py
 
 Dependencies (pip install):
     numpy  pandas  matplotlib  seaborn  scipy  statsmodels
 
-Outputs  → <DATA_ROOT>/BATCH_ANALYSIS/
+Outputs  -> <DATA_ROOT>/BATCH_ANALYSIS/
     preference_data.csv           per-mouse per-session PI + voc_pi
     stimulus_breakdown.csv        per-stimulus-type visit duration + stim_pi
     fig1_pi_trajectories.png/pdf  individual mouse PI trajectories
@@ -25,7 +25,7 @@ Outputs  → <DATA_ROOT>/BATCH_ANALYSIS/
     fig3_pi_violins.png/pdf       violin plots by day
     fig4_complexity_heatmap.png   visit duration by stimulus type
     fig5_vocalisation_contrast.png vocalisation PI analysis (3 panels)
-    fig6_re_vs_pi.png/pdf         roaming entropy → PI
+    fig6_re_vs_pi.png/pdf         roaming entropy -> PI
     fig7_icc_summary.png/pdf      ICC variance decomposition
     fig8_stimulus_pi.png/pdf      per-stimulus PI vs silent baseline
     stats_report.txt              all statistical test results
@@ -61,7 +61,7 @@ try:
 except ImportError:
     HAS_STATSMODELS = False
 
-# ── experiment structure ─────────────────────────────────────────────
+# -- experiment structure ---------------------------------------------
 EXPERIMENT_DAYS = {
     "w1_d1": {
         "folder": "w1_d1",
@@ -112,7 +112,7 @@ DAY_ORDER = ["w1_d1", "w1_d2", "w1_d3", "w1_d4", "w2_sequences", "w2_vocalisatio
 DAY_SHORT = {d: EXPERIMENT_DAYS[d]["short"] for d in DAY_ORDER}
 
 
-# ── data classes ─────────────────────────────────────────────────────
+# -- data classes -----------------------------------------------------
 
 @dataclass
 class SessionInfo:
@@ -123,7 +123,7 @@ class SessionInfo:
     detailed_visits_csv: Optional[str] = None
 
 
-# ── session discovery ────────────────────────────────────────────────
+# -- session discovery ------------------------------------------------
 
 def _extract_mouse_id(folder_name: str) -> Optional[str]:
     m = re.search(r"mouse(\d{4,6})", folder_name, re.IGNORECASE)
@@ -172,7 +172,7 @@ def get_mice_with_min_sessions(sessions, min_n=2):
     return {m for m, c in counts.items() if c >= min_n}
 
 
-# ── helpers ──────────────────────────────────────────────────────────
+# -- helpers ----------------------------------------------------------
 
 def classify_stimulus(row, day_key):
     mode = EXPERIMENT_DAYS[day_key]["mode"]
@@ -298,9 +298,9 @@ def log_stat(msg, lines):
     lines.append(msg)
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# ============================================================
 #  MAIN
-# ═══════════════════════════════════════════════════════════════════════
+# ============================================================
 
 def main():
     parser = argparse.ArgumentParser(
@@ -341,7 +341,7 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     stats_lines: list[str] = []
 
-    # ── 1. discover & load ───────────────────────────────────────────
+    # -- 1. discover & load -------------------------------------------
     print(f"\nData path:   {base_path}")
     print(f"Output dir:  {output_dir}")
     print(f"Day folders: {', '.join(found_days)}\n")
@@ -531,7 +531,7 @@ def main():
     print(f"\nPI analysis: {len(df_pi)} sessions across {len(PI_DAYS)} days")
     print(f"Unique mice: {df_pi['mouse_id'].nunique()}")
 
-    # ── 2. Fig 1: PI trajectories ────────────────────────────────────
+    # -- 2. Fig 1: PI trajectories ------------------------------------
     print("\nPlotting Figure 1: PI trajectories...")
     multi_mice = get_mice_with_min_sessions(all_sessions, 3)
     df_traj = df_pi[df_pi["mouse_id"].isin(multi_mice)].copy()
@@ -568,7 +568,7 @@ def main():
                  bbox_inches="tight")
     print("  Saved fig1")
 
-    # ── 3. Fig 2: Mean PI per day ────────────────────────────────────
+    # -- 3. Fig 2: Mean PI per day ------------------------------------
     print("Plotting Figure 2: Mean PI per day...")
     fig2, ax2 = plt.subplots(figsize=(10, 6))
     means, cis, ns = [], [], []
@@ -599,7 +599,7 @@ def main():
                  bbox_inches="tight")
     print("  Saved fig2")
 
-    # ── 4. Fig 3: Violin plots ───────────────────────────────────────
+    # -- 4. Fig 3: Violin plots ---------------------------------------
     print("Plotting Figure 3: PI violins...")
     fig3, ax3 = plt.subplots(figsize=(12, 6))
     df_pi["day_short"] = df_pi["day"].map(DAY_SHORT)
@@ -628,7 +628,7 @@ def main():
                  bbox_inches="tight")
     print("  Saved fig3")
 
-    # ── 5. Fig 4: Complexity box plots ───────────────────────────────
+    # -- 5. Fig 4: Complexity box plots -------------------------------
     print("Plotting Figure 4: Complexity box plots...")
     if len(df_stim) > 0:
         fig4, axes4 = plt.subplots(2, 3, figsize=(18, 10))
@@ -675,7 +675,7 @@ def main():
                      bbox_inches="tight")
         print("  Saved fig4")
 
-    # ── 6. Fig 5: Vocalisation contrast ──────────────────────────────
+    # -- 6. Fig 5: Vocalisation contrast ------------------------------
     # Uses voc_pi (stimulus-specific vocalisation PI) for a fair comparison
     print("Plotting Figure 5: Vocalisation contrast...")
 
@@ -779,7 +779,7 @@ def main():
                  bbox_inches="tight")
     print("  Saved fig5")
 
-    # ── 7. Fig 6: Roaming entropy vs PI ──────────────────────────────
+    # -- 7. Fig 6: Roaming entropy vs PI ------------------------------
     print("Plotting Figure 6: Roaming entropy vs PI...")
     df_re = df_pi.dropna(subset=["roaming_entropy", "preference_index"]).copy()
     fig6, axes6 = plt.subplots(1, 2, figsize=(14, 6))
@@ -827,7 +827,7 @@ def main():
                  bbox_inches="tight")
     print("  Saved fig6")
 
-    # ── 7b. Fig 6b: First-minute RE vs PI ────────────────────────────
+    # -- 7b. Fig 6b: First-minute RE vs PI ----------------------------
     print("Plotting Figure 6b: First-minute RE vs PI...")
     df_re1 = df_pi.dropna(subset=["re_first_min", "preference_index"]).copy()
     n_re1 = len(df_re1)
@@ -888,7 +888,7 @@ def main():
     else:
         print(f"  Skipping fig6b: only {n_re1} sessions with first-minute RE")
 
-    # ── 7c. Fig: Voc PI vs Other Sounds PI ───────────────────────────
+    # -- 7c. Fig: Voc PI vs Other Sounds PI ---------------------------
     print("Plotting Figure: Voc PI vs Other Sounds PI...")
     df_voc_vs = df_pref.dropna(subset=["voc_pi", "other_sounds_pi"]).copy()
     df_voc_vs = df_voc_vs[df_voc_vs["day"] != "w2_vocalisations"]
@@ -976,9 +976,9 @@ def main():
                      bbox_inches="tight")
         print("  Saved fig_voc_vs_other_sounds_pi")
     else:
-        print("  No sessions with both voc PI and other sounds PI — skipping")
+        print("  No sessions with both voc PI and other sounds PI - skipping")
 
-    # ── 8. Mixed models + Fig 7 ──────────────────────────────────────
+    # -- 8. Mixed models + Fig 7 --------------------------------------
     print("\nFitting mixed-effects models...")
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("MIXED-EFFECTS MODELS", stats_lines)
@@ -1065,7 +1065,7 @@ def main():
                  bbox_inches="tight")
     print("  Saved fig7")
 
-    # ── 9. Fig 8: Per-stimulus PI by day ────────────────────────────
+    # -- 9. Fig 8: Per-stimulus PI by day ----------------------------
     print("Plotting Figure 8: Per-stimulus PI by day...")
     if len(df_stim) > 0 and "stim_pi" in df_stim.columns:
         fig8, axes8 = plt.subplots(2, 3, figsize=(18, 10))
@@ -1112,7 +1112,7 @@ def main():
                      bbox_inches="tight")
         print("  Saved fig8")
 
-    # ── 9b. Interactive Plotly figures ─────────────────────────────────
+    # -- 9b. Interactive Plotly figures ---------------------------------
     try:
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
@@ -1416,7 +1416,7 @@ def main():
         except Exception as e:
             print(f"  WARNING: Plotly fig8 failed: {e}")
 
-    # ── 10. Complexity stats ─────────────────────────────────────────
+    # -- 10. Complexity stats -----------------------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("SENSORY COMPLEXITY ANALYSIS", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -1443,7 +1443,7 @@ def main():
             stat, p = kruskal(*groups)
             log_stat(f"  Kruskal-Wallis: H={stat:.2f}, p={p:.4f}", stats_lines)
 
-    # ── 11. One-sample PI tests ─────────────────────────────────────
+    # -- 11. One-sample PI tests -------------------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("ONE-SAMPLE TESTS: PI vs 0", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -1457,7 +1457,7 @@ def main():
         else:
             log_stat(f"  {DAY_SHORT[d]}: n={len(vals)} (too few)", stats_lines)
 
-    # ── 11b. Vocalisation-specific PI tests ──────────────────────────
+    # -- 11b. Vocalisation-specific PI tests --------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("VOCALISATION-SPECIFIC PI TESTS", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -1480,15 +1480,15 @@ def main():
                      f"mean={np.mean(vals):.3f}, n={len(vals)} (too few for test)",
                      stats_lines)
 
-    # ══════════════════════════════════════════════════════════════════
+    # ============================================================
     #  ENHANCED ANALYSIS
-    # ══════════════════════════════════════════════════════════════════
+    # ============================================================
     log_stat("\n\n" + "#" * 70, stats_lines)
     log_stat("#  ENHANCED ANALYSIS", stats_lines)
     log_stat("#  (post-hoc tests, effect sizes, trend tests, corrections)", stats_lines)
     log_stat("#" * 70, stats_lines)
 
-    # ── helper: Wilcoxon rank-biserial effect size ──────────────────
+    # -- helper: Wilcoxon rank-biserial effect size ------------------
     def wilcoxon_effect_size(x, y=None):
         """Rank-biserial r = Z / sqrt(N).
         If y is None, one-sample test of x vs 0."""
@@ -1508,7 +1508,7 @@ def main():
         r = z / np.sqrt(n)
         return stat, p, r
 
-    # ── helper: Kruskal-Wallis epsilon-squared ──────────────────────
+    # -- helper: Kruskal-Wallis epsilon-squared ----------------------
     def kw_epsilon_squared(H, groups):
         """Epsilon-squared = (H - k + 1) / (N - k)."""
         k = len(groups)
@@ -1517,7 +1517,7 @@ def main():
             return np.nan
         return (H - k + 1) / (N - k)
 
-    # ── helper: Dunn's post-hoc with Holm correction ───────────────
+    # -- helper: Dunn's post-hoc with Holm correction ---------------
     def dunns_posthoc(groups, labels):
         """Dunn's test with Holm-Bonferroni correction.
         Returns list of (label_a, label_b, z, p_raw, p_adj)."""
@@ -1557,7 +1557,7 @@ def main():
         return [(a, b, z, rp, ap)
                 for (a, b, z, rp), ap in zip(pairs, adj_ps)]
 
-    # ── helper: Jonckheere-Terpstra trend test ──────────────────────
+    # -- helper: Jonckheere-Terpstra trend test ----------------------
     def jonckheere_terpstra_test(groups):
         """JT test for ordered alternatives.
         groups: list of arrays in hypothesised order (low->high).
@@ -1594,7 +1594,7 @@ def main():
         p = norm.sf(z)  # one-sided (testing increasing trend)
         return J, z, p
 
-    # ── helper: format table row ───────────────────────────────────
+    # -- helper: format table row -----------------------------------
     def fmt_test(test_name, stat_name, stat_val, df_or_n, p_raw,
                  p_adj=None, effect_name=None, effect_val=None):
         """Consistent output: stat | df/N | p_raw | p_adj | effect."""
@@ -1607,9 +1607,9 @@ def main():
             parts.append(f"{effect_name}={effect_val:.3f}")
         return " | ".join(parts)
 
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     # EA-1. ONE-SAMPLE PI TESTS WITH EFFECT SIZES + HOLM CORRECTION
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("EA-1. ONE-SAMPLE PI TESTS (effect sizes + Holm correction)",
              stats_lines)
@@ -1631,9 +1631,9 @@ def main():
                          p_adj=p_adj, effect_name="r_rb", effect_val=r_rb),
                 stats_lines)
 
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     # EA-2. KRUSKAL-WALLIS ACROSS DAYS + DUNN'S POST-HOC + EFFECT SIZE
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("EA-2. KRUSKAL-WALLIS ACROSS DAYS (post-hoc + effect size)",
              stats_lines)
@@ -1665,9 +1665,9 @@ def main():
                 log_stat(f"  {a+' vs '+b:<28s} {z:>8.3f} {rp:>8.4f} {ap:>8.4f} {sig:>5s}",
                          stats_lines)
 
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     # EA-3. SENSORY COMPLEXITY: JT TREND + KW POST-HOC + EFFECT SIZES
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("EA-3. SENSORY COMPLEXITY (JT trend + KW post-hoc + effect sizes)",
              stats_lines)
@@ -1723,9 +1723,9 @@ def main():
                 log_stat("    --> Significant increasing trend in visit duration "
                          "with stimulus complexity", stats_lines)
 
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     # EA-4. VOC PI TESTS WITH EFFECT SIZES + HOLM CORRECTION
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("EA-4. VOC PI TESTS (effect sizes + Holm correction)", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -1746,9 +1746,9 @@ def main():
                          p_adj=p_adj, effect_name="r_rb", effect_val=r_rb),
                 stats_lines)
 
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     # EA-5. WITHIN-MOUSE RE-PI: MIXED MODEL (replacing Pearson r)
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("EA-5. WITHIN-MOUSE RE-PI ASSOCIATION (mixed model)", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -1775,9 +1775,9 @@ def main():
             except Exception as e:
                 log_stat(f"  Within-mouse mixed model failed: {e}", stats_lines)
 
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     # EA-6. MIXED MODEL COMPARISON: AIC, BIC, LRT
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("EA-6. MODEL COMPARISON (AIC, BIC, LRT)", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -1844,7 +1844,7 @@ def main():
 
                 # LRT: M1 vs M3
                 if m3_ml is not None:
-                    # M3 may be on a subset — refit M1 on same subset
+                    # M3 may be on a subset - refit M1 on same subset
                     try:
                         m1_sub = smf.mixedlm(
                             "preference_index ~ 1", df_re_m_ea,
@@ -1890,9 +1890,9 @@ def main():
             except Exception as e:
                 log_stat(f"  Model comparison failed: {e}", stats_lines)
 
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     # EA-7. BETA REGRESSION SENSITIVITY CHECK
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("EA-7. BETA REGRESSION SENSITIVITY CHECK", stats_lines)
     log_stat("  PI_scaled = (PI + 1) / 2, mapped to (0, 1)", stats_lines)
@@ -1969,9 +1969,9 @@ def main():
         except Exception as e:
             log_stat(f"  Beta regression failed: {e}", stats_lines)
 
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     # EA-8. PAIRED VOC-PI vs OVERALL-PI WITH EFFECT SIZE
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("EA-8. PAIRED VOC PI vs OVERALL PI (with effect size)", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -1992,7 +1992,7 @@ def main():
     log_stat("#  END OF ENHANCED ANALYSIS", stats_lines)
     log_stat("#" * 70, stats_lines)
 
-    # ── 12. Vocalisation vs other sounds (within-session paired) ────
+    # -- 12. Vocalisation vs other sounds (within-session paired) ----
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("VOCALISATION vs OTHER SOUNDS (within-session, paired)", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -2057,7 +2057,7 @@ def main():
         else:
             log_stat(f"    Too few mice for test (n={n})", stats_lines)
 
-    # ── 12b. Voc PI vs Other Sounds PI (per-day paired test) ────────
+    # -- 12b. Voc PI vs Other Sounds PI (per-day paired test) --------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("VOCALISATION PI vs OTHER SOUNDS PI (per-day, paired)", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -2116,7 +2116,7 @@ def main():
             log_stat(f"    Wilcoxon signed-rank: W={stat:.1f}, p={p:.4f}",
                      stats_lines)
 
-    # ── 12c. First-minute RE stats ───────────────────────────────────
+    # -- 12c. First-minute RE stats -----------------------------------
     log_stat("\n" + "=" * 60, stats_lines)
     log_stat("FIRST-MINUTE ROAMING ENTROPY", stats_lines)
     log_stat("=" * 60, stats_lines)
@@ -2155,13 +2155,13 @@ def main():
             log_stat(f"    Spearman r={r:.3f}, p={p:.4f}, n={len(mouse_avg_1m)}",
                      stats_lines)
 
-    # ── 13. Save stats ───────────────────────────────────────────────
+    # -- 13. Save stats -----------------------------------------------
     stats_path = os.path.join(output_dir, "stats_report.txt")
     with open(stats_path, "w", encoding="utf-8") as f:
         f.write("\n".join(stats_lines))
     print(f"\nStats report saved to {stats_path}")
 
-    # ── 14. Run within-trial preference analysis (02_*) ──────────────
+    # -- 14. Run within-trial preference analysis (02_*) --------------
     # 02_within_trial_preference.py uses preference_analysis_config.py,
     # which respects the MAZE_DATA_DIR env var.  We pass base_path that way.
     print(f"\n{'='*60}")

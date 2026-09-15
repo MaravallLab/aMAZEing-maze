@@ -90,7 +90,7 @@ def _compute_metrics(trials_df: pd.DataFrame) -> Dict:
 
     result: Dict = {}
 
-    # ── environment totals ──────────────────────────────────────────────
+    # -- environment totals ----------------------------------------------
     for env in ENVS:
         sub = active[active["environment_association"] == env]
         result[f"{env}_time"]   = float(sub["time_spent"].sum() / 60)
@@ -101,7 +101,7 @@ def _compute_metrics(trials_df: pd.DataFrame) -> Dict:
         (result["EE_time"] - result["SC_time"]) / total if total > 0 else np.nan
     )
 
-    # ── tier × environment breakdown ────────────────────────────────────
+    # -- tier × environment breakdown ------------------------------------
     for tier in TIERS:
         for env in ENVS:
             sub = active[
@@ -155,14 +155,14 @@ class SummaryAnalyzer:
 
         figs: List[Tuple[str, plt.Figure]] = []
 
-        # ── EE vs SC ──────────────────────────────────────────────────
+        # -- EE vs SC --------------------------------------------------
         figs.append(self._fig_ee_sc_per_mouse(days, mice))
         figs.append(self._fig_preference_index(days, mice))
         figs.append(self._fig_group_summary(days))
         if multi_day:
             figs.append(self._fig_cross_day_pi(days, mice))
 
-        # ── Predictive complexity (tier) ──────────────────────────────
+        # -- Predictive complexity (tier) ------------------------------
         figs.append(self._fig_tier_breakdown_per_mouse(days, mice))
         figs.append(self._fig_group_tier_breakdown(days))
         if multi_day:
@@ -183,7 +183,7 @@ class SummaryAnalyzer:
         mouse tested that day) and a comprehensive ``summary_all_sessions.csv``
         at the root (one row per mouse per day). Returns the root path.
 
-        The habituation sessions are excluded — only the sound experiment days
+        The habituation sessions are excluded - only the sound experiment days
         (day_1, day_2, ...) are written.
         """
         # Sound experiment days only; habituation is not part of the analysis.
@@ -216,7 +216,7 @@ class SummaryAnalyzer:
 
         cols = self._ordered_columns(full)
 
-        # ── per-day CSV inside each day folder ──────────────────────────
+        # -- per-day CSV inside each day folder --------------------------
         for day_path, dd in full.groupby("day_path"):
             day_label = dd["day_label"].iloc[0]
             fname     = f"summary_{day_label}.csv"
@@ -224,7 +224,7 @@ class SummaryAnalyzer:
             dd[[c for c in cols if c != "day_path"]].to_csv(out, index=False)
             print(f"  [summary] Saved {os.path.relpath(out, self.root_path)}")
 
-        # ── comprehensive CSV at root ───────────────────────────────────
+        # -- comprehensive CSV at root -----------------------------------
         out_all = os.path.join(self.root_path, "summary_all_sessions.csv")
         full[cols].to_csv(out_all, index=False)
         print(f"  [summary] Saved summary_all_sessions.csv")
@@ -244,9 +244,9 @@ class SummaryAnalyzer:
         extras    = [c for c in df.columns if c not in preferred]
         return preferred + extras
 
-    # ══════════════════════════════════════════════════════════════════
+    # ============================================================
     # EE vs SC figures
-    # ══════════════════════════════════════════════════════════════════
+    # ============================================================
 
     def _fig_ee_sc_per_mouse(self, days, mice) -> Tuple[str, plt.Figure]:
         df = self.metrics_df
@@ -346,9 +346,9 @@ class SummaryAnalyzer:
         plt.tight_layout()
         return ("summary_D_cross_day_pi.png", fig)
 
-    # ══════════════════════════════════════════════════════════════════
+    # ============================================================
     # Predictive complexity (tier) figures
-    # ══════════════════════════════════════════════════════════════════
+    # ============================================================
 
     def _fig_tier_breakdown_per_mouse(self, days, mice) -> Tuple[str, plt.Figure]:
         """Stacked bars per mouse: EE bar (dom/sec/rare) and SC bar (dom/sec/rare)."""
@@ -442,7 +442,7 @@ class SummaryAnalyzer:
 
         fig, (ax_ee, ax_sc) = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
         fig.suptitle(
-            "Predictive complexity across days — group mean ± SEM",
+            "Predictive complexity across days - group mean ± SEM",
             fontsize=12,
         )
 
@@ -476,7 +476,7 @@ class SummaryAnalyzer:
         plt.tight_layout()
         return ("summary_G_cross_day_tiers.png", fig)
 
-    # ── helpers ────────────────────────────────────────────────────────
+    # -- helpers --------------------------------------------------------
 
     def _col_per_mouse(self, day_df: pd.DataFrame, mice: list, col: str,
                        fill: float = 0.0) -> np.ndarray:

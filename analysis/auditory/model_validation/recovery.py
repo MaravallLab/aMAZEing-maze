@@ -8,7 +8,7 @@ Everything here uses the real per-arm features (from latent_regressors) and a
 fast NumPy/scipy estimator so the loop runs thousands of times. This is the
 frequentist sibling of the Phase 2 PyMC/LOO comparison; if it fails, the correct
 output of the whole pipeline is "the design cannot separate semantic value from
-fluency" — a real, reportable result, not a bug.
+fluency" - a real, reportable result, not a bug.
 
 The link is SOFTMAX here (weights are identified; the matching law is invariant
 to a positive rescaling of all weights, so it identifies only sign and ratios).

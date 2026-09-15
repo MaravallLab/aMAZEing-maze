@@ -1,4 +1,4 @@
-"""Tests for the Audio class — sound generation, ramping, calibration."""
+"""Tests for the Audio class - sound generation, ramping, calibration."""
 
 import numpy as np
 import pytest

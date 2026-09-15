@@ -1,4 +1,4 @@
-"""Phase 2 — posterior predictive over the six-arm pattern.
+"""Phase 2 - posterior predictive over the six-arm pattern.
 
 From the fitted `full` model, generate predicted dwell fractions for all six
 grammar arms (+ silent/vocalisation as reference) and overlay on the observed
@@ -20,7 +20,7 @@ def predicted_pattern_from_weights(design: Design, w: Dict[str, float]) -> Dict[
     """Mean predicted dwell fraction per arm, given a point estimate of weights.
 
     Usable with a posterior-mean weight dict (Phase 2) or a fast-fit dict
-    (Phase 1) — keeps posterior-predictive logic independent of the sampler.
+    (Phase 1) - keeps posterior-predictive logic independent of the sampler.
     """
     acc: Dict[str, list] = {}
     for b in design.blocks:

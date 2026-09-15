@@ -28,7 +28,7 @@ class _NpEncoder(json.JSONEncoder):
 
 
 def _go(flag: bool) -> str:
-    return "✅ GO" if flag else "🛑 NO-GO"
+    return "GO" if flag else "NO-GO"
 
 
 def render_markdown(results: Dict[str, object]) -> str:
@@ -47,7 +47,7 @@ def render_markdown(results: Dict[str, object]) -> str:
     excl = cohort.get("excluded_sessions", [])
     L.append(f"- Excluded sessions: **{len(excl)}**")
     for e in excl:
-        L.append(f"    - {e.get('mouse')}/{e.get('day')}/{e.get('ts')} — {e.get('reason')}")
+        L.append(f"    - {e.get('mouse')}/{e.get('day')}/{e.get('ts')} - {e.get('reason')}")
     if cohort.get("duplicates_dropped"):
         L.append(f"- Duplicate filings dropped: `{cohort['duplicates_dropped']}`")
     L.append(f"- Grammar arms missing melodies: "
@@ -63,7 +63,7 @@ def render_markdown(results: Dict[str, object]) -> str:
     # ---- sanity ----
     san = results.get("sanity")
     if san:
-        L.append(f"## Sanity gate — {_go(san.get('passed', False))}\n")
+        L.append(f"## Sanity gate - {_go(san.get('passed', False))}\n")
         for n in san.get("notes", []):
             L.append(f"- {n}")
         for k, v in san.get("checks", {}).items():
@@ -103,7 +103,7 @@ def render_markdown(results: Dict[str, object]) -> str:
         L.append(f"- corr(r, S) = {col.get('corr_r_S')}")
         L.append(f"- VIF: `{col.get('vif')}`")
         if col.get("flag_high_rS_collinearity"):
-            L.append("- ⚠️ **HIGH r–S collinearity**: the design did not separate "
+            L.append("- **HIGH r - S collinearity**: the design did not separate "
                      "fluency from semantics in practice; recovery decides if wS "
                      "is estimable at all.")
         L.append("")
@@ -111,12 +111,12 @@ def render_markdown(results: Dict[str, object]) -> str:
     # ---- recovery ----
     rec = results.get("recovery")
     if rec and "error" not in rec:
-        L.append(f"## Recovery gate — {_go(rec.get('gate_passed', False))}\n")
+        L.append(f"## Recovery gate - {_go(rec.get('gate_passed', False))}\n")
         pr = rec.get("parameter_recovery", {})
         L.append(f"- Parameter recovery passed: **{pr.get('passed')}** "
                  f"(n_sim={pr.get('n_sim')})")
         for row in pr.get("grid", []):
-            L.append(f"    - wS_true={row['wS_true']:.2f} → "
+            L.append(f"    - wS_true={row['wS_true']:.2f} -> "
                      f"recovered={row['wS_recovered_mean']:+.3f} "
                      f"CI={row['ci']} covers_truth={row['covers_truth']}")
         cf = rec.get("model_confusion", {})
@@ -130,7 +130,7 @@ def render_markdown(results: Dict[str, object]) -> str:
         L.append(f"- _{cf.get('intrinsic_grammar_note', '')}_")
         L.append("")
     elif rec:
-        L.append(f"## Recovery gate — skipped\n- {rec.get('error')}\n")
+        L.append(f"## Recovery gate - skipped\n- {rec.get('error')}\n")
 
     # ---- day-2 secondary ----
     sec = results.get("secondary")
@@ -139,14 +139,14 @@ def render_markdown(results: Dict[str, object]) -> str:
         tc = sec.get("timecourse", {})
         L.append(f"- block time-course PI~block slope: "
                  f"{tc.get('slope_per_block')} CI={tc.get('ci')} "
-                 f"→ {tc.get('interpretation')}")
+                 f"-> {tc.get('interpretation')}")
         L.append(f"- mean PI by block: `{tc.get('mean_pi_by_block')}`")
         L.append("")
 
     # ---- Phase 2 (Bayesian) ----
     p2 = results.get("phase2")
     if p2:
-        L.append("## Phase 2 — Bayesian nested-model comparison (day 1)\n")
+        L.append("## Phase 2 - Bayesian nested-model comparison (day 1)\n")
         if "error" in p2:
             L.append(f"- ERROR: {p2['error']}")
         else:
@@ -173,7 +173,7 @@ def render_markdown(results: Dict[str, object]) -> str:
         L.append("")
 
     L.append("## Verdict\n")
-    L.append(results.get("verdict", "_pending — see gates above_"))
+    L.append(results.get("verdict", "_pending - see gates above_"))
     L.append("")
     return "\n".join(L)
 

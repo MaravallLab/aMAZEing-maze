@@ -1,4 +1,4 @@
-"""Tests for the ROIMonitor vision module — ROI tracking and debouncing."""
+"""Tests for the ROIMonitor vision module - ROI tracking and debouncing."""
 
 import numpy as np
 import pandas as pd
@@ -116,7 +116,7 @@ class TestROICrop:
     def test_crop_returns_correct_region(self, roi_monitor):
         """Crop extracts the expected slice of the frame."""
         frame = np.arange(200 * 200, dtype=np.uint8).reshape(200, 200)
-        # ROI1 is at x=10, y=80, w=50, h=50 → frame[80:130, 10:60]
+        # ROI1 is at x=10, y=80, w=50, h=50 -> frame[80:130, 10:60]
         crop = roi_monitor._crop_roi(frame, "ROI1")
         expected = frame[80:130, 10:60]
         np.testing.assert_array_equal(crop, expected)

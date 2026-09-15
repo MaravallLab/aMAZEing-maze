@@ -23,7 +23,7 @@ class ExperimentConfig:
     samplerate: int = 192000
     channel_id: int = 3
 
-    # Sound settings — for specific changes (e.g. you want some sounds to be
+    # Sound settings - for specific changes (e.g. you want some sounds to be
     # longer or shorter than others) you can override these when calling the
     # generation functions in main.py
     default_sound_duration: float = 10.0
@@ -63,12 +63,12 @@ class ExperimentConfig:
 
     # Only used if experiment_mode == "grammar"
     # grammar_mode:
-    #   "training"        — main.py refuses; you must use grammar_stimuli.run CLI
+    #   "training" - main.py refuses; you must use grammar_stimuli.run CLI
     #                       (default so a forgotten config raises a clear error)
-    #   "silent_baseline" — Day 1 of the 3-test-day protocol: 1 hour in the
+    #   "silent_baseline" - Day 1 of the 3-test-day protocol: 1 hour in the
     #                       maze with NO audio on any arm. Logs ROI visits
     #                       only, to establish baseline preference.
-    #   "test"            — Day 2 / Day 3: 1 hour with the full grammar test
+    #   "test" - Day 2 / Day 3: 1 hour with the full grammar test
     #                       (9-block shuffle of 8 stimuli).
     # enriched_grammar: which physical grammar (A or B) this mouse heard
     #   in the EE (enriched) cage during training. The other grammar is the
@@ -115,7 +115,7 @@ class ExperimentConfig:
     # reproduce sessions recorded before this option existed (uncompensated).
     grammar_apply_speaker_gain: bool = True
 
-    # PATHS — override these for your machine
+    # PATHS - override these for your machine
     base_output_path: str = _DEFAULT_BASE
     calibration_gain_path: str = _DEFAULT_CALIBRATION
 

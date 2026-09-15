@@ -1,4 +1,4 @@
-# model_validation — Quick Guide
+# model_validation - Quick Guide
 
 A from-scratch guide to *what* this analysis is, *why* it is built the way it is,
 and *how* to run and tweak it yourself. For the broader experiment see the repo
@@ -24,9 +24,9 @@ PI = (time on EE-grammar arms − time on SC-grammar arms) / (sum of the two)
 
 The narrow question this package answers is:
 
-> **Does a semantic value term S(t) — a signal that the mouse is recognising the
-> grammar associated with its enriched environment — explain the EE−SC
-> preference, over and above a fluency-only Brielmann & Dayan (B–D) baseline, out
+> **Does a semantic value term S(t) - a signal that the mouse is recognising the
+> grammar associated with its enriched environment - explain the EE−SC
+> preference, over and above a fluency-only Brielmann & Dayan (B - D) baseline, out
 > of sample, with the predicted EE > SC sign?**
 
 Not "do mice like sound" (that is silent-vs-sound, the *old* experiment). This is
@@ -40,14 +40,14 @@ We extend the Brielmann & Dayan aesthetic-value model. Each arm's melody is
 scored by an ideal observer, producing three time series that we summarise to one
 number per arm:
 
-- **r(t) — fluency / predictability.** How expected is each tone transition under
+- **r(t) - fluency / predictability.** How expected is each tone transition under
   the grammar the mouse learned? Predictable (dominant-tier) transitions are
   high-r; surprising (rare-tier) transitions are low-r. This is the *complexity*
   axis. Computed as the log-likelihood (negative surprise) of each transition.
-- **ΔV(t) — learning signal.** How much does hearing this melody move the B–D
+- **ΔV(t) - learning signal.** How much does hearing this melody move the B - D
   "system state" toward its long-run target? Within a steady-state arm this is
-  near zero (learning has plateaued) — expected, and reported, not hidden.
-- **S(t) — semantic value.** The novel term. A hidden-context filter tracks the
+  near zero (learning has plateaued) - expected, and reported, not hidden.
+- **S(t) - semantic value.** The novel term. A hidden-context filter tracks the
   mouse's belief that it is in an "EE-grammar world" vs an "SC-grammar world".
   Hearing a melody that follows the EE grammar pushes that belief up; `S` is the
   belief shift weighted by context value (V_EE = 1, V_SC = 0). So **S > 0 on EE
@@ -64,7 +64,7 @@ preference beyond fluency.
 
 ### The load-bearing idea: emissions are BIGRAM, not single-tone
 
-Both grammars are **doubly stochastic** — every tone is, on average, equally
+Both grammars are **doubly stochastic** - every tone is, on average, equally
 likely under A and under B. So if the observer asked "how likely is this *tone*
 under EE vs SC?", the answer is always "equally likely", the belief never moves,
 and **S(t) would be identically zero**. The grammars differ only in their
@@ -85,7 +85,7 @@ The logged `mean_bits` column collapses the secondary and rare tiers (it is
 computed under the restricted sampling distribution, where both are "1 of 2
 choices"). Under the **full** grammar the mouse actually learned, the three tiers
 are genuinely different surprise levels (≈0.74 / 3.06 / 3.84 bits). We recompute
-surprise under the full grammar from the `symbols` string — we never trust the
+surprise under the full grammar from the `symbols` string - we never trust the
 logged bits.
 
 ---
@@ -93,7 +93,7 @@ logged bits.
 ## 3. Why the counterbalancing GROUP matters (the confound)
 
 At the dominant tier, Grammar A is an **ascending sweep** and Grammar B is an
-**octave trill** — perceptually very different *regardless* of any learned
+**octave trill** - perceptually very different *regardless* of any learned
 association. So a preference could be "semantic" (the mouse prefers its
 EE-associated grammar) or "intrinsic" (everyone just prefers the sweep, or the
 trill).
@@ -114,25 +114,25 @@ provisional until this group split is confirmed clean.**
 
 ## 4. The pipeline order (and why it is fixed)
 
-The ordering is deliberate — do not reorder:
+The ordering is deliberate - do not reorder:
 
-1. **Cohort filter** — apply named, auditable exclusions; report N and group
+1. **Cohort filter** - apply named, auditable exclusions; report N and group
    balance.
-2. **Sanity** — is the rig sane? The gate is the arm-index residual (physical ROI
+2. **Sanity** - is the rig sane? The gate is the arm-index residual (physical ROI
    must not predict dwell after the 15-min reshuffle). Silent-vs-sound is
    *reported but not gated* (test-day sound avoidance is a real possibility here).
-3. **Model-free design analysis** — `dwell ~ environment × tier × group +
+3. **Model-free design analysis** - `dwell ~ environment × tier × group +
    (1|mouse)`. Establishes whether an EE−SC effect exists *without* trusting the
    model. If there's nothing here, no model fit is worth interpreting.
-4. **Latent regressors + collinearity** — build r, ΔV, S; check they are actually
+4. **Latent regressors + collinearity** - build r, ΔV, S; check they are actually
    separable in the delivered sequences (if `r` and `S` are collinear, `wS` can't
    be identified).
-5. **Recovery (the gate)** — on synthetic data built from the *real* sequences:
+5. **Recovery (the gate)** - on synthetic data built from the *real* sequences:
    can we recover a known `wS`? Do we get a false positive when `wS = 0`? Does the
    comparison pick the right model? **No fitted `wS` is interpreted until this
    passes.** If recovery fails, "the design cannot separate semantics from
    fluency" is the real result, not a bug.
-6. **Phase 2 (Bayesian)** — only if recovery passes: fit the four nested models,
+6. **Phase 2 (Bayesian)** - only if recovery passes: fit the four nested models,
    compare out-of-sample (LOO), report the `wS` posterior and the
    posterior-predictive arm pattern.
 
@@ -144,7 +144,7 @@ four 15-min blocks is the extinction signature). The two days are never pooled.
 
 ## 5. How to run it
 
-From the repo root (or anywhere — the script bootstraps its own path).
+From the repo root (or anywhere - the script bootstraps its own path).
 
 ### Phase 1 (no extra dependencies beyond the standard scientific stack)
 
@@ -156,13 +156,13 @@ python analysis/auditory/model_validation/run_validation.py \
 ```
 
 Outputs into `--out_dir`:
-- `report.md` — the human-readable report (cohort, gates, effects, verdict).
-- `results.json` — every raw number (machine-readable).
-- `day1_arm_block_features.csv` — the tidy per-arm-block table with r/ΔV/S.
+- `report.md` - the human-readable report (cohort, gates, effects, verdict).
+- `results.json` - every raw number (machine-readable).
+- `day1_arm_block_features.csv` - the tidy per-arm-block table with r/ΔV/S.
 
 Add `--day both` to also run the day-2 secondary section.
 
-### Phase 2 (Bayesian LOO — needs PyMC)
+### Phase 2 (Bayesian LOO - needs PyMC)
 
 PyMC + ArviZ must be installed (pinned to versions that match the env):
 
@@ -190,7 +190,7 @@ python analysis/auditory/model_validation/run_validation.py `
 ```
 
 `--skip-recovery` skips the (slow) Phase-1 recovery sims when you only want the
-Bayesian fit. With the compiler on PATH each model compiles + samples in ~1–2 min;
+Bayesian fit. With the compiler on PATH each model compiles + samples in ~1-2 min;
 the random intercept is non-centered, so the final fit comes out with R-hat≈1.00,
 ESS in the thousands, and 0 divergences. Raise `--target-accept` toward 0.99 if
 any divergences reappear.
@@ -203,7 +203,7 @@ python -m pytest analysis/auditory/model_validation/tests -q
 
 The tests lock the central claims: S = 0 for a non-diagnostic sequence, S > 0 for
 a Grammar-A sequence and ≤ 0 for Grammar B, belief stays normalised; the K=1 / wS=0
-reduction to plain B–D; and that recovery recovers a known `wS` without flagging
+reduction to plain B - D; and that recovery recovers a known `wS` without flagging
 `wS = 0` as positive.
 
 ---
@@ -212,23 +212,23 @@ reduction to plain B–D; and that recovery recovers a known `wS` without flaggi
 
 `report.md` sections, top to bottom:
 
-- **Cohort & exclusions** — sessions found, day-1 N (should be 33 right now),
+- **Cohort & exclusions** - sessions found, day-1 N (should be 33 right now),
   group balance, every excluded session *with its reason*, duplicate filings
   dropped, and the `trials ↔ grammar_samples` label cross-check.
-- **Sanity gate** — GO/NO-GO on the arm-index residual; control arms reported as
+- **Sanity gate** - GO/NO-GO on the arm-index residual; control arms reported as
   information.
-- **Model-free design analysis** — the headline. `group_consistent: True` means
+- **Model-free design analysis** - the headline. `group_consistent: True` means
   the EE−SC sign agrees across counterbalancing groups (semantic). The per-tier
   simple effects show whether the effect is concentrated at the predictable
   (dominant) tier and attenuates at high complexity.
-- **Feature collinearity** — `corr(r,S)` and VIFs. Near-zero correlation means the
+- **Feature collinearity** - `corr(r,S)` and VIFs. Near-zero correlation means the
   design separated fluency from semantics.
-- **Recovery gate** — GO/NO-GO. This is what licenses interpreting `wS`.
-- **Day-2 secondary** — the block time-course (decay = extinction).
-- **Phase 2** — LOO ranking of the four models, the `wS` posterior (mean, 95% HDI,
+- **Recovery gate** - GO/NO-GO. This is what licenses interpreting `wS`.
+- **Day-2 secondary** - the block time-course (decay = extinction).
+- **Phase 2** - LOO ranking of the four models, the `wS` posterior (mean, 95% HDI,
   P(wS>0)), leave-one-mouse-out `wS` stability, and the posterior-predictive arm
   pattern.
-- **Verdict** — a plain-language synthesis.
+- **Verdict** - a plain-language synthesis.
 
 ---
 
@@ -239,7 +239,7 @@ reduction to plain B–D; and that recovery recovers a known `wS` without flaggi
 | Reinstate the excluded mouse once its tracking is cleaned | remove `"13533"` from `EXCLUDED_ANIMALS` in `data_loading.py` and rerun (that's the whole change) |
 | Exclude another animal | add `"id": "reason"` to `EXCLUDED_ANIMALS` |
 | Change how stable the context belief is | `ctx_self_transition` in `validated_config()` (default 0.99) |
-| Change the B–D learning rate / target / prior | `alpha`, `p_T_*`, `prior` args of `validated_config()` |
+| Change the B - D learning rate / target / prior | `alpha`, `p_T_*`, `prior` args of `validated_config()` |
 | Use the softmax link instead of the matching law | `--link softmax` |
 | Use accumulated instead of mean features | `--summary sum` (means are primary; sums are over-logging-sensitive) |
 | Make recovery faster / more thorough | `--recovery-sims`, `--confusion-sims` |
@@ -248,8 +248,8 @@ reduction to plain B–D; and that recovery recovers a known `wS` without flaggi
 | Run day 2 | `--day secondary` or `--day both` |
 | Point at a different results tree | `--results_dir` |
 
-**Structural parameters are fixed by design and never fitted** — the grammar
-matrices, the context transition matrix, the B–D learning rate and target, and
+**Structural parameters are fixed by design and never fitted** - the grammar
+matrices, the context transition matrix, the B - D learning rate and target, and
 `V_EE = 1 / V_SC = 0`. Only the linear weights `(w0, wr, wV, wS)` (and the link
 temperature) are free. This is a hard commitment: fitting the generative
 structure would destroy identifiability.
@@ -289,13 +289,13 @@ tests/                 reduction, latent-regressor, and recovery tests
   number per (group, environment, tier) cell. This deliberately avoids belief
   depending on dwell depending on belief. Consequence: the regressors take only
   ~6 distinct values, so the model-based fit is close to a structured
-  re-expression of the model-free `grammar × tier` analysis — which is exactly why
+  re-expression of the model-free `grammar × tier` analysis - which is exactly why
   **recovery is the binding test**.
 - **The logged melody count over-states what was delivered** (the player
   pre-renders 20 melodies per arm entry and is cut off when the mouse leaves). We
   therefore use per-cell *means* (unbiased to over-logging) and assign them by
   arm label, so unvisited arms still get correct features.
-- **ΔV has almost no between-arm variance** — within-arm learning plateaus. So
+- **ΔV has almost no between-arm variance** - within-arm learning plateaus. So
   `wV` does little work here; the real contrast is `r` vs `S`.
 - **EE−SC PI matches the existing `summary_analysis` convention exactly**, so this
   pipeline is consistent with the figures you already produce.
@@ -305,7 +305,7 @@ tests/                 reduction, latent-regressor, and recovery tests
 
 ---
 
-## 10. Figures — generating and interpreting them
+## 10. Figures - generating and interpreting them
 
 ### How to generate
 
@@ -320,7 +320,7 @@ python analysis/auditory/model_validation/figures.py  "C:\path\to\out_dir"
 
 Figures read only `results.json` + `day1_arm_block_features.csv` from the out_dir
 and write 300-dpi PNGs back into it. Each figure is wrapped independently, so a
-missing input just skips that figure (figs 6–7 need a `--phase2` run; figs 5/8
+missing input just skips that figure (figs 6-7 need a `--phase2` run; figs 5/8
 need recovery / `--day both`).
 
 ### What each figure represents
@@ -360,15 +360,15 @@ model at three grains and shows the recovery:
 python analysis/auditory/model_validation/grain_comparison.py  "...\grammar"  "...\out"
 ```
 
-Outputs into `out`: `grain_results.json` + three figures —
+Outputs into `out`: `grain_results.json` + three figures -
 
 | File | Shows |
 |---|---|
-| `grain_weights_wS.png` | wS (95% HDI) at per-block / cell-mean / PI grains: includes 0 at per-block, **excludes 0** at both coarser grains — the effect recovers as aggregation passes per-block noise. |
-| `grainB_cellmean_ppc.png` | Per-mouse cell-mean predicted vs observed across all 7 arms — the model reproduces the EE-dominant peak, EE descending gradient, low SC, high silent. |
-| `grainC_tierPI_ppc.png` | Predicted vs observed EE−SC preference index per tier (× group) — positive at dominant/secondary, ~0 at rare. |
+| `grain_weights_wS.png` | wS (95% HDI) at per-block / cell-mean / PI grains: includes 0 at per-block, **excludes 0** at both coarser grains - the effect recovers as aggregation passes per-block noise. |
+| `grainB_cellmean_ppc.png` | Per-mouse cell-mean predicted vs observed across all 7 arms - the model reproduces the EE-dominant peak, EE descending gradient, low SC, high silent. |
+| `grainC_tierPI_ppc.png` | Predicted vs observed EE−SC preference index per tier (× group) - positive at dominant/secondary, ~0 at rare. |
 
 **Read the grain result as a mechanistic illustration**, not independent validation:
 the cell/PI fit re-expresses the design-based model-free result in process-model form.
 LOO is **not** comparable across grains (different observation models). Cohort = 32
-explorers (mouse 13672 excluded — non-explorer, 0 dwell).
+explorers (mouse 13672 excluded - non-explorer, 0 dwell).

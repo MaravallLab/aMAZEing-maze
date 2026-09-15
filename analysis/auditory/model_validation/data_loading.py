@@ -47,7 +47,7 @@ EXCLUDED_ANIMALS: Dict[str, str] = {
     "13533": (
         "Light event spuriously triggered all ROIs on both test days; position "
         "tracking contaminated. Perceived environment unchanged (cage+maze "
-        "covered) — tracking artifact, not a perceptual confound. PI untrusted "
+        "covered) - tracking artifact, not a perceptual confound. PI untrusted "
         "until artifact frames are removed by hand."
     ),
 }
@@ -192,7 +192,7 @@ def _load_samples(samples_path: Optional[str]):
     """Map (trial_ID, ROI) -> (melody symbol strings, (grammar, tier, env) label).
 
     grammar_samples logs grammar/tier/environment_association per melody at play
-    time — an independent recording of the same pairing the trials CSV logs at
+    time - an independent recording of the same pairing the trials CSV logs at
     block construction. We return both so the caller can attach melodies AND
     cross-check the two sources for mis-joins / logging glitches.
     """
@@ -369,7 +369,7 @@ def block_pi(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def cell_pi(df: pd.DataFrame) -> pd.DataFrame:
-    """Per-(mouse, environment, tier) dwell time and share — the 6-cell grammar pattern."""
+    """Per-(mouse, environment, tier) dwell time and share - the 6-cell grammar pattern."""
     g = df[df["arm_type"] == "grammar"].dropna(subset=["environment", "tier"])
     return (g.groupby(["mouse", "group", "environment", "tier"])["time_spent_s"]
             .sum().reset_index())

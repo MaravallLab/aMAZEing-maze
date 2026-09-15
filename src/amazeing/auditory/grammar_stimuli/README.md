@@ -45,7 +45,7 @@ Each row of a 6×6 transition matrix contains a fixed mixture:
 | **rare** | 0.07 | 2 entries |
 | **self** | 0.02 | 1 entry |
 
-Rows sum to 1.0. Columns also sum to 1.0 — both matrices are doubly
+Rows sum to 1.0. Columns also sum to 1.0 - both matrices are doubly
 stochastic, so the stationary distribution is uniform over the six tones.
 
 The grammars differ only in **which** transition is dominant:
@@ -84,7 +84,7 @@ by which columns of each row the sampler is allowed to draw from.
 **Important**: within-tier surprise collapses to 0/1/1 for the test tiers
 because tier restriction + renormalisation makes choices uniform inside
 the restricted subset. What distinguishes secondary from rare at test is
-not within-tier entropy — it's the *prior probability* the mouse has
+not within-tier entropy - it's the *prior probability* the mouse has
 learned for those transitions during training.
 
 ### Why training uses `'all'`
@@ -151,11 +151,11 @@ only the dominant-cycle structure differs.
 | arm4 | grammar | SC | dominant |
 | arm5 | grammar | SC | secondary |
 | arm6 | grammar | SC | rare |
-| arm7 | vocalisation | – | – |
-| arm8 | silent | – | – |
+| arm7 | vocalisation | - | - |
+| arm8 | silent | - | - |
 
 The 6 grammar arms cross **{EE-paired, SC-paired} × {dominant, secondary, rare}**.
-Both grammars are fully familiar to the mouse by test day — there is no
+Both grammars are fully familiar to the mouse by test day - there is no
 "novel grammar". The contrasts the design measures are:
 
 1. **Association effect**: does the mouse spend more time in EE-paired arms
@@ -189,7 +189,7 @@ for baseline acoustic preference.
 
 ### 7a. Training day (no video, just continuous melody playback)
 
-Standalone runner — uses `sounddevice` directly, no camera, no Arduino,
+Standalone runner - uses `sounddevice` directly, no camera, no Arduino,
 no ROI gating. Run it **once per day**: one grammar plays from one
 speaker; every cage in the room (EE-type and SC-type alike) hears the
 same audio stream.
@@ -211,33 +211,33 @@ amaze-grammar --mode training \
     --output-dir ./sessions/2026-05-13_grammarB
 ```
 
-`--cage-ids` is bookkeeping only — it tags the output filename and the
+`--cage-ids` is bookkeeping only - it tags the output filename and the
 JSON summary; it does not affect the audio.
 
 Optional flags:
-- `--seed N` — reproducible RNG (omit for a random seed each run)
-- `--dry-run` — no audio output, but still generates and logs symbols
-- `--device-id N` — choose sounddevice output (default 3)
-- `--group N --condition X` — alternate way to pick the grammar (looks up
+- `--seed N` - reproducible RNG (omit for a random seed each run)
+- `--dry-run` - no audio output, but still generates and logs symbols
+- `--device-id N` - choose sounddevice output (default 3)
+- `--group N --condition X` - alternate way to pick the grammar (looks up
   from counterbalance table). Useful when one room contains only cages
   from a single group; less useful in the same-room mixed setup.
-- `--duration-seconds 60` — short sanity check
+- `--duration-seconds 60` - short sanity check
 
 Output (per session): one CSV with melody index, symbols played, per-step
 surprise bits, onset/offset times; plus a JSON summary including the
 cage-ids list.
 
-### 7b. Test days — 3-day protocol, 1 hour per mouse per day
+### 7b. Test days - 3-day protocol, 1 hour per mouse per day
 
 Each mouse goes through three test sessions:
 
 | Day | `grammar_mode` | What plays | Total duration | Block schedule |
 |:---:|---|---|:---:|---|
-| Day 1 | `"silent_baseline"` | nothing — pure silence | 60 min | single 60-min trial |
+| Day 1 | `"silent_baseline"` | nothing - pure silence | 60 min | single 60-min trial |
 | Day 2 | `"test"` | full grammar test | 60 min | `[4, 12, 2, 12, 2, 12, 2, 12, 2]` min |
 | Day 3 | `"test"` | full grammar test (new RNG draw) | 60 min | same as Day 2 |
 
-Driven by `src/amazeing/auditory/main.py` — the full harness with camera, ROI
+Driven by `src/amazeing/auditory/main.py` - the full harness with camera, ROI
 monitor, video writer, and trial CSV.
 
 **Stable defaults** live in `src/amazeing/auditory/config.py` (sample rate, ROI
@@ -281,13 +281,13 @@ influence.
 **Days 2 and 3 (test)** use the 9-block cycle: four 12-min active
 blocks (with the 8 stimuli randomly shuffled across the 8 ROIs each
 time) separated by short silent gaps. Every ROI entry samples a
-**fresh** 12-tone melody — so the same arm replays the same
+**fresh** 12-tone melody - so the same arm replays the same
 grammar/tier but never the exact same sequence. Day 2 and Day 3
 produce different melody draws (different RNG state).
 
 #### Customising the durations
 
-The session length is not hardcoded — two `ExperimentConfig` fields
+The session length is not hardcoded - two `ExperimentConfig` fields
 expose them:
 
 ```python
@@ -307,7 +307,7 @@ followed by four nearly-uninterrupted active blocks.
 #### Re-drawing the ROIs
 
 The first time you run `main.py`, you'll be prompted to draw all 10
-ROIs (2 entrances + ROIs 1–8) interactively using OpenCV's selectROI.
+ROIs (2 entrances + ROIs 1-8) interactively using OpenCV's selectROI.
 The layout is saved to `cfg.roi_csv_path` (default
 `<base_output_path>/rois1.csv`) and reused for every subsequent session.
 
@@ -322,7 +322,7 @@ To re-draw the ROIs (e.g. you moved the maze), set
 python -m amazeing.auditory.grammar_stimuli.dump_matrices grammars.txt --samples 20
 ```
 
-Open `grammars.txt` — the bottom shows empirical transition counts
+Open `grammars.txt` - the bottom shows empirical transition counts
 under `tier='all'`; you should see all four probabilities reproduced
 within ~0.005 of the matrix values.
 
@@ -350,12 +350,12 @@ within ~0.005 of the matrix values.
 
 Two CSVs per session, in the standard data_manager output folder:
 
-`trials_<timestamp>.csv` — per (trial × ROI) row:
+`trials_<timestamp>.csv` - per (trial × ROI) row:
 - `trial_ID`, `ROIs`, `frequency`, `grammar`, `tier`,
   `environment_association`, `wave_arrays`, `time_spent`,
   `visitation_count`, etc.
 
-`grammar_samples_<timestamp>.csv` — one row per rendered melody (only
+`grammar_samples_<timestamp>.csv` - one row per rendered melody (only
 produced on Day 2 / Day 3; Day 1 has no melodies so the file is absent
 or empty):
 - `trial_ID`, `ROI`, `grammar`, `tier`, `environment_association`,

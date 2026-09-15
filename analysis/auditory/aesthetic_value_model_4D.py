@@ -10,14 +10,14 @@ EXPERIMENTAL DESIGN NOTES:
   - 8-arm radial maze, 7 sound arms, 1 silent arm
   - All arms including silence reassign randomly every 15 minutes
   - PI = relative time near sound vs silence, corrected for chance
-  - Spatial learning impossible by design — PI reflects
+  - Spatial learning impossible by design - PI reflects
     real-time acoustic processing only
   - Sounds change category every day
   - Vocalisation appears on D1 and W2_Voc only
 
 MODEL ASSUMPTIONS:
   1. Stimulus feature vectors are theoretically motivated
-     and manually assigned — not empirically derived.
+     and manually assigned - not empirically derived.
      Results are sensitive to these values.
      TODO: sensitivity analysis on feature vector assumptions.
   2. mu_T dim 2 (biological relevance) reflects a partially
@@ -91,7 +91,7 @@ from scipy.stats import pearsonr
 np.random.seed(42)
 
 # ======================================================================
-# PART 1 — FOUR-DIMENSIONAL FEATURE SPACE
+# PART 1 - FOUR-DIMENSIONAL FEATURE SPACE
 # ======================================================================
 # Dimensions: [location_familiarity, spectral_complexity,
 #              biological_relevance, temporal_predictability]
@@ -104,7 +104,7 @@ DIM_NAMES = [
     "temporal_predictability",
 ]
 
-# Location familiarity by day (dim 0 — fixed, not fitted)
+# Location familiarity by day (dim 0 - fixed, not fitted)
 LOC_BY_DAY = {
     "D1":     0.10,
     "D2":     0.40,
@@ -156,7 +156,7 @@ BLOCKS_PER_DAY = 4
 RESHUFFLE_PENALTY = 0.05  # fixed, not fitted
 
 # ======================================================================
-# PART 5 — OBSERVED DATA
+# PART 5 - OBSERVED DATA
 # ======================================================================
 
 observed_voc_pi = {
@@ -209,11 +209,11 @@ observed_within_trial = {
 
 
 # ======================================================================
-# PART 3 — MODEL IMPLEMENTATION
+# PART 3 - MODEL IMPLEMENTATION
 # ======================================================================
 
 class AestheticModel:
-    """Brielmann & Dayan (2022) aesthetic value model — 4D extension."""
+    """Brielmann & Dayan (2022) aesthetic value model - 4D extension."""
 
     def __init__(self, params: dict):
         self.alpha = params["alpha"]
@@ -264,7 +264,7 @@ class AestheticModel:
         """Full aesthetic value computation for one stimulus encounter.
 
         Returns dict with r, V_before, V_after, Delta_V_eff, A.
-        Does NOT modify self.mu — caller decides whether to apply update.
+        Does NOT modify self.mu - caller decides whether to apply update.
         """
         r = self.compute_r(s)
         V_before = self.compute_V()
@@ -296,7 +296,7 @@ class AestheticModel:
 
 
 # ======================================================================
-# PART 4 — EXPERIMENT SIMULATION
+# PART 4 - EXPERIMENT SIMULATION
 # ======================================================================
 
 def simulate_experiment(params: dict,
@@ -430,7 +430,7 @@ def simulate_experiment(params: dict,
 
 
 # ======================================================================
-# PART 6 — MODEL FITTING
+# PART 6 - MODEL FITTING
 # ======================================================================
 
 PARAM_NAMES = [
@@ -447,7 +447,7 @@ PARAM_BOUNDS = [
     (0.01, 20.0),   # sigma_sq
     (0.0, 1.0),     # mu_T_0
     (0.0, 3.0),     # mu_T_1
-    (0.4, 1.0),     # mu_T_2 — constrained above 0.4 (innate prior)
+    (0.4, 1.0),     # mu_T_2 - constrained above 0.4 (innate prior)
     (0.0, 1.0),     # mu_T_3
     (0.1, 20.0),    # sigma_T_sq
 ]
@@ -525,7 +525,7 @@ def fit_model():
 
 
 # ======================================================================
-# PART 7 — DECOMPOSITION ANALYSES
+# PART 7 - DECOMPOSITION ANALYSES
 # ======================================================================
 
 def run_decompositions(best_params: dict, best_results: dict):
@@ -690,7 +690,7 @@ def secondary_evaluations(best_results: dict):
 
 
 # ======================================================================
-# PART 8 — VISUALISATION
+# PART 8 - VISUALISATION
 # ======================================================================
 
 def make_figure(best_params, best_results, best_rmse, top20, decomp, evals,
@@ -706,7 +706,7 @@ def make_figure(best_params, best_results, best_rmse, top20, decomp, evals,
     day_x = np.arange(len(DAY_ORDER))
 
     # ------------------------------------------------------------------
-    # Panel A — Primary Voc PI fit
+    # Panel A - Primary Voc PI fit
     # ------------------------------------------------------------------
     ax_a = fig.add_subplot(gs[0, 0])
 
@@ -749,7 +749,7 @@ def make_figure(best_params, best_results, best_rmse, top20, decomp, evals,
     ax_a.legend(fontsize=7, loc="lower right")
 
     # ------------------------------------------------------------------
-    # Panel B — D1 complexity gradient
+    # Panel B - D1 complexity gradient
     # ------------------------------------------------------------------
     ax_b = fig.add_subplot(gs[0, 1])
     d1_stims = ["smooth", "rough", "rough_complex", "vocalisation"]
@@ -775,7 +775,7 @@ def make_figure(best_params, best_results, best_rmse, top20, decomp, evals,
     ax_b.legend(lines_b + lines_b2, labels_b + labels_b2, fontsize=7, loc="upper left")
 
     # ------------------------------------------------------------------
-    # Panel C — W2 sequence predictions
+    # Panel C - W2 sequence predictions
     # ------------------------------------------------------------------
     ax_c = fig.add_subplot(gs[0, 2])
     w2_stims = ["AAAAA", "AoAo", "ABAB", "BABA", "ABCABC", "ABBA"]
@@ -799,7 +799,7 @@ def make_figure(best_params, best_results, best_rmse, top20, decomp, evals,
     ax_c.legend(lines_c + lines_c2, labels_c + labels_c2, fontsize=7, loc="upper left")
 
     # ------------------------------------------------------------------
-    # Panel D — System state trajectory (4 subplots)
+    # Panel D - System state trajectory (4 subplots)
     # ------------------------------------------------------------------
     gs_d = gs[1, 0].subgridspec(2, 2, hspace=0.45, wspace=0.3)
 
@@ -851,7 +851,7 @@ def make_figure(best_params, best_results, best_rmse, top20, decomp, evals,
             ax_d.set_xlabel("Trial", fontsize=7)
 
     # ------------------------------------------------------------------
-    # Panel E — Lesioned model comparison
+    # Panel E - Lesioned model comparison
     # ------------------------------------------------------------------
     ax_e = fig.add_subplot(gs[1, 1])
 
@@ -859,7 +859,7 @@ def make_figure(best_params, best_results, best_rmse, top20, decomp, evals,
     ax_e.plot(day_x, pred_scaled, "-o", color="#4c72b0", lw=2, ms=5,
               label=f"Full (RMSE={best_rmse:.4f})")
 
-    # Lesioned models — scale each to observed
+    # Lesioned models - scale each to observed
     for les_key, les_label, ls_style, clr in [
         ("lesion_A", "wr=0 (learning only)", "--", "#55a868"),
         ("lesion_B", "wV=0 (fluency only)", ":", "#c44e52"),
@@ -884,7 +884,7 @@ def make_figure(best_params, best_results, best_rmse, top20, decomp, evals,
     ax_e.legend(fontsize=6, loc="lower right")
 
     # ------------------------------------------------------------------
-    # Panel F — Dimension dropout + location decomposition
+    # Panel F - Dimension dropout + location decomposition
     # ------------------------------------------------------------------
     gs_f = gs[1, 2].subgridspec(1, 2, wspace=0.4)
 
@@ -944,7 +944,7 @@ def make_figure(best_params, best_results, best_rmse, top20, decomp, evals,
 
 
 # ======================================================================
-# PART 9 — PRINTED REPORT
+# PART 9 - PRINTED REPORT
 # ======================================================================
 
 def print_report(best_params, best_rmse, best_results, top20, decomp, evals):
@@ -952,7 +952,7 @@ def print_report(best_params, best_rmse, best_results, top20, decomp, evals):
     sep = "=" * 65
 
     print(f"\n{sep}")
-    print("AESTHETIC VALUE MODEL — 4D EXTENSION (Brielmann & Dayan 2022)")
+    print("AESTHETIC VALUE MODEL - 4D EXTENSION (Brielmann & Dayan 2022)")
     print(sep)
 
     # --- BEST FIT PARAMETERS ---
@@ -1160,7 +1160,7 @@ def print_report(best_params, best_rmse, best_results, top20, decomp, evals):
     print(f"\n  5. The reshuffling design (all arms including silence reassigned every")
     print(f"     15 minutes) means PI reflects real-time acoustic processing only,")
     print(f"     free of spatial learning confounds. The model's A(t) computation")
-    print(f"     is consistent with this — it predicts instantaneous aesthetic value")
+    print(f"     is consistent with this - it predicts instantaneous aesthetic value")
     print(f"     from system state and stimulus features, without any spatial memory")
     print(f"     component.")
 

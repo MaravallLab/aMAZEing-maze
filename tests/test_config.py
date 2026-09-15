@@ -1,4 +1,4 @@
-"""Tests for ExperimentConfig — verify defaults and trial lengths."""
+"""Tests for ExperimentConfig - verify defaults and trial lengths."""
 
 import pytest
 

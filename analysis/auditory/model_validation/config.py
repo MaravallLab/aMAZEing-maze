@@ -1,6 +1,6 @@
 """Frozen structural configuration for the model-validation pipeline.
 
-HARD COMMITMENTS (baked in — not options):
+HARD COMMITMENTS (baked in - not options):
   * Structural parameters are FIXED from the experimental design, never fitted:
     the two grammar bigram matrices, the context-level transition matrix A_ctx,
     the filter prior b0, the B-D learning rate alpha, and the long-run target

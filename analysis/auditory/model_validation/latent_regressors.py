@@ -115,7 +115,7 @@ def bd_updates(seq: np.ndarray, b_post: np.ndarray, cfg: ValidatedConfig,
 
     At n_contexts == 1 this reduces to the plain B-D single-state update
     (asserted in tests). ΔV averaged over a steady-state block is expected to be
-    small — within-context learning plateaus — which is fine; the cross-arm
+    small - within-context learning plateaus - which is fine; the cross-arm
     signal then lives mainly in r (complexity) and S (grammar).
     """
     n = len(seq)
@@ -170,7 +170,7 @@ def tier_restricted_emissions(M: np.ndarray, tier: str, cfg: ValidatedConfig,
     """Restrict a grammar matrix to its tier columns and renormalise (with eps
     smoothing on out-of-tier transitions).
 
-    These emissions MATCH the generative process — the stimuli were drawn from
+    These emissions MATCH the generative process - the stimuli were drawn from
     exactly these tier-restricted distributions. Scoring transitions this way
     fixes the secondary-tier S sign-flip that the full matrix produces (a
     secondary melody's i->i+3 / i->i+1 steps overlap the OTHER grammar's dominant
@@ -197,7 +197,7 @@ def arm_block_features(melodies: Sequence[str], group: int,
 
     `emission`: "full" scores transitions under the full learned grammar matrices;
     "tier_restricted" scores them under the tier-restricted generative
-    distributions (requires `tier`) — this fixes the secondary-tier S sign-flip.
+    distributions (requires `tier`) - this fixes the secondary-tier S sign-flip.
     """
     M_EE, M_SC = cfg.emission_matrices(group)
     if emission == "tier_restricted" and tier in cfg.complexity_tiers:
@@ -248,7 +248,7 @@ def build_features(df, cfg: ValidatedConfig, pool_cap: int = _CELL_POOL_CAP,
     (group, environment, tier) cell every melody is an i.i.d. draw from the same
     restricted grammar. So we pool the logged melodies across all arm-blocks of a
     cell, compute the cell's mean r/S/dV ONCE, and assign them to every arm-block
-    in that cell — including arms the mouse never visited that block (which log no
+    in that cell - including arms the mouse never visited that block (which log no
     melodies). This (a) removes the dependence on the known melody over-logging
     and on whether an arm happened to be visited, and (b) uses only delivered
     sequences, never a regenerated one. `n_melodies_logged` keeps per-arm

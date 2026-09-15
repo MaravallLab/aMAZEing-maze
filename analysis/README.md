@@ -6,7 +6,7 @@ estimation. The maze is a white cross/T-shaped binary decision tree
 the rig, filmed from below.
 
 To locate each of 24 maze landmarks in a new video the script doesn't
-re-detect the maze geometry from scratch — it searches for small
+re-detect the maze geometry from scratch - it searches for small
 image patches taken from a calibration frame around where each
 landmark was, and finds their best matches in the new frame using
 **normalised cross-correlation template matching** (`cv2.matchTemplate`
@@ -24,7 +24,7 @@ core idea:
   re-searched around their homography-predicted positions, recovering
   templates that initially locked onto the wrong nearby corner.
 - **Multi-calibration** support for datasets that span more than one
-  rig/camera setup — calibrate once per setup, drop the JSONs in a
+  rig/camera setup - calibrate once per setup, drop the JSONs in a
   directory, and the batch picks the best fit per video.
 - **`--skip_existing`** (default on) skips videos whose
   `*_cropped.mp4` is already on disk, so re-runs only touch new work.
@@ -148,7 +148,7 @@ Open `<out>/review/<mouse>/<session>/*_review.png` for any `medium` /
       +---------------+
 ```
 
-### Stage 1 — Calibration (`--calibrate`)
+### Stage 1 - Calibration (`--calibrate`)
 
 ```
 python crop_and_align_maze.py --calibrate \
@@ -194,19 +194,19 @@ the mouse never occludes a landmark during calibration.
 | 24 | inner corner: TL arm meets central junction (bottom side)         |
 
 Window controls:
-- left-click — place the next point
-- **r** — reset all clicks (works in placement and confirm phases)
-- **y** / **Y** — confirm once 24 points are placed
-- **ESC** — cancel without saving
+- left-click - place the next point
+- **r** - reset all clicks (works in placement and confirm phases)
+- **y** / **Y** - confirm once 24 points are placed
+- **ESC** - cancel without saving
 
 On confirm the script writes (filenames derive from the JSON stem so
 multiple calibrations can live in the same directory):
 
-- `<stem>.json` — the 24 landmark positions, the patch size, the
+- `<stem>.json` - the 24 landmark positions, the patch size, the
   frame dimensions, and the basename of the saved frame.
-- `<stem>_frame.png` — the *unannotated* median frame. Batch matching
+- `<stem>_frame.png` - the *unannotated* median frame. Batch matching
   reads this to extract template patches; do not modify it.
-- `<stem>_frame_annotated.png` — the same frame with the 24 landmarks
+- `<stem>_frame_annotated.png` - the same frame with the 24 landmarks
   numbered and the `--patch_size` patch boxes drawn around each point,
   for human reference.
 
@@ -222,7 +222,7 @@ falls outside the frame), a warning lists the affected landmarks;
 those landmarks will be unmatched in batch mode unless you
 re-calibrate with a smaller patch size.
 
-### Stage 2 — Batch processing
+### Stage 2 - Batch processing
 
 ```
 python crop_and_align_maze.py \
@@ -234,7 +234,7 @@ For every video under `--input_dir`:
 
 1. **Skip-if-existing.** If `<stem>_cropped.mp4` already exists in the
    output tree and `--skip_existing` is on (the default), the video is
-   skipped entirely — no median sampling, no detection, no warp. Use
+   skipped entirely - no median sampling, no detection, no warp. Use
    `--no-skip_existing` to force everything to re-run, or `--redo_video
    <name>` to force one specific video.
 2. **Median frame.** Read `--n_median_frames` frames (default 11)
@@ -275,10 +275,10 @@ For every video under `--input_dir`:
    is written for `medium` / `low` / `failed` cases.
 
 The 24 patches are extracted **once** per calibration at the start of
-the batch run, not per video — the same set of templates is reused
+the batch run, not per video - the same set of templates is reused
 across every video.
 
-### Stage 2b — Multi-calibration (`--calibration_dir`)
+### Stage 2b - Multi-calibration (`--calibration_dir`)
 
 When your dataset spans more than one rig/camera setup, calibrate once
 per setup and put the JSONs (plus their frames) in a single directory:
@@ -344,7 +344,7 @@ The canonical positions of the 24 landmarks are derived from the
 calibration: each calibration point is translated so the bounding box
 of all 24 sits at `(--padding, --padding)`, and the output canvas size
 is `(bbox_width + 2*padding, bbox_height + 2*padding)`. Spacing and
-proportions are preserved exactly — every video is warped so its 24
+proportions are preserved exactly - every video is warped so its 24
 detected corners align with these canonical targets. When using
 `--calibration_dir`, each calibration defines its own canonical layout,
 so videos cropped against different calibrations may have different
@@ -374,7 +374,7 @@ have a cropped output but get a debug review PNG so you can decide
 whether to keep them or rescue them with `--manual_video`.
 
 For videos processed via saved manual landmarks, confidence is judged
-on reprojection error and inlier count only — the mean template score
+on reprojection error and inlier count only - the mean template score
 is not relevant because no template matching ran. (In practice, a
 manual run produces 24 inliers and a very small reprojection error.)
 
@@ -406,8 +406,8 @@ python crop_and_align_maze.py \
 
 | Argument              | Default                                          | Meaning                                                                                |
 | --------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `--input_dir`         | —                                                | Folder to search recursively for videos. Required for batch mode.                      |
-| `--output_dir`        | —                                                | Where cropped videos, calibration files, per-video manual landmarks, the review folder, and the CSV are written. |
+| `--input_dir`         | - | Folder to search recursively for videos. Required for batch mode.                      |
+| `--output_dir`        | - | Where cropped videos, calibration files, per-video manual landmarks, the review folder, and the CSV are written. |
 | `--padding`           | 50                                               | Padding (px) around the bounding box of the canonical landmarks.                       |
 | `--patch_size`        | 80                                               | Square template patch size in pixels. Used during `--calibrate`; the saved value is read back at batch time. |
 | `--search_radius`     | 60                                               | How far (px) from each (shifted) calibration landmark to search for the template.      |
@@ -483,7 +483,7 @@ The review PNG for a flagged or failed video shows:
   positions for unmatched landmarks (so you can see exactly which
   corner the matcher couldn't find).
 - **Yellow lines** from each calibration position to its detected
-  position for matched landmarks — the visible "shift" tells you
+  position for matched landmarks - the visible "shift" tells you
   whether the camera moved a lot (long lines) or barely at all (short
   lines).
 - A header showing `auto` or `manual` source, matched count, mean
@@ -507,15 +507,15 @@ Triage workflow:
    stragglers. If the matched yellow lines are long or inconsistent,
    rescue with `--manual_video`.
 3. **`failed` videos** have no cropped output. By far the most common
-   cause in a multi-rig dataset is **wrong calibration** — entire
+   cause in a multi-rig dataset is **wrong calibration** - entire
    mouse cohorts failing together is the signature. Calibrate a new
    rig from one of their videos, drop the JSON into
    `--calibration_dir`, and re-run. Other causes:
      - Mouse was sitting on a critical landmark in *every* sampled
-       frame — try a larger `--n_median_frames` to denoise more.
-     - Camera shift exceeded the search window — raise
+       frame - try a larger `--n_median_frames` to denoise more.
+     - Camera shift exceeded the search window - raise
        `--search_radius` and/or `--refine_radius`.
-     - Very noisy templates — lower `--match_threshold` (e.g. 0.2) at
+     - Very noisy templates - lower `--match_threshold` (e.g. 0.2) at
        the risk of more false matches; the RANSAC inlier filter will
        drop them but you may end up with fewer inliers.
      - Rescue with `--manual_video <path>`. Clicks are saved next to
@@ -530,7 +530,7 @@ Triage workflow:
 
 - **`--patch_size`** controls how distinctive each template is. Larger
   patches are more discriminative (fewer false matches) but more
-  sensitive to small camera rotation/scale changes — and they're more
+  sensitive to small camera rotation/scale changes - and they're more
   likely to clip outside the frame near the edges of the maze. 80 px
   is a reasonable starting point for ~720 p ventral recordings; halve
   or double it if your videos are much smaller or larger.

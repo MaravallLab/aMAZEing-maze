@@ -271,7 +271,7 @@ def review_rois_interactive(cur_img: np.ndarray,
         if issues:
             y0 = 30
             for msg in issues[:8]:
-                cv.putText(preview, f"⚠ {msg}", (20, y0), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2, cv.LINE_AA)
+                cv.putText(preview, f"{msg}", (20, y0), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,255), 2, cv.LINE_AA)
                 y0 += 28
         cv.namedWindow(win, cv.WINDOW_NORMAL)
         cv.imshow(win, preview)

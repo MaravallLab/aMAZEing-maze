@@ -34,7 +34,7 @@ class GrammarStimulus:
     """
     sampler: MarkovSampler
     tier: str                       # "dominant" / "secondary" / "rare"
-    environment_association: str    # "EE" / "SC" — which cage this grammar was paired with
+    environment_association: str    # "EE" / "SC" - which cage this grammar was paired with
     history: List[Dict[str, Any]] = field(default_factory=list)
 
     def render(self, audio: Audio, roi: str = "", trial_id: int = 0,
@@ -74,7 +74,7 @@ class GrammarStimulus:
             })
         return np.concatenate(chunks).astype(np.float32)
 
-# ── helpers ──────────────────────────────────────────────────────────
+# -- helpers ----------------------------------------------------------
 
 def _make_hashable(x):
     """Convert lists to tuples so they can go in a set."""
@@ -99,7 +99,7 @@ class ExperimentFactory:
     # this class will act like a "menu" that generates the correct trial structure based on the experiment mode in config.py
     # we generate the sound data that will go in the df with the functions we defined in audio.py
 
-    # ── trial-structure constants ────────────────────────────────────
+    # -- trial-structure constants ------------------------------------
     TOTAL_REPETITIONS = 9   # how many blocks (silent + active interleaved)
     SAMPLE_RATE = 192000    # used only for silence arrays
 
@@ -135,9 +135,9 @@ class ExperimentFactory:
             raise ValueError(f"Unknown experiment mode: {experiment_type}")
 
 
-    # ════════════════════════════════════════════════════════════════
+    # ============================================================
     # EXPERIMENT-SPECIFIC SETUP
-    # ════════════════════════════════════════════════════════════════
+    # ============================================================
 
     @staticmethod
     def _make_simple_smooth(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
@@ -416,8 +416,8 @@ class ExperimentFactory:
                 "from src/auditory/ instead."
             )
 
-        # ── silent_baseline mode (day 1 of the 3-day test protocol) ──────
-        # No audio anywhere — just track which ROIs the mouse visits in the
+        # -- silent_baseline mode (day 1 of the 3-day test protocol) ------
+        # No audio anywhere - just track which ROIs the mouse visits in the
         # maze, with the camera + visit log on. Used to establish a
         # baseline ROI preference before the audio-on test days.
         if cfg.grammar_mode == "silent_baseline":
@@ -459,7 +459,7 @@ class ExperimentFactory:
         sc_grammar = "B" if ee_grammar == "A" else "A"
         env_to_grammar: Dict[str, str] = {"EE": ee_grammar, "SC": sc_grammar}
 
-        # ── Build the 8 canonical stimuli (fixed pool, shuffled per block) ──
+        # -- Build the 8 canonical stimuli (fixed pool, shuffled per block) --
         stimuli: List[Any] = []      # one entry per TEST_ARM_PLAN slot
         stim_labels: List[Dict[str, Any]] = []   # parallel metadata
 
@@ -502,7 +502,7 @@ class ExperimentFactory:
                     "tier": "-", "environment_association": "-",
                 })
 
-        # ── 9-block structure with per-block shuffle ────────────────────────
+        # -- 9-block structure with per-block shuffle ------------------------
         total_repetitions = 9
         n = len(rois)
         rois_repeated = rois * total_repetitions
@@ -683,9 +683,9 @@ class ExperimentFactory:
         df = _add_tracking_columns(df)
         return df, wave_arrays
 
-    # ════════════════════════════════════════════════════════════════
+    # ============================================================
     # TRIAL CREATION LOGIC
-    # ════════════════════════════════════════════════════════════════
+    # ============================================================
     #
     # These methods build the trials DataFrame + wave_arrays list.
     # The pattern is the same for every experiment type:
@@ -693,7 +693,7 @@ class ExperimentFactory:
     #   - even blocks shuffle the ROI↔stimulus mapping
     #   - first active block (i==1) keeps the original order
     #   - subsequent active blocks are unique random permutations
-    # ────────────────────────────────────────────────────────────────
+    # ------------------------------------------------------------
 
     @staticmethod
     def _create_simple_trials_logic(
@@ -1060,9 +1060,9 @@ class ExperimentFactory:
         return df, wave_arrays
 
 
-    # ════════════════════════════════════════════════════════════════
-    # HELPER FUNCTIONS — stimulus info getters
-    # ════════════════════════════════════════════════════════════════
+    # ============================================================
+    # HELPER FUNCTIONS - stimulus info getters
+    # ============================================================
 
     @staticmethod
     def _get_interval(interval_name: str) -> Tuple[float, str]:

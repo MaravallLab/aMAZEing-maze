@@ -89,7 +89,7 @@ def _dump_matrix(name: str, out: TextIO) -> None:
     out.write("\n")
 
     # Column sums (should also be 1.0 because doubly stochastic)
-    out.write("Column sums (should all be 1.000 — doubly stochastic):  ")
+    out.write("Column sums (should all be 1.000 - doubly stochastic):  ")
     out.write("  ".join(f"{cfg.TONE_SYMBOLS[j]}={M[:, j].sum():.3f}"
                        for j in range(cfg.N_TONES)))
     out.write("\n")

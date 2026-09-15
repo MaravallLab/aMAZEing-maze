@@ -7,10 +7,10 @@ analysis (stats, plotting, etc.).
 
 Usage
 -----
-# CSVs for one day — all mice tested that day:
+# CSVs for one day - all mice tested that day:
     python run_summary_csv.py --day path/to/grammar/day_1
 
-# Cross-day CSVs — all mice across all days, plus a combined CSV:
+# Cross-day CSVs - all mice across all days, plus a combined CSV:
     python run_summary_csv.py --all path/to/grammar/
 """
 

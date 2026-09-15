@@ -41,7 +41,7 @@ def _sem(a):
 
 
 # ---------------------------------------------------------------------------
-# Figure 1 — EE vs SC dwell by tier, per counterbalancing group (the headline)
+# Figure 1 - EE vs SC dwell by tier, per counterbalancing group (the headline)
 # ---------------------------------------------------------------------------
 def fig_ee_sc_by_tier_group(feats, out_dir, written):
     g = feats[feats["arm_type"] == "grammar"].dropna(subset=["environment", "tier", "group"])
@@ -73,7 +73,7 @@ def fig_ee_sc_by_tier_group(feats, out_dir, written):
 
 
 # ---------------------------------------------------------------------------
-# Figure 2 — per-mouse EE-SC preference index, by group
+# Figure 2 - per-mouse EE-SC preference index, by group
 # ---------------------------------------------------------------------------
 def fig_per_mouse_pi(feats, out_dir, written):
     g = feats[feats["arm_type"] == "grammar"].dropna(subset=["environment", "group"])
@@ -103,7 +103,7 @@ def fig_per_mouse_pi(feats, out_dir, written):
 
 
 # ---------------------------------------------------------------------------
-# Figure 3 — the six-cell behavioural pattern (env x tier) + silent/voc refs
+# Figure 3 - the six-cell behavioural pattern (env x tier) + silent/voc refs
 # ---------------------------------------------------------------------------
 def fig_six_cell_pattern(feats, out_dir, written):
     g = feats[feats["arm_type"] == "grammar"].dropna(subset=["environment", "tier"])
@@ -131,7 +131,7 @@ def fig_six_cell_pattern(feats, out_dir, written):
 
 
 # ---------------------------------------------------------------------------
-# Figure 4 — latent regressors in (r, S) space
+# Figure 4 - latent regressors in (r, S) space
 # ---------------------------------------------------------------------------
 def fig_latent_rs(feats, out_dir, written):
     g = feats[feats["arm_type"] == "grammar"].dropna(subset=["environment", "tier", "r_mean", "S_mean"])
@@ -156,7 +156,7 @@ def fig_latent_rs(feats, out_dir, written):
 
 
 # ---------------------------------------------------------------------------
-# Figure 5 — recovery (identifiability + confusion)
+# Figure 5 - recovery (identifiability + confusion)
 # ---------------------------------------------------------------------------
 def fig_recovery(results, out_dir, written):
     rec = results.get("recovery", {})
@@ -187,7 +187,7 @@ def fig_recovery(results, out_dir, written):
 
 
 # ---------------------------------------------------------------------------
-# Figure 6 — model comparison (LOO) + wS posterior
+# Figure 6 - model comparison (LOO) + wS posterior
 # ---------------------------------------------------------------------------
 def fig_model_comparison(results, out_dir, written):
     p2 = results.get("phase2", {})
@@ -215,19 +215,19 @@ def fig_model_comparison(results, out_dir, written):
         a2.set_xticks([]); a2.set_ylabel("wS (semantic weight)")
         a2.set_title(f"wS posterior: mean={m:+.3f}\n95% HDI={[round(x,3) for x in hdi]}, "
                      f"P(wS>0)={ws.get('wS_p_positive')}")
-    fig.suptitle("Does the semantic term beat the B–D baseline out of sample?",
+    fig.suptitle("Does the semantic term beat the B - D baseline out of sample?",
                  fontweight="bold")
     _save(fig, out_dir, "fig6_model_comparison_wS.png", written)
 
 
 # ---------------------------------------------------------------------------
-# Figure 7 — posterior-predictive arm pattern vs observed
+# Figure 7 - posterior-predictive arm pattern vs observed
 # ---------------------------------------------------------------------------
 def fig_posterior_predictive(results, feats, out_dir, written):
     """Per-(environment x tier) posterior-predictive check.
 
-    Both predicted and observed are the SAME quantity — the fraction of a block's
-    dwell on ONE arm — so the bars are directly comparable (the earlier version
+    Both predicted and observed are the SAME quantity - the fraction of a block's
+    dwell on ONE arm - so the bars are directly comparable (the earlier version
     compared a per-arm mean against a per-category sum, which was apples-to-
     oranges). Predicted = softmax of the fitted value over the block's arms
     (the per-mouse intercept and w0 cancel inside the softmax, so only wr/wV/wS
@@ -277,14 +277,14 @@ def fig_posterior_predictive(results, feats, out_dir, written):
     ax.set_xticks(x); ax.set_xticklabels(cells, rotation=20, ha="right", fontsize=9)
     ax.set_ylabel("dwell fraction within block (per arm)")
     ax.set_title("Posterior-predictive vs observed, per (environment × tier) cell\n"
-                 "(per-block grain — underpowered; see grain_comparison for cell-mean / PI fit)",
+                 "(per-block grain - underpowered; see grain_comparison for cell-mean / PI fit)",
                  fontweight="bold")
     ax.legend()
     _save(fig, out_dir, "fig7_posterior_predictive.png", written)
 
 
 # ---------------------------------------------------------------------------
-# Figure 8 — within-session block time-course (day 1 vs day 2)
+# Figure 8 - within-session block time-course (day 1 vs day 2)
 # ---------------------------------------------------------------------------
 def fig_block_timecourse(results, out_dir, written):
     series = []
@@ -313,7 +313,7 @@ def fig_wS_by_tier(feats, out_dir, written):
     """Semantic weight estimated on each tier alone vs the joint estimate.
 
     Shows directly why the joint wS is modest: it is strong at the dominant tier
-    (where S is well-defined), flipped at secondary (i→i+3 overlap), and null at
+    (where S is well-defined), flipped at secondary (i->i+3 overlap), and null at
     rare (shared rare transitions), so the single joint weight is a dilution.
     """
     if feats.empty:
@@ -348,7 +348,7 @@ def fig_wS_by_tier(feats, out_dir, written):
     ax.set_xticks(range(len(tiers))); ax.set_xticklabels(tiers)
     ax.set_ylabel("semantic weight wS (fit on that tier alone)")
     ax.set_title("Semantic weight is strong at dominant, flipped at secondary "
-                 "(i→i+3), null at rare\n→ the joint estimate is a ~3× dilution, "
+                 "(i->i+3), null at rare\n-> the joint estimate is a ~3× dilution, "
                  "traced to the grammar implementation", fontweight="bold", fontsize=10)
     ax.legend()
     _save(fig, out_dir, "fig9_wS_by_tier.png", written)
