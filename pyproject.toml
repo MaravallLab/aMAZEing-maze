@@ -44,9 +44,19 @@ analysis = [
     "seaborn>=0.11",
     "statsmodels>=0.13",
 ]
+# Graphical interface (amaze-app).
+gui = [
+    "PySide6>=6.6",
+]
+# Building the standalone Windows application.
+build = [
+    "PySide6>=6.6",
+    "pyinstaller>=6.0",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=3.0",
+    "PySide6>=6.6",
 ]
 
 [project.urls]
@@ -63,6 +73,9 @@ amaze-summary-csv = "amazeing.auditory.run_summary_csv:main"
 amaze-grammar = "amazeing.auditory.grammar_stimuli.run:main"
 amaze-tactile = "amazeing.simplermaze:main"
 amaze-tactile-segments = "amazeing.simplermaze.post_process_session:main"
+
+[project.gui-scripts]
+amaze-app = "amazeing.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

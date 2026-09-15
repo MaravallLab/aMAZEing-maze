@@ -49,6 +49,12 @@ def _parse_cli():
     p.add_argument("--write-config", metavar="YAML", default=None,
                    help="Write the effective configuration to this YAML file and exit "
                         "(a quick way to get a template to edit).")
+    p.add_argument("--mouse-id", default=None,
+                   help="Mouse ID. When given, the console prompts for mouse ID and "
+                        "metadata are skipped (the graphical interface uses this).")
+    p.add_argument("--ear-mark", default="", help="Metadata: ear mark identifiers.")
+    p.add_argument("--birth-date", default="", help="Metadata: birth date.")
+    p.add_argument("--sex", default="", help="Metadata: sex (m/f).")
     return p.parse_args()
 
 
@@ -110,10 +116,14 @@ def main():
     # Interactive Setup:
     # This asks for mouse ID and creates the folder structure:
     # e.g., /data/complex_intervals_w1day2/time_2023..._mouse1/
-    new_dir_path, animal_ID = data_mgr.setup_session(cfg)
-    
-    # Optional: Collect and save metadata (Gender, DOB, etc.)
-    data_mgr.save_metadata()
+    new_dir_path, animal_ID = data_mgr.setup_session(cfg, mouse_id=args.mouse_id)
+
+    # Collect and save metadata (sex, DOB, etc.); prompted unless --mouse-id was given
+    if args.mouse_id is not None:
+        data_mgr.save_metadata({"ear_mark": args.ear_mark, "birth_date": args.birth_date,
+                                "gender": args.sex})
+    else:
+        data_mgr.save_metadata()
     
     # Initialize the detailed CSV log for individual visits
     visit_log_path = data_mgr.init_visit_log(cfg.experiment_mode)

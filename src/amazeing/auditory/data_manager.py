@@ -26,15 +26,20 @@ class DataManager:
         self.mouseID = ""
         self.timestamp = ""
 
-    def setup_session(self, cfg) -> Tuple[str, str]:
-        # automatically ask user input and create folder structure : base_output_path / experiment_session / time_YYYY...mouseID /
+    def setup_session(self, cfg, mouse_id: Optional[str] = None) -> Tuple[str, str]:
+        # create folder structure : base_output_path / experiment_session / time_YYYY...mouseID /
         # return session_directory_path, full mouse ID
+        # mouse_id: pass it to skip the console prompt (the graphical interface
+        # and the --mouse-id flag do this); None prompts as before.
 
         self.timestamp = time.strftime('%Y-%m-%d_%H_%M_%S', time.localtime())
 
-        #get user input for mouseID
-        user_input = input("insert mouse ID (number only):\n").strip()
-        self.mouseID = f"mouse{user_input}"
+        if mouse_id is None:
+            mouse_id = input("insert mouse ID (number only):\n")
+        mouse_id = str(mouse_id).strip()
+        if mouse_id.lower().startswith("mouse"):
+            mouse_id = mouse_id[5:]
+        self.mouseID = f"mouse{mouse_id}"
 
         #create directory structure by creating the experiment session folder
         experiment_dir_name = cfg.experiment_mode
@@ -66,12 +71,19 @@ class DataManager:
         return self.session_directory, self.mouseID
     
 
-    def save_metadata(self):
-        # prompt the user for the mouse information to then save into a metadata csv
-        print("Mouse info (press enter to skip)")
-        ear_mark = input("ear mark identifiers?\n").strip()
-        birth_date= input("insert mouse birth date:\n").strip()
-        gender= input("insert mouse gender (m/f/whatever the mouse identifies with):\n").strip().lower()
+    def save_metadata(self, metadata: Optional[Dict[str, str]] = None):
+        # save the mouse information into a metadata csv. If ``metadata`` is
+        # given (keys ear_mark, birth_date, gender; missing keys = empty) no
+        # console prompt is shown; otherwise prompt as before.
+        if metadata is None:
+            print("Mouse info (press enter to skip)")
+            ear_mark = input("ear mark identifiers?\n").strip()
+            birth_date= input("insert mouse birth date:\n").strip()
+            gender= input("insert mouse gender (m/f/whatever the mouse identifies with):\n").strip().lower()
+        else:
+            ear_mark = str(metadata.get("ear_mark", "")).strip()
+            birth_date = str(metadata.get("birth_date", "")).strip()
+            gender = str(metadata.get("gender", "")).strip().lower()
 
         data = {
             "animal ID": self.mouseID,

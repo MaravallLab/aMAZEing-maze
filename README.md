@@ -104,6 +104,27 @@ pip install -e ".[analysis,dev]"
 
 ## Usage
 
+You can drive the maze in two equivalent ways: from the command line (below) or from the graphical application. Both run the same code; the application simply writes a session config file and launches the same commands.
+
+### The graphical application
+
+```bash
+pip install -e ".[gui]"
+amaze-app
+```
+
+Or download the standalone Windows build (`amazeing-app.zip` on the Releases page), unzip it and run `amazeing-app.exe`; no Python installation is needed.
+
+| Tab | What it does |
+|---|---|
+| **Auditory session** | Form for every session setting (experiment mode, ROI count, camera and audio device, detection threshold, block schedule, custom stimulus-to-ROI table). Load/save the config as YAML, draw the ROIs on the live camera, enter the mouse ID and start the session. The session's console output appears in the panel; the live tracking windows are the same OpenCV windows as before. |
+| **Speaker calibration** | Table editor and plot for the frequency / attenuation curve. Enter your speaker's response (datasheet or your own microphone measurement), save it, and it becomes the session's calibration file. |
+| **Analysis** | Pick a session, day or experiment folder and generate the per-session or cross-session figures and CSVs. Figures are previewed in the tab. |
+| **Grammar training** | Continuous playback of one grammar for the home-cage training days. |
+| **Tactile session** | Launches the tactile paradigm script unchanged, with a console line to answer its prompts. |
+
+Every session started from the application is reproducible from the YAML file it writes to `<recordings folder>/session_configs/`, and can be re-run from a terminal with `amaze-auditory --config <that file>`.
+
 ### Running an Auditory Experiment
 
 1. Edit `src/amazeing/auditory/config.py` to set your experiment parameters (mode, sample rate, device IDs, paths).
@@ -285,12 +306,19 @@ aMAZEing-maze/
 │   │       ├── tone_generator.py   # Pure-tone melody synthesis
 │   │       ├── run.py          #     Training-day playback   -> amaze-grammar
 │   │       └── QUICKSTART.md   #     Step-by-step grammar experiment guide
-│   └── simplermaze/            # Tactile paradigm: 2-level binary decision tree with servo-controlled gratings
-│       ├── simplerCode.py      #   Main script               -> amaze-tactile
-│       ├── supFun.py           #   Support functions
-│       ├── post_process_session.py # Per-trial video segments -> amaze-tactile-segments
-│       ├── grating_maps.csv    #   Servo commands per reward location (template)
-│       └── reward_sequences.csv #  Trial distribution per training stage (template)
+│   ├── simplermaze/            # Tactile paradigm: 2-level binary decision tree with servo-controlled gratings
+│   │   ├── simplerCode.py      #   Main script               -> amaze-tactile
+│   │   ├── supFun.py           #   Support functions
+│   │   ├── post_process_session.py # Per-trial video segments -> amaze-tactile-segments
+│   │   ├── grating_maps.csv    #   Servo commands per reward location (template)
+│   │   └── reward_sequences.csv #  Trial distribution per training stage (template)
+│   └── app/                    # Graphical interface (PySide6)   -> amaze-app
+│       ├── main_window.py      #   Tabs: session, calibration, analysis, grammar, tactile
+│       ├── config_form.py      #   Form <-> ExperimentConfig
+│       ├── process_panel.py    #   Runs the command-line tools as child processes
+│       └── launcher.py         #   Builds those commands (source checkout or frozen exe)
+│
+├── packaging/                  # PyInstaller spec, Windows build script, pinned versions
 │
 ├── firmware/
 │   ├── ttl_bnc/                # Arduino TTL synchronisation sketch
@@ -408,6 +436,22 @@ python -m pytest tests/ --cov=amazeing --cov-report=term-missing
 # Run a specific test file
 python -m pytest tests/test_audio.py -v
 ```
+
+---
+
+## Building the standalone application
+
+The Windows build bundles Python and every library, so the result runs on a machine with nothing installed. The exact library versions used for a build are pinned in `packaging/requirements-lock.txt` (generated with `pip freeze` on a machine where the test suite passes); the build script installs those versions first, so two builds from the same commit are identical.
+
+```powershell
+python -m venv .venv-build
+.\.venv-build\Scripts\Activate.ps1
+.\packaging\build_windows.ps1
+```
+
+This runs the tests, builds `dist\amazeing-app\amazeing-app.exe` with PyInstaller, and smoke-tests the executable. Zip the `dist\amazeing-app` folder to distribute it. The same executable runs the command-line tools (for example `amazeing-app.exe --entry auditory --config session.yaml`), which is how the application launches sessions on a machine without Python.
+
+Refreshing the pins after upgrading a library: install the new version, run the tests, then `pip freeze --exclude-editable > packaging/requirements-lock.txt`.
 
 ---
 
