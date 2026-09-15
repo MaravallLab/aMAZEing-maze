@@ -20,7 +20,7 @@ day-2 secondary. CLI: `run_validation.py`. 9/9 unit tests pass.
 - **Behavioural target = EE−SC PI** (EE−SC)/(EE+SC), matching the existing
   `summary_analysis` convention exactly. Silent/vocalisation = reference only.
 - **Structural params fixed, never fitted**: grammar matrices, context transition
-  (self≈0.99), B - D α/target/prior, V_EE=1 / V_SC=0. Only (w0, wr, wV, wS) free.
+  (self≈0.99), B-D α/target/prior, V_EE=1 / V_SC=0. Only (w0, wr, wV, wS) free.
 - **Group is a factor everywhere** (the octave-trill-vs-sweep intrinsic-grammar
   confound). Recovery includes an intrinsic-grammar generator + grammar-identity
   nuisance weight so wS can't be a relabelled intrinsic preference.
@@ -107,7 +107,7 @@ grain mismatch.
 The mingw compiler was installed, so the exact PyMC `az.compare` LOO ran
 (compiled NUTS, ~20-35 s/model); the frequentist leave-one-mouse-out CV agrees.
 
-- **LOO ranking** (elpd_loo, higher = better; B - D-constrained model wr,wV≥0):
+- **LOO ranking** (elpd_loo, higher = better; B-D-constrained model wr,wV≥0):
   `full` rank 0 (**901.87**, stacking weight 0.55) **≈ tied with `intercept`**
   (901.19, weight 0.45) > `bd_baseline` (900.40) > `fluency` (899.85). So `full`
   still ranks #1 but Δelpd ≈ 0.7 vs dse ≈ 4.3 - the predictors add **almost nothing
@@ -119,7 +119,7 @@ The mingw compiler was installed, so the exact PyMC `az.compare` LOO ran
   [0.048, 0.064]) ⇒ a real S-aligned signal, not driven by a few animals.
 - **MCMC diagnostics (clean)**: after a non-centered random-intercept
   reparameterization, the final fit (4 chains / 2000 tune / 1000 draws /
-  target_accept 0.95) has **R-hat = 1.00, ESS ≈ 4.2k - 10k, 0 divergences**, and wS
+  target_accept 0.95) has **R-hat = 1.00, ESS ≈ 4.2k-10k, 0 divergences**, and wS
   reproduced (0.076-0.078) across three independent runs ⇒ quotable as final.
 
 ### Subtlety the (r,S) figure exposed (matters for interpretation)
@@ -137,7 +137,7 @@ secondary/rare). That convergence is itself supporting evidence; but it also
 means the single positive wS is carried by the dominant tier and partly
 *mis*-predicts secondary. A design talking point, not a bug.
 
-**Read (final, B - D-constrained model)**: model-free EE−SC + reliably-positive wS
+**Read (final, B-D-constrained model)**: model-free EE−SC + reliably-positive wS
 posterior + clean recovery all align. The per-cell posterior-predictive (Fig 7 -
 NOTE: an earlier figure bug applied the fitted weights to *raw* features instead of
 the SD-standardized features used in the fit, shrinking the semantic effect ~20×
@@ -160,7 +160,7 @@ reported joint wS is **diluted ~3×** because one weight must also fit secondary
 mis-aligned by the i→i+3 overlap) and rare (S uninformative). **Conclusion: a
 robust model-free EE−SC effect + a reliably-positive S-term that is strong at the
 dominant tier but diluted in the joint estimate by the grammar implementation** (we
-did NOT add an interaction or redefine S). The behaviour is the result; the B - D+S
+did NOT add an interaction or redefine S). The behaviour is the result; the B-D+S
 model captures it where S is well-defined, and the partiality is fully traced to
 the grammar's i→i+3 / shared-rare structure - not a mis-set weight.
 

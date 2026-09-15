@@ -215,7 +215,7 @@ def fig_model_comparison(results, out_dir, written):
         a2.set_xticks([]); a2.set_ylabel("wS (semantic weight)")
         a2.set_title(f"wS posterior: mean={m:+.3f}\n95% HDI={[round(x,3) for x in hdi]}, "
                      f"P(wS>0)={ws.get('wS_p_positive')}")
-    fig.suptitle("Does the semantic term beat the B - D baseline out of sample?",
+    fig.suptitle("Does the semantic term beat the B-D baseline out of sample?",
                  fontweight="bold")
     _save(fig, out_dir, "fig6_model_comparison_wS.png", written)
 

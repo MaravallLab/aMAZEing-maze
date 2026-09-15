@@ -103,7 +103,7 @@ def render_markdown(results: Dict[str, object]) -> str:
         L.append(f"- corr(r, S) = {col.get('corr_r_S')}")
         L.append(f"- VIF: `{col.get('vif')}`")
         if col.get("flag_high_rS_collinearity"):
-            L.append("- **HIGH r - S collinearity**: the design did not separate "
+            L.append("- **HIGH r-S collinearity**: the design did not separate "
                      "fluency from semantics in practice; recovery decides if wS "
                      "is estimable at all.")
         L.append("")

@@ -26,7 +26,7 @@ The narrow question this package answers is:
 
 > **Does a semantic value term S(t) - a signal that the mouse is recognising the
 > grammar associated with its enriched environment - explain the EE−SC
-> preference, over and above a fluency-only Brielmann & Dayan (B - D) baseline, out
+> preference, over and above a fluency-only Brielmann & Dayan (B-D) baseline, out
 > of sample, with the predicted EE > SC sign?**
 
 Not "do mice like sound" (that is silent-vs-sound, the *old* experiment). This is
@@ -44,7 +44,7 @@ number per arm:
   the grammar the mouse learned? Predictable (dominant-tier) transitions are
   high-r; surprising (rare-tier) transitions are low-r. This is the *complexity*
   axis. Computed as the log-likelihood (negative surprise) of each transition.
-- **ΔV(t) - learning signal.** How much does hearing this melody move the B - D
+- **ΔV(t) - learning signal.** How much does hearing this melody move the B-D
   "system state" toward its long-run target? Within a steady-state arm this is
   near zero (learning has plateaued) - expected, and reported, not hidden.
 - **S(t) - semantic value.** The novel term. A hidden-context filter tracks the
@@ -203,7 +203,7 @@ python -m pytest analysis/auditory/model_validation/tests -q
 
 The tests lock the central claims: S = 0 for a non-diagnostic sequence, S > 0 for
 a Grammar-A sequence and ≤ 0 for Grammar B, belief stays normalised; the K=1 / wS=0
-reduction to plain B - D; and that recovery recovers a known `wS` without flagging
+reduction to plain B-D; and that recovery recovers a known `wS` without flagging
 `wS = 0` as positive.
 
 ---
@@ -239,7 +239,7 @@ reduction to plain B - D; and that recovery recovers a known `wS` without flaggi
 | Reinstate the excluded mouse once its tracking is cleaned | remove `"13533"` from `EXCLUDED_ANIMALS` in `data_loading.py` and rerun (that's the whole change) |
 | Exclude another animal | add `"id": "reason"` to `EXCLUDED_ANIMALS` |
 | Change how stable the context belief is | `ctx_self_transition` in `validated_config()` (default 0.99) |
-| Change the B - D learning rate / target / prior | `alpha`, `p_T_*`, `prior` args of `validated_config()` |
+| Change the B-D learning rate / target / prior | `alpha`, `p_T_*`, `prior` args of `validated_config()` |
 | Use the softmax link instead of the matching law | `--link softmax` |
 | Use accumulated instead of mean features | `--summary sum` (means are primary; sums are over-logging-sensitive) |
 | Make recovery faster / more thorough | `--recovery-sims`, `--confusion-sims` |
@@ -249,7 +249,7 @@ reduction to plain B - D; and that recovery recovers a known `wS` without flaggi
 | Point at a different results tree | `--results_dir` |
 
 **Structural parameters are fixed by design and never fitted** - the grammar
-matrices, the context transition matrix, the B - D learning rate and target, and
+matrices, the context transition matrix, the B-D learning rate and target, and
 `V_EE = 1 / V_SC = 0`. Only the linear weights `(w0, wr, wV, wS)` (and the link
 temperature) are free. This is a hard commitment: fitting the generative
 structure would destroy identifiability.
