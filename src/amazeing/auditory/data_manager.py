@@ -186,6 +186,67 @@ class DataManager:
             writer = csv.writer(f)
             writer.writerow([trial_id, roi, stimulus_str, sound_onset, sound_offset, duration])
 
+    # Units of every column the session writes. Analysis code should read
+    # these from the manifest rather than assuming (v1 recordings stored
+    # time_spent in milliseconds; v2 stores seconds).
+    OUTPUT_SCHEMA: Dict[str, Dict[str, str]] = {
+        "trials_csv": {
+            "trial_ID": "block number, 1-based; odd = silent block, even = active block",
+            "ROIs": "ROI name",
+            "frequency": "Hz, 0 = silent, or a label (grammar / vocalisation / file path)",
+            "time_spent": "seconds, summed over all visits in the block",
+            "visitation_count": "count of visits in the block",
+        },
+        "detailed_visits_csv": {
+            "trial_ID": "block number",
+            "ROI_visited": "ROI name",
+            "stimulus": "stimulus description string",
+            "sound_on_time": "unix time in seconds, visit start",
+            "sound_off_time": "unix time in seconds, visit end",
+            "time_spent_seconds": "seconds",
+        },
+        "maze_entries_csv": {
+            "trial_ID": "block number",
+            "event": "entered / exited / session_end_still_inside",
+            "timestamp": "unix time in seconds",
+            "time_in_maze_seconds": "seconds, only on exit events",
+        },
+    }
+
+    @staticmethod
+    def write_manifest(session_dir: str, cfg: Any, files: Dict[str, Optional[str]],
+                       status: str, extra: Optional[Dict[str, Any]] = None) -> str:
+        """Write ``session_manifest.json`` describing this session.
+
+        The manifest records the exact configuration used, the package
+        version, the files produced and the units of their columns, so an
+        analysis tool (or a person, years later) can read a session folder
+        without guessing. Called once when the session starts (status
+        "running") and again when it ends (status "completed" or "aborted").
+        """
+        import dataclasses
+        import json
+        try:
+            from amazeing import __version__ as pkg_version
+        except Exception:  # pragma: no cover
+            pkg_version = "unknown"
+
+        manifest = {
+            "manifest_version": 1,
+            "amazeing_version": pkg_version,
+            "status": status,
+            "written_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+            "config": dataclasses.asdict(cfg) if dataclasses.is_dataclass(cfg) else dict(cfg),
+            "files": {k: (os.path.basename(v) if v else None) for k, v in files.items()},
+            "columns": DataManager.OUTPUT_SCHEMA,
+        }
+        if extra:
+            manifest.update(extra)
+        path = os.path.join(session_dir, "session_manifest.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(manifest, fh, indent=2, default=str)
+        return path
+
     @staticmethod
     def close_open_visits(csv_path: str, trials_df: pd.DataFrame, trial_id: int,
                           visit_start_times: Dict[str, Optional[float]],

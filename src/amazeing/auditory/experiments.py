@@ -127,6 +127,8 @@ class ExperimentFactory:
             return ExperimentFactory._make_vocalisation(generic_rois, cfg, audio)
         elif experiment_type == "grammar":
             return ExperimentFactory._make_grammar(generic_rois, cfg, audio)
+        elif experiment_type == "custom":
+            return ExperimentFactory._make_custom(generic_rois, cfg, audio)
         elif experiment_type == "semantic_predictive_complexity":
             raise NotImplementedError("semantic_predictive_complexity is not yet implemented")
         else:
@@ -556,6 +558,130 @@ class ExperimentFactory:
         df = _add_tracking_columns(df)
         return df, wave_arrays
 
+
+    @staticmethod
+    def _make_custom(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        """User-defined stimulus per ROI, read from ``cfg.custom_stimuli``.
+
+        This is the mode the configuration file and the graphical interface
+        use. It does not touch the hard-coded experiment modes above: it
+        renders one waveform per ROI from a small declarative description
+        and then applies the standard 9-block silent/active structure with
+        per-block shuffling of the stimulus-to-ROI mapping.
+        """
+        by_roi: Dict[str, Dict[str, Any]] = {}
+        for entry in cfg.custom_stimuli:
+            if not isinstance(entry, dict) or "roi" not in entry:
+                raise ValueError(f"custom_stimuli entries need a 'roi' key: {entry!r}")
+            roi = str(entry["roi"])
+            if roi not in rois:
+                raise ValueError(
+                    f"custom_stimuli refers to ROI {roi!r} but rois_number={cfg.rois_number} "
+                    f"only defines {rois}")
+            if roi in by_roi:
+                raise ValueError(f"custom_stimuli defines ROI {roi!r} twice")
+            by_roi[roi] = entry
+
+        labels: List[str] = []
+        kinds: List[str] = []
+        freqs: List[Any] = []
+        waves: List[np.ndarray] = []
+        for roi in rois:
+            spec = by_roi.get(roi, {"kind": "silent"})
+            kind = str(spec.get("kind", "silent")).lower()
+            wave, freq = ExperimentFactory._render_custom_stimulus(spec, kind, audio)
+            labels.append(str(spec.get("label", kind if kind == "silent" else f"{kind}:{freq}")))
+            kinds.append(kind)
+            freqs.append(freq)
+            waves.append(wave)
+
+        return ExperimentFactory._create_custom_trials_logic(rois, freqs, kinds, labels, waves, audio)
+
+    @staticmethod
+    def _render_custom_stimulus(spec: Dict[str, Any], kind: str, audio: Audio):
+        """Return (waveform, frequency_or_path) for one custom_stimuli entry."""
+        if kind == "silent":
+            return np.zeros(int(audio.fs * audio.default_duration)), 0
+        if kind in ("tone", "am_tone"):
+            if "frequency" not in spec:
+                raise ValueError(f"custom stimulus of kind {kind!r} needs 'frequency': {spec!r}")
+            freq = float(spec["frequency"])
+            common = dict(
+                waveform=spec.get("waveform"),
+                duration_s=spec.get("duration_s"),
+                volume=spec.get("volume"),
+                ramp_duration_s=spec.get("ramp_s"),
+            )
+            if kind == "tone":
+                return audio.generate_sound_data(freq, **common), freq
+            return audio.generate_simple_tem_sound_data(
+                freq, modulated_frequency=float(spec.get("mod_freq", 50.0)),
+                depth=float(spec.get("depth", 0.5)), **common), freq
+        if kind == "wav":
+            path = spec.get("path", "")
+            if not path or not os.path.exists(path):
+                raise FileNotFoundError(f"custom stimulus .wav not found: {path!r}")
+            return audio.load_wav(path), path
+        raise ValueError(f"Unknown custom stimulus kind {kind!r} (use tone, am_tone, wav or silent)")
+
+    @staticmethod
+    def _create_custom_trials_logic(
+        rois: List[str],
+        frequencies: List[Any],
+        kinds: List[str],
+        labels: List[str],
+        waves: List[np.ndarray],
+        audio: Audio,
+        total_repetitions: int = 9,
+    ) -> TrialData:
+        """9-block structure for custom stimuli (odd blocks silent, active blocks shuffled)."""
+        rois_repeated = rois * total_repetitions
+        trial_ids: List[int] = []
+        freq_col: List[Any] = []
+        kind_col: List[str] = []
+        label_col: List[str] = []
+        wave_arrays: List[np.ndarray] = []
+        previous_perms: set = set()
+        n = len(rois)
+        silence = np.zeros(int(audio.fs * audio.default_duration))
+
+        for block in range(total_repetitions):
+            if block % 2 == 0:
+                for _ in rois:
+                    trial_ids.append(block + 1)
+                    freq_col.append(0)
+                    kind_col.append("silent_trial")
+                    label_col.append("silent")
+                    wave_arrays.append(silence)
+                continue
+            while True:
+                if block == 1:
+                    perm = tuple(range(n))
+                else:
+                    idxs = list(range(n))
+                    random.shuffle(idxs)
+                    perm = tuple(idxs)
+                # With 1 ROI every permutation is identical; don't loop forever.
+                if perm not in previous_perms or n < 2:
+                    previous_perms.add(perm)
+                    break
+            for stim_idx in perm:
+                trial_ids.append(block + 1)
+                freq_col.append(frequencies[stim_idx])
+                kind_col.append(kinds[stim_idx])
+                label_col.append(labels[stim_idx])
+                wave_arrays.append(waves[stim_idx])
+
+        df = pd.DataFrame({
+            "trial_ID": trial_ids,
+            "ROIs": rois_repeated,
+            "frequency": freq_col,
+            "sound_type": kind_col,
+            "stimulus_label": label_col,
+            "wave_arrays": wave_arrays,
+        })
+        df = _add_tracking_columns(df)
+        return df, wave_arrays
 
     # ════════════════════════════════════════════════════════════════
     # TRIAL CREATION LOGIC

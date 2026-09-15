@@ -34,6 +34,7 @@ dependencies = [
     "pyserial>=3.5",
     "matplotlib>=3.4",
     "imageio-ffmpeg>=0.4",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

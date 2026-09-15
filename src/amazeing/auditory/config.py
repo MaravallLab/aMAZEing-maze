@@ -6,7 +6,7 @@ Override them here or pass them when constructing the config.
 
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 # Default base directory: ~/Desktop/auditory_maze_experiments/maze_recordings
 _DEFAULT_BASE = os.path.join(os.path.expanduser("~"), "Desktop", "auditory_maze_experiments", "maze_recordings")
@@ -53,6 +53,7 @@ class ExperimentConfig:
     ### Experiment mode ###
     # Options: "simple_smooth", "simple_intervals", "temporal_envelope_modulation",
     #          "complex_intervals", "sequences", "vocalisation", "grammar",
+    #          "custom" (stimuli described in custom_stimuli below),
     #          "semantic_predictive_complexity"
     experiment_mode: str = "grammar"
 
@@ -86,6 +87,22 @@ class ExperimentConfig:
     grammar_test_block_minutes: List[float] = field(
         default_factory=lambda: [0, 15.0, 0, 15.0, 0, 15.0, 0, 15.0, 0]
     )
+
+    # Only used if experiment_mode == "custom": one entry per numbered ROI
+    # ("1", "2", ...) describing the stimulus played there. ROIs without an
+    # entry are silent. Each entry is a mapping with a ``kind``:
+    #   tone    : frequency (Hz); optional waveform, duration_s, volume,
+    #             ramp_s. Speaker compensation is applied.
+    #   am_tone : as tone, plus mod_freq (Hz) and depth (0-1) for a constant
+    #             amplitude-modulation envelope.
+    #   wav     : path to a .wav file (resampled to the session sample rate).
+    #   silent  : plays nothing (explicit silent control arm).
+    # Optional ``label`` names the stimulus in the logs and figures.
+    custom_stimuli: List[Dict[str, Any]] = field(default_factory=list)
+    # Block schedule for custom mode, in minutes. Odd-indexed entries are
+    # active blocks, even-indexed are silent blocks (same 9-block cycle as
+    # every other mode). None = the standard schedule from get_trial_lengths.
+    custom_block_minutes: Optional[List[float]] = None
 
     # Trial Settings
     rois_number: int = 8
@@ -147,6 +164,15 @@ class ExperimentConfig:
                     f"test uses a fixed 9-block silent/active cycle."
                 )
             return list(self.grammar_test_block_minutes)
+
+        if self.experiment_mode == "custom" and self.custom_block_minutes is not None:
+            if len(self.custom_block_minutes) != 9:
+                raise ValueError(
+                    f"custom_block_minutes must have exactly 9 entries "
+                    f"(got {len(self.custom_block_minutes)}); even indices are "
+                    f"silent blocks, odd indices are active blocks."
+                )
+            return [float(x) for x in self.custom_block_minutes]
 
         if self.testing:
             return [0.1, 1, 0.2, 2, 0.2, 2, 0.2, 2, 0.2]

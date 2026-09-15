@@ -141,6 +141,8 @@ amaze-auditory --grammar-mode test --enriched-grammar A --day day_2
 | `--day LABEL` | Parent folder label in the output path (e.g. `habituation`, `day_1`, `day_2`) |
 | `--seed N` | RNG seed for reproducible melody draws |
 | `--draw-rois` | Force interactive ROI re-drawing even if `rois1.csv` already exists |
+| `--config FILE.yaml` | Load every setting from a session config file (see [Session config files](#session-config-files)); other flags still override |
+| `--write-config FILE.yaml` | Write the effective configuration to a YAML file and exit (the easiest way to get a template) |
 
 ### Experiment Modes
 
@@ -155,6 +157,52 @@ Set `experiment_mode` in `config.py` to one of:
 | `complex_intervals` | Multi-day interval protocol with consonant/dissonant contrasts |
 | `sequences` | Tone-pattern sequences (ABAB, AoAo, etc.) |
 | `vocalisation` | Each ROI plays a different vocalisation recording |
+| `custom` | Your own stimulus per ROI (tone, AM tone, .wav file or silent), declared in the session config file — see below |
+
+### Session config files
+
+Every field of `ExperimentConfig` can be set from a YAML file instead of editing `config.py`. This is the format the graphical interface reads and writes, so a session started from the app and one started from the command line are identical.
+
+```bash
+# 1. Get a template containing every setting and its current default
+amaze-auditory --write-config my_session.yaml
+
+# 2. Edit it, then run
+amaze-auditory --config my_session.yaml
+
+# Command-line flags still win over the file, e.g. per-mouse values:
+amaze-auditory --config my_session.yaml --enriched-grammar B --day day_2
+```
+
+Unknown field names are rejected (a typo cannot silently fall back to a default), and the file carries a `schema_version` so old files can be migrated later.
+
+**Mapping your own stimuli to ROIs** uses `experiment_mode: custom`:
+
+```yaml
+schema_version: 1
+experiment_mode: custom
+rois_number: 4
+custom_block_minutes: [2, 15, 2, 15, 2, 15, 2, 15, 2]   # optional; even = silent blocks
+custom_stimuli:
+  - roi: "1"
+    kind: tone          # pure tone, speaker-compensated
+    frequency: 10000
+    label: low_tone
+  - roi: "2"
+    kind: am_tone       # amplitude-modulated tone
+    frequency: 20000
+    mod_freq: 50
+    depth: 0.5
+  - roi: "3"
+    kind: wav           # any recording; resampled to the session rate
+    path: C:/data/vocalisations/call.wav
+  - roi: "4"
+    kind: silent        # explicit silent control arm
+```
+
+ROIs without an entry are silent. The 9-block structure and per-block shuffling are the same as in every other mode, so the existing analysis scripts work unchanged; the trials CSV gains `sound_type` and `stimulus_label` columns.
+
+**Session manifest.** Every session folder also gets a `session_manifest.json` recording the package version, the full configuration used, the files written, and the units of every column (for example that `time_spent` is in seconds in this version, whereas v1 recordings stored milliseconds). Analysis tools should read units from there rather than assume them.
 
 ### Running the Tactile paradigm (SimplerMaze)
 

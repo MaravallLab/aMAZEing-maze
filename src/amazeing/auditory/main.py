@@ -10,6 +10,7 @@ import sounddevice as sd
 
 # our modules from the subdirectory `modules`
 from amazeing.auditory.config import ExperimentConfig
+from amazeing.auditory.session_config import load_config, save_config
 from amazeing.auditory.hardware import ArduinoController, Camera
 from amazeing.auditory.vision import ROIMonitor
 from amazeing.auditory.audio import Audio
@@ -42,15 +43,42 @@ def _parse_cli():
     p.add_argument("--no-record-video", action="store_true",
                    help="Disable video file saving while keeping camera tracking active. "
                         "Useful for habituation days to save disk space.")
+    p.add_argument("--config", metavar="YAML", default=None,
+                   help="Session config file (see session_config.py). Fields in it "
+                        "replace the defaults in config.py; other flags still override.")
+    p.add_argument("--write-config", metavar="YAML", default=None,
+                   help="Write the effective configuration to this YAML file and exit "
+                        "(a quick way to get a template to edit).")
     return p.parse_args()
+
+
+def _utf8_console():
+    """Make the status messages (which use emoji) safe on any console.
+
+    A plain Windows console or a piped stdout defaults to a legacy code page
+    and raises UnicodeEncodeError on the first emoji, which would abort a
+    session before it starts. Re-encode as UTF-8 and replace anything the
+    stream still cannot show instead of crashing.
+    """
+    import sys
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):  # pragma: no cover - exotic streams
+            pass
 
 
 def main():
     # ==========================================
     # 1. SETUP & INITIALIZATION
     # ==========================================
+    _utf8_console()
     args = _parse_cli()
-    cfg = ExperimentConfig()
+    if args.config:
+        cfg = load_config(args.config)
+        print(f"📄 Loaded session config: {args.config}")
+    else:
+        cfg = ExperimentConfig()
 
     # Apply CLI overrides (only if the flag was passed)
     if args.grammar_mode is not None:
@@ -65,6 +93,11 @@ def main():
         cfg.experiment_day = args.day
     if args.no_record_video:
         cfg.record_video = False
+
+    if args.write_config:
+        out = save_config(cfg, args.write_config)
+        print(f"📄 Wrote effective configuration to {out}")
+        return
 
     print(f"Session config: experiment_mode={cfg.experiment_mode!r}  "
           f"grammar_mode={cfg.grammar_mode!r}  "
@@ -106,6 +139,7 @@ def main():
     
     # Setup Video Recording (optional)
     video_writer = None
+    rec_path = None
     if cfg.record_video:
         rec_name = f"{animal_ID}_{data_mgr.timestamp}.mp4"
         rec_path = os.path.join(new_dir_path, rec_name)
@@ -130,6 +164,19 @@ def main():
     
     unique_trials = trials_df['trial_ID'].unique()
     trial_lengths = cfg.get_trial_lengths()
+
+    # Manifest: what this session is, which files it writes, and their units.
+    session_files = {
+        "trials_csv": os.path.join(new_dir_path, f"{base_name}.csv"),
+        "sound_arrays_npy": os.path.join(new_dir_path, f"{base_name}.npy"),
+        "detailed_visits_csv": visit_log_path,
+        "maze_entries_csv": maze_log_path,
+        "video": rec_path,
+        "rois_csv": cfg.roi_csv_path,
+    }
+    DataManager.write_manifest(new_dir_path, cfg, session_files, status="running",
+                               extra={"mouse_id": animal_ID, "timestamp": data_mgr.timestamp,
+                                      "block_minutes": trial_lengths})
 
     def _fmt(seconds: float) -> str:
         s = max(0, int(seconds))
@@ -406,6 +453,11 @@ def main():
         DataManager.log_maze_event(maze_log_path, trial_idx, "session_end_still_inside", time.time(), duration)
 
     print(f"  Total time spent in maze: {total_maze_time:.1f}s ({total_maze_time/60:.2f} min)")
+
+    DataManager.write_manifest(new_dir_path, cfg, session_files, status="completed",
+                               extra={"mouse_id": animal_ID, "timestamp": data_mgr.timestamp,
+                                      "block_minutes": trial_lengths,
+                                      "total_time_in_maze_seconds": round(total_maze_time, 3)})
 
     # Dump grammar sampling history (only if grammar mode ran).
     # The same GrammarStimulus instance appears in sound_array at multiple
