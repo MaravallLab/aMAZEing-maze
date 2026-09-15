@@ -19,12 +19,16 @@
   - [Usage](#usage)
     - [The graphical application](#the-graphical-application)
     - [Running an Auditory Experiment](#running-an-auditory-experiment)
+    - [CLI flags](#cli-flags)
     - [Experiment Modes](#experiment-modes)
     - [Session config files](#session-config-files)
-    - [Running the SimplerMaze](#running-the-simplermaze)
+    - [Running the Tactile paradigm (SimplerMaze)](#running-the-tactile-paradigm-simplermaze)
   - [Configuration](#configuration)
   - [Repository Structure](#repository-structure)
   - [Post-Session Analysis](#post-session-analysis)
+    - [Output path structure](#output-path-structure)
+    - [Per-session figures](#per-session-figures)
+    - [Cross-session summary figures](#cross-session-summary-figures)
   - [Testing](#testing)
   - [Building the standalone application](#building-the-standalone-application)
   - [Hardware Build](#hardware-build)
@@ -207,7 +211,7 @@ Unknown field names are rejected (a typo cannot silently fall back to a default)
 schema_version: 1
 experiment_mode: custom
 rois_number: 4
-custom_block_minutes: [2, 15, 2, 15, 2, 15, 2, 15, 2]   # optional; even = silent blocks
+block_minutes: [2, 15, 2, 15, 2, 15, 2, 15, 2]   # optional; positions 1,3,5,7,9 are silent
 custom_stimuli:
   - roi: "1"
     kind: tone          # pure tone, speaker-compensated
@@ -226,6 +230,21 @@ custom_stimuli:
 ```
 
 ROIs without an entry are silent. The 9-block structure and per-block shuffling are the same as in every other mode, so the existing analysis scripts work unchanged; the trials CSV gains `sound_type` and `stimulus_label` columns.
+
+**Block lengths** are set with `block_minutes` in any mode. Nine values: positions 1, 3, 5, 7 and 9 are silent blocks, positions 2, 4, 6 and 8 are active blocks, and a `0` skips that block. Leave it out to keep the mode's default schedule. A grammar silent-baseline day ignores it and runs one continuous block of `grammar_silent_baseline_minutes`.
+
+**Every mode's stimuli are configurable too.** The frequencies, intervals, modulation rates and patterns that used to be literals inside `experiments.py` are now config fields, with the original values as defaults:
+
+| Mode | Fields |
+|---|---|
+| `simple_smooth` | `smooth_frequencies` |
+| `simple_intervals` | `simple_interval_tonal_centre`, `simple_intervals_list` |
+| `temporal_envelope_modulation` | `tem_smooth_freqs`, `tem_constant_rough_freqs`, `tem_complex_rough_freqs`, `tem_constant_mod_freq`, `tem_complex_mod_freqs`, `tem_mod_depth`, `tem_controls` |
+| `complex_intervals` | `complex_interval_day` (preset), `complex_interval_tonal_centre`, and the overrides `complex_consonant_intervals`, `complex_dissonant_intervals`, `complex_controls`, `complex_include_smooth`, `complex_include_rough` |
+| `sequences` | `sequence_patterns`, `sequence_tone_map`, `sequence_repetitions` |
+| `vocalisation` | `vocalisation_include_silent_arm`, `path_to_vocalisation_folder` |
+
+Leaving a field at its default reproduces the published protocol exactly; `tests/test_mode_parameters.py` pins those defaults so they cannot drift.
 
 **Session manifest.** Every session folder also gets a `session_manifest.json` recording the package version, the full configuration used, the files written, and the units of every column (for example that `time_spent` is in seconds in this version, whereas v1 recordings stored milliseconds). Analysis tools should read units from there rather than assume them.
 
@@ -843,7 +862,7 @@ Please keep the test suite green and add tests for new functionality.
 - Oluwaseyi Jesusanmi
 - Isabel Maranhao
 - Maja Nowak
-- Narcus Burnell-Spetcor
+- Marcus Burnell-Spetcor
 - Yuri Elias Rodrigues
   
 

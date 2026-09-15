@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt
 from amazeing.app.config_form import ConfigForm
 from amazeing.app.launcher import command_for
 from amazeing.app.process_panel import ProcessPanel
+from amazeing.app.waveform_panel import WaveformPanel
 from amazeing.auditory.session_config import load_config, save_config
 
 
@@ -63,11 +64,26 @@ class SessionTab(QWidget):
         rl.addWidget(self.config_label)
         rl.addWidget(self.panel, 1)
 
+        self.waveform = WaveformPanel()
+        self.waveform.bind(self.form.to_config)
+        self.form.changed.connect(self.waveform.schedule_refresh)
+        # The plots need real estate or matplotlib cannot fit its axis labels.
+        self.waveform.setMinimumHeight(360)
+        right.setMinimumHeight(260)
+
+        middle = QSplitter(Qt.Vertical)
+        middle.addWidget(self.waveform)
+        middle.addWidget(right)
+        middle.setStretchFactor(0, 3)
+        middle.setStretchFactor(1, 2)
+        middle.setSizes([520, 340])
+
         split = QSplitter(Qt.Horizontal)
         split.addWidget(self.form)
-        split.addWidget(right)
+        split.addWidget(middle)
         split.setStretchFactor(0, 3)
-        split.setStretchFactor(1, 2)
+        split.setStretchFactor(1, 3)
+        split.setSizes([820, 700])
         lay = QVBoxLayout(self)
         lay.addWidget(split)
 

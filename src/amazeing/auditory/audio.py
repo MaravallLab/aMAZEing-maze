@@ -12,8 +12,12 @@ from typing import List, Dict, Optional, Union, Tuple, Sequence
 
 class Audio:
     def __init__(self, cfg: ExperimentConfig,
-                 calibration_gain_path: Optional[str] = None):
-        
+                 calibration_gain_path: Optional[str] = None,
+                 configure_device: bool = True):
+        # configure_device=False builds an Audio that only generates waveforms
+        # and never touches the sound card, so a preview can run on a machine
+        # where the configured output device does not exist.
+
         #initialise
         self.fs = cfg.samplerate
         self.device_id = cfg.channel_id
@@ -21,10 +25,11 @@ class Audio:
         self.default_volume = cfg.default_volume
         self.default_ramp = cfg.default_ramp_length_s
         self.default_waveform = cfg.default_waveform
-        
-        #Setup Sound Card 
-        sd.default.samplerate = self.fs
-        sd.default.device = self.device_id
+
+        #Setup Sound Card
+        if configure_device:
+            sd.default.samplerate = self.fs
+            sd.default.device = self.device_id
 
         #interpolation function from the frequency response data extrapolated from the graph on the speaker's website
         self.gain_curve = None
@@ -157,7 +162,10 @@ class Audio:
             
             # Local time vector for this segment to keep phase continuous-ish
             t_seg = t[start:end]
-            envelope = 1 + 0.5 * np.sin(2 * np.pi * f_mod * t_seg)
+            # Use the requested depth. Before v2 this was hard-coded to 0.5 and
+            # the depth argument was ignored; 0.5 is still the default, so
+            # stimuli generated with default settings are unchanged.
+            envelope = 1 + depth * np.sin(2 * np.pi * f_mod * t_seg)
             modulated[start:end] *= envelope
             
         # Normalize to prevent clipping

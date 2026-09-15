@@ -17,7 +17,7 @@ class TestSessionConfigFile:
         cfg = ExperimentConfig(experiment_mode="custom", rois_number=3,
                                base_output_path=str(tmp_path / "rec"),
                                custom_stimuli=[{"roi": "1", "kind": "tone", "frequency": 12000}],
-                               custom_block_minutes=[1, 2, 1, 2, 1, 2, 1, 2, 1])
+                               block_minutes=[1, 2, 1, 2, 1, 2, 1, 2, 1])
         path = save_config(cfg, str(tmp_path / "s.yaml"))
         assert os.path.exists(path)
         text = open(path, encoding="utf-8").read()
@@ -50,15 +50,33 @@ class TestSessionConfigFile:
         with pytest.raises(ValueError, match="schema_version"):
             load_config(str(p))
 
-    def test_custom_block_minutes_validation(self):
+    def test_block_minutes_validation(self):
         from amazeing.auditory.config import ExperimentConfig
-        cfg = ExperimentConfig(experiment_mode="custom", custom_block_minutes=[1, 2, 3])
-        with pytest.raises(ValueError):
+        cfg = ExperimentConfig(experiment_mode="custom", block_minutes=[1, 2, 3])
+        with pytest.raises(ValueError, match="9 entries"):
             cfg.get_trial_lengths()
-        cfg.custom_block_minutes = [0, 5, 0, 5, 0, 5, 0, 5, 0]
+        cfg.block_minutes = [0, 5, 0, 5, 0, 5, 0, 5, 0]
         assert cfg.get_trial_lengths() == [0, 5, 0, 5, 0, 5, 0, 5, 0]
-        cfg.custom_block_minutes = None
+        cfg.block_minutes = None
         assert len(cfg.get_trial_lengths()) == 9
+
+    def test_block_minutes_applies_to_every_mode(self):
+        """Not just custom: any mode can have its block lengths set."""
+        from amazeing.auditory.config import ExperimentConfig
+        schedule = [1, 9, 1, 9, 1, 9, 1, 9, 1]
+        for mode in ("simple_smooth", "simple_intervals", "sequences",
+                     "temporal_envelope_modulation", "complex_intervals",
+                     "vocalisation", "custom"):
+            cfg = ExperimentConfig(experiment_mode=mode, block_minutes=schedule)
+            assert cfg.get_trial_lengths() == schedule, mode
+        # grammar test mode too
+        cfg = ExperimentConfig(experiment_mode="grammar", grammar_mode="test",
+                               block_minutes=schedule)
+        assert cfg.get_trial_lengths() == schedule
+        # but a silent-baseline grammar day stays one continuous block
+        cfg = ExperimentConfig(experiment_mode="grammar", grammar_mode="silent_baseline",
+                               block_minutes=schedule, grammar_silent_baseline_minutes=30)
+        assert cfg.get_trial_lengths() == [30.0]
 
 
 class TestCustomMode:

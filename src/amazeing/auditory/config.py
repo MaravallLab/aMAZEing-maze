@@ -16,6 +16,30 @@ _DEFAULT_BASE = os.path.join(os.path.expanduser("~"), "Desktop", "auditory_maze_
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 _DEFAULT_CALIBRATION = os.path.join(_PACKAGE_DIR, "data", "frequency_response_speaker.csv")
 
+# Presets for experiment_mode == "complex_intervals". Each day fixes which
+# consonant and dissonant intervals are presented, whether a smooth and a rough
+# unison arm are included, and which control arms are present. Taken verbatim
+# from the original experiments.py so existing protocols are unchanged.
+COMPLEX_INTERVAL_DAYS: Dict[str, Dict[str, Any]] = {
+    "w1day2": {"consonant": ["perf_5", "perf_4"], "dissonant": ["tritone", "min_7"],
+               "smooth": True, "rough": True, "controls": ["vocalisation", "silent"]},
+    "w1day3": {"consonant": ["maj_6", "min_3"], "dissonant": ["maj_7", "min_2"],
+               "smooth": True, "rough": True, "controls": ["vocalisation", "silent"]},
+    "w1day4": {"consonant": ["maj_3", "perf_4", "perf_5", "min_6"],
+               "dissonant": ["min_7", "maj_2", "tritone", "maj_7"],
+               "smooth": False, "rough": False, "controls": []},
+    "another_day": {"consonant": ["maj_3", "perf_4", "perf_5"],
+                    "dissonant": ["min_7", "maj_2", "tritone"],
+                    "smooth": False, "rough": False,
+                    "controls": ["vocalisation", "silent"]},
+}
+
+# Every interval the stimulus generator understands (just intonation).
+INTERVAL_NAMES: List[str] = [
+    "unison", "min_2", "maj_2", "min_3", "maj_3", "perf_4", "tritone",
+    "perf_5", "min_6", "maj_6", "min_7", "maj_7", "octave",
+]
+
 @dataclass
 class ExperimentConfig:
 
@@ -88,6 +112,55 @@ class ExperimentConfig:
         default_factory=lambda: [0, 15.0, 0, 15.0, 0, 15.0, 0, 15.0, 0]
     )
 
+    # ---------------------------------------------------------------
+    # Per-mode stimulus parameters
+    # ---------------------------------------------------------------
+    # These were literals inside experiments.py until v2; the defaults below
+    # reproduce the original values exactly, so an untouched config generates
+    # the same stimuli as before. Edit them here or in the interface.
+
+    # experiment_mode == "simple_smooth": one pure tone per arm
+    smooth_frequencies: List[float] = field(
+        default_factory=lambda: [10000, 12000, 14000, 16000, 18735, 20957, 22543, 24065])
+
+    # experiment_mode == "simple_intervals": two-tone chords on one tonal centre
+    simple_interval_tonal_centre: float = 10000.0
+    simple_intervals_list: List[str] = field(
+        default_factory=lambda: ["perf_5", "perf_4", "maj_6", "tritone", "min_2", "maj_7"])
+
+    # experiment_mode == "temporal_envelope_modulation"
+    tem_controls: List[str] = field(default_factory=lambda: ["vocalisation", "silent"])
+    tem_smooth_freqs: List[float] = field(default_factory=lambda: [10000, 20000])
+    tem_constant_rough_freqs: List[float] = field(default_factory=lambda: [10000, 20000])
+    tem_complex_rough_freqs: List[float] = field(default_factory=lambda: [10000, 20000])
+    tem_constant_mod_freq: float = 50.0            # Hz, constant AM rate
+    tem_complex_mod_freqs: List[float] = field(default_factory=lambda: [30, 50, 70])
+    tem_mod_depth: float = 0.5                     # AM depth, 0-1
+
+    # experiment_mode == "complex_intervals": consonant vs dissonant contrasts.
+    # complex_interval_day selects a preset (see COMPLEX_INTERVAL_DAYS); the
+    # override fields below take precedence when non-empty, so the interface can
+    # edit a day's stimuli without inventing a new day name.
+    complex_interval_tonal_centre: float = 15000.0
+    complex_consonant_intervals: List[str] = field(default_factory=list)
+    complex_dissonant_intervals: List[str] = field(default_factory=list)
+    complex_controls: Optional[List[str]] = None   # None = use the day preset
+    complex_include_smooth: Optional[bool] = None
+    complex_include_rough: Optional[bool] = None
+
+    # experiment_mode == "sequences": tone patterns per arm.
+    # sequence_tone_map maps each letter in the patterns to a frequency in Hz
+    # ("o" is a silent slot). Leave both empty to get the original interactive
+    # console prompts.
+    sequence_patterns: List[str] = field(
+        default_factory=lambda: ["AAAAA", "AoAo", "ABAB", "ABCABC", "BABA", "ABBA",
+                                 "silence", "vocalisation"])
+    sequence_tone_map: Dict[str, float] = field(default_factory=dict)
+    sequence_repetitions: int = 50
+
+    # experiment_mode == "vocalisation"
+    vocalisation_include_silent_arm: bool = True
+
     # Only used if experiment_mode == "custom": one entry per numbered ROI
     # ("1", "2", ...) describing the stimulus played there. ROIs without an
     # entry are silent. Each entry is a mapping with a ``kind``:
@@ -99,10 +172,15 @@ class ExperimentConfig:
     #   silent  : plays nothing (explicit silent control arm).
     # Optional ``label`` names the stimulus in the logs and figures.
     custom_stimuli: List[Dict[str, Any]] = field(default_factory=list)
-    # Block schedule for custom mode, in minutes. Odd-indexed entries are
-    # active blocks, even-indexed are silent blocks (same 9-block cycle as
-    # every other mode). None = the standard schedule from get_trial_lengths.
-    custom_block_minutes: Optional[List[float]] = None
+    # Block schedule in minutes, applied to every experiment mode. The session
+    # always runs the 9-block cycle: even-numbered entries (0, 2, 4, 6, 8) are
+    # silent blocks and odd-numbered entries (1, 3, 5, 7) are active blocks.
+    # Set an entry to 0 to skip that block entirely.
+    #   None  = use the mode's own default (the legacy 15/15/2 schedule, or
+    #           grammar_test_block_minutes in grammar test mode).
+    # Grammar silent-baseline days ignore this and use
+    # grammar_silent_baseline_minutes, which is a single block.
+    block_minutes: Optional[List[float]] = None
 
     # Trial Settings
     rois_number: int = 8
@@ -146,14 +224,49 @@ class ExperimentConfig:
                 os.path.dirname(os.path.normpath(self.base_output_path)), "vocalisations")
 
 
+    def resolve_complex_interval_day(self) -> Dict[str, Any]:
+        """Return the complex-intervals stimulus set, applying any overrides.
+
+        Starts from the COMPLEX_INTERVAL_DAYS preset named by
+        ``complex_interval_day`` and replaces any field the user has set
+        explicitly. Raises ValueError for an unknown day name.
+        """
+        if self.complex_interval_day not in COMPLEX_INTERVAL_DAYS:
+            raise ValueError(
+                f"Unknown complex_interval_day: {self.complex_interval_day!r}. "
+                f"Valid: {', '.join(COMPLEX_INTERVAL_DAYS)}")
+        preset = dict(COMPLEX_INTERVAL_DAYS[self.complex_interval_day])
+        if self.complex_consonant_intervals:
+            preset["consonant"] = list(self.complex_consonant_intervals)
+        if self.complex_dissonant_intervals:
+            preset["dissonant"] = list(self.complex_dissonant_intervals)
+        if self.complex_controls is not None:
+            preset["controls"] = list(self.complex_controls)
+        if self.complex_include_smooth is not None:
+            preset["smooth"] = bool(self.complex_include_smooth)
+        if self.complex_include_rough is not None:
+            preset["rough"] = bool(self.complex_include_rough)
+        return preset
+
     def get_trial_lengths(self) -> List[float]:
 
         # Grammar experiment: durations are taken from the dedicated
         # grammar_* fields above so you can override them without touching
         # this function.
+        if self.experiment_mode == "grammar" and self.grammar_mode == "silent_baseline":
+            # One continuous block; block_minutes does not apply.
+            return [float(self.grammar_silent_baseline_minutes)]
+
+        # A schedule set here wins for every mode.
+        if self.block_minutes is not None:
+            if len(self.block_minutes) != 9:
+                raise ValueError(
+                    f"block_minutes must have exactly 9 entries "
+                    f"(got {len(self.block_minutes)}); even indices are silent "
+                    f"blocks, odd indices are active blocks.")
+            return [float(x) for x in self.block_minutes]
+
         if self.experiment_mode == "grammar":
-            if self.grammar_mode == "silent_baseline":
-                return [float(self.grammar_silent_baseline_minutes)]
             # test mode: must be a 9-element list (the 9-block cycle is
             # hard-coded in _make_grammar). Validate so a stray change
             # fails loudly.
@@ -164,15 +277,6 @@ class ExperimentConfig:
                     f"test uses a fixed 9-block silent/active cycle."
                 )
             return list(self.grammar_test_block_minutes)
-
-        if self.experiment_mode == "custom" and self.custom_block_minutes is not None:
-            if len(self.custom_block_minutes) != 9:
-                raise ValueError(
-                    f"custom_block_minutes must have exactly 9 entries "
-                    f"(got {len(self.custom_block_minutes)}); even indices are "
-                    f"silent blocks, odd indices are active blocks."
-                )
-            return [float(x) for x in self.custom_block_minutes]
 
         if self.testing:
             return [0.1, 1, 0.2, 2, 0.2, 2, 0.2, 2, 0.2]

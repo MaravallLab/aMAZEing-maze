@@ -19,6 +19,13 @@ from amazeing.auditory.grammar_stimuli.tone_generator import generate_melody, ge
 #this will be the structure of the output of the trial generation. A dataframe containing all the trials information + the list of the sound sound_arrays
 TrialData = Tuple[pd.DataFrame, List[Any]]
 
+# Each active block uses a stimulus-to-arm mapping that has not been used
+# before. With few arms there are fewer possible mappings than active blocks
+# (2 arms give only 2 orderings but the cycle has 4 active blocks), so the
+# search has to give up rather than loop forever; past this many tries a
+# repeat is accepted.
+_MAX_SHUFFLE_ATTEMPTS = 200
+
 
 @dataclass
 class GrammarStimulus:
@@ -141,7 +148,7 @@ class ExperimentFactory:
 
     @staticmethod
     def _make_simple_smooth(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
-        frequencies = [10000, 12000, 14000, 16000, 18735, 20957, 22543, 24065]
+        frequencies = list(cfg.smooth_frequencies)
 
         if len(frequencies) < len(rois):
             print("not enough frequencies for ROIs. Recycling. If you want to add/modify, go to experiments.py,  _make_simple_smooth().")
@@ -157,8 +164,8 @@ class ExperimentFactory:
         if manual: # if manual =True, prompt the user for the intervals
             frequency, intervals, intervals_names = ExperimentFactory._ask_info_intervals(rois_number)
         else:
-            tonal_centre = 10000 #Hz
-            intervals_list = ["perf_5", "perf_4", "maj_6", "tritone", "min_2", "maj_7"]
+            tonal_centre = cfg.simple_interval_tonal_centre
+            intervals_list = list(cfg.simple_intervals_list)
             frequency, intervals, intervals_names = ExperimentFactory._get_info_intervals_hard_coded(rois, tonal_centre, intervals_list)
 
         return ExperimentFactory._create_intervals_trials_logic(rois, frequency, intervals, intervals_names, audio)
@@ -169,16 +176,16 @@ class ExperimentFactory:
 
         # okay, so, this adds another layer of control. You user can choose which frequencies will be smooth, which with constant Amplitude Modulation, and which with variable AM
 
-        smooth_freqs = [10000, 20000]
-        constant_rough_freqs = [10000, 20000]
+        smooth_freqs = list(cfg.tem_smooth_freqs)
+        constant_rough_freqs = list(cfg.tem_constant_rough_freqs)
         #constant temporal modulation
-        ctemporal_modulation = 50 #Hz
-        complex_rough_freqs = [10000, 20000]
+        ctemporal_modulation = cfg.tem_constant_mod_freq
+        complex_rough_freqs = list(cfg.tem_complex_rough_freqs)
 
         #complex temporal modulation
-        complex_temporal_modulation = [30, 50, 70] # Hz
+        complex_temporal_modulation = list(cfg.tem_complex_mod_freqs)
 
-        controls = ["vocalisation", "silent"]
+        controls = list(cfg.tem_controls)
 
         path_to_vocalisation = cfg.path_to_vocalisation_control
 
@@ -190,6 +197,7 @@ class ExperimentFactory:
             complex_rough_freqs,
             constant_rough_modulation=ctemporal_modulation,
             complex_rough_mod=complex_temporal_modulation,
+            depth=cfg.tem_mod_depth,
             audio=audio,
             path_to_voc=path_to_vocalisation,
         )
@@ -199,35 +207,15 @@ class ExperimentFactory:
 
     @staticmethod
     def _make_complex_intervals(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
-        experiment_day = cfg.complex_interval_day
+        day = cfg.resolve_complex_interval_day()
 
-        tonal_centre = 15000
+        tonal_centre = cfg.complex_interval_tonal_centre
         path_to_voc = cfg.path_to_vocalisation_control
-        smooth_freq = False
-        rough_freq = False
-        controls = ["vocalisation", "silent"] #"vocalisation", "silent"
-
-        #"w1day2", "w1day3", "w1day4", "another_day"
-        if experiment_day == "w1day2":
-            smooth_freq = True; rough_freq = True
-            consonant_intervals = ["perf_5", "perf_4"]
-            dissonant_intervals = ["tritone", "min_7"]
-
-        elif experiment_day == "w1day3":
-            smooth_freq = True; rough_freq = True
-            consonant_intervals = ["maj_6", "min_3"]
-            dissonant_intervals = ["maj_7", "min_2"]
-
-        elif experiment_day == "w1day4":
-            consonant_intervals = ["maj_3", "perf_4", "perf_5", "min_6"]
-            dissonant_intervals = ["min_7", "maj_2", "tritone", "maj_7"]
-            controls = []
-
-        elif experiment_day == "another_day":
-            consonant_intervals = ["maj_3", "perf_4", "perf_5"]
-            dissonant_intervals = ["min_7", "maj_2", "tritone"]
-        else:
-            raise ValueError(f"Unknown complex_interval_day: {experiment_day}")
+        smooth_freq = day["smooth"]
+        rough_freq = day["rough"]
+        controls = list(day["controls"])
+        consonant_intervals = list(day["consonant"])
+        dissonant_intervals = list(day["dissonant"])
 
         frequencies, interval_numerical_list, interval_string_names, sound_type, sounds_arrays = ExperimentFactory._get_info_complex_intervals_hard_coded(
             len(rois),
@@ -248,6 +236,12 @@ class ExperimentFactory:
 
     @staticmethod
     def _make_sequences(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        # Config-driven path: used by the interface and by any session config
+        # that fills in sequence_patterns and sequence_tone_map. Falls back to
+        # the original console prompts when the tone map is empty.
+        if cfg.sequence_patterns and cfg.sequence_tone_map:
+            return ExperimentFactory._make_sequences_from_config(rois, cfg, audio)
+
         # Interactive Setup (Ported from ask_music_info_sequences)
         intervals_vs_custom = input("Would you like to add CUSTOM values or generate sequences based on INTERVALS? (c / i): ").lower().strip()
 
@@ -334,10 +328,52 @@ class ExperimentFactory:
 
 
     @staticmethod
+    def _make_sequences_from_config(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        """Build sequence stimuli from cfg.sequence_patterns / sequence_tone_map.
+
+        Mirrors the interactive path exactly: a pattern is repeated up to 200
+        tone slots, each letter is looked up in the tone map ("o" and any
+        unmapped letter are silent slots), and the special patterns "silence",
+        "vocalisation" and "random" behave as before.
+        """
+        patterns = list(cfg.sequence_patterns)
+        if len(patterns) < len(rois):
+            patterns = (patterns * ((len(rois) // max(len(patterns), 1)) + 1))
+        patterns = patterns[:len(rois)]
+
+        tone_map = {str(k): float(v) for k, v in cfg.sequence_tone_map.items()}
+        special = ("silence", "vocalisation", "random")
+        unmapped = {ch for p in patterns if p not in special for ch in p
+                    if ch != "o" and ch not in tone_map}
+        if unmapped:
+            raise ValueError(
+                f"sequence_tone_map has no frequency for {sorted(unmapped)}. "
+                f"Add an entry per tone letter used in sequence_patterns "
+                f"(use 'o' for a silent slot).")
+
+        sequence_of_frequencies: List[Any] = []
+        for item in patterns:
+            if item == "vocalisation":
+                sequence_of_frequencies.append("vocalisation")
+            elif item == "silence":
+                sequence_of_frequencies.append([0] * 200)
+            elif item == "random":
+                keys = list(tone_map) or ["A"]
+                sequence_of_frequencies.append(
+                    [tone_map.get(random.choice(keys), 0) for _ in range(200)])
+            else:
+                full = (item * cfg.sequence_repetitions)[:200]
+                sequence_of_frequencies.append([tone_map.get(ch, 0) for ch in full])
+
+        return ExperimentFactory._create_sequence_trials_logic(
+            rois, sequence_of_frequencies, patterns, audio,
+            cfg.path_to_vocalisation_control)
+
+    @staticmethod
     def _make_vocalisation(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
         """All-vocalisation experiment: each ROI plays a different vocalisation file."""
         path_to_vocalisations_folder = cfg.path_to_vocalisation_folder
-        silent_arm = True
+        silent_arm = cfg.vocalisation_include_silent_arm
 
         if not os.path.isdir(path_to_vocalisations_folder):
             raise FileNotFoundError(f"Vocalisation folder not found: {path_to_vocalisations_folder}")
@@ -527,14 +563,16 @@ class ExperimentFactory:
                     wave_arrays.append(silence)
             else:
                 # Active block: unique permutation of stimulus indices
+                attempts = 0
                 while True:
+                    attempts += 1
                     if block == 1:
                         perm = tuple(range(n))  # identity on first active block
                     else:
                         idxs = list(range(n))
                         random.shuffle(idxs)
                         perm = tuple(idxs)
-                    if perm not in previous_perms:
+                    if perm not in previous_perms or attempts >= _MAX_SHUFFLE_ATTEMPTS:
                         previous_perms.add(perm)
                         break
                 for j, stim_idx in enumerate(perm):
@@ -654,7 +692,9 @@ class ExperimentFactory:
                     label_col.append("silent")
                     wave_arrays.append(silence)
                 continue
+            attempts = 0
             while True:
+                attempts += 1
                 if block == 1:
                     perm = tuple(range(n))
                 else:
@@ -662,7 +702,7 @@ class ExperimentFactory:
                     random.shuffle(idxs)
                     perm = tuple(idxs)
                 # With 1 ROI every permutation is identical; don't loop forever.
-                if perm not in previous_perms or n < 2:
+                if perm not in previous_perms or attempts >= _MAX_SHUFFLE_ATTEMPTS:
                     previous_perms.add(perm)
                     break
             for stim_idx in perm:
@@ -718,7 +758,9 @@ class ExperimentFactory:
                     frequency_final.append(0)
                     wave_arrays.append(np.zeros(int(audio.fs * audio.default_duration)))
             else:
+                attempts = 0
                 while True:
+                    attempts += 1
                     if i == 1:
                         trial_tuple = tuple(frequencies)
                     else:
@@ -726,7 +768,7 @@ class ExperimentFactory:
                         random.shuffle(trial_list)
                         trial_tuple = tuple(trial_list)
 
-                    if trial_tuple not in previous_trials:
+                    if trial_tuple not in previous_trials or attempts >= _MAX_SHUFFLE_ATTEMPTS:
                         previous_trials.add(trial_tuple)
                         for j in range(len(rois)):
                             repetition_numbers.append(i + 1)
@@ -789,7 +831,9 @@ class ExperimentFactory:
                     intervals_names_final.append(0)
                     wave_arrays.append(np.zeros(int(audio.fs * audio.default_duration)))
             else:
+                attempts = 0
                 while True:
+                    attempts += 1
                     if i == 1:
                         trial_list = list(zip(frequency, intervals, intervals_names, dual_array_sounds))
                     else:
@@ -798,7 +842,7 @@ class ExperimentFactory:
 
                     trial_tuple_as_tuple = tuple(item[2] for item in trial_list)
 
-                    if trial_tuple_as_tuple not in previous_trials:
+                    if trial_tuple_as_tuple not in previous_trials or attempts >= _MAX_SHUFFLE_ATTEMPTS:
                         previous_trials.add(trial_tuple_as_tuple)
                         for j in range(len(rois)):
                             repetition_numbers.append(i + 1)
@@ -850,7 +894,9 @@ class ExperimentFactory:
                     sound_type_final.append("silent_trial")
                     wave_arrays.append(np.zeros(int(audio.fs * audio.default_duration)))
             else:
+                attempts = 0
                 while True:
+                    attempts += 1
                     if i == 1:
                         trial_triples = []
                         for idx in range(len(rois)):
@@ -869,7 +915,7 @@ class ExperimentFactory:
                         trial_tuple_as_tuple = tuple(trial_triples)
                         trial_list = combined
 
-                    if trial_tuple_as_tuple not in previous_trials:
+                    if trial_tuple_as_tuple not in previous_trials or attempts >= _MAX_SHUFFLE_ATTEMPTS:
                         previous_trials.add(trial_tuple_as_tuple)
 
                         if i == 1:
@@ -932,7 +978,9 @@ class ExperimentFactory:
                     sound_type_final.append("silent_trial")
                     wave_arrays.append((0, 0))
             else:
+                attempts = 0
                 while True:
+                    attempts += 1
                     if i == 1:
                         trial_triples = []
                         for idx in range(len(rois)):
@@ -952,7 +1000,7 @@ class ExperimentFactory:
                         trial_tuple_as_tuple = tuple(trial_triples)
                         trial_list = combined
 
-                    if trial_tuple_as_tuple not in previous_trials:
+                    if trial_tuple_as_tuple not in previous_trials or attempts >= _MAX_SHUFFLE_ATTEMPTS:
                         previous_trials.add(trial_tuple_as_tuple)
 
                         if i == 1:
@@ -1012,7 +1060,9 @@ class ExperimentFactory:
                     patterns_final.append(0)
                     wave_arrays.append(np.zeros(int(audio.fs * audio.default_duration)))
             else:
+                attempts = 0
                 while True:
+                    attempts += 1
                     if i == 1:
                         trial_list = list(zip(frequency, patterns))
                     else:
@@ -1025,7 +1075,7 @@ class ExperimentFactory:
                         for freq, pat in trial_list
                     )
 
-                    if trial_tuple_as_tuple not in previous_trials:
+                    if trial_tuple_as_tuple not in previous_trials or attempts >= _MAX_SHUFFLE_ATTEMPTS:
                         previous_trials.add(trial_tuple_as_tuple)
                         for j in range(len(rois)):
                             repetition_numbers.append(i + 1)
@@ -1191,6 +1241,7 @@ class ExperimentFactory:
         complex_rough_freqs,
         constant_rough_modulation=50,
         complex_rough_mod=None,
+        depth: float = 0.5,
         audio: Optional[Audio] = None,
         path_to_voc: Optional[str] = None,
     ):
@@ -1229,13 +1280,15 @@ class ExperimentFactory:
             frequencies.append(f)
             temporal_modulation.append(constant_rough_modulation)
             sound_type.append("rough")
-            sound_arrays.append(audio.generate_simple_tem_sound_data(f, modulated_frequency=constant_rough_modulation))
+            sound_arrays.append(audio.generate_simple_tem_sound_data(
+                f, modulated_frequency=constant_rough_modulation, depth=depth))
 
         for f in complex_rough_freqs:
             frequencies.append(f)
             temporal_modulation.append(complex_rough_mod)
             sound_type.append("rough_complex")
-            sound_arrays.append(audio.generate_complex_tem_sound_data(f, modulated_frequencies_list=complex_rough_mod))
+            sound_arrays.append(audio.generate_complex_tem_sound_data(
+                f, modulated_frequencies_list=complex_rough_mod, depth=depth))
 
         return frequencies, temporal_modulation, sound_type, sound_arrays
 

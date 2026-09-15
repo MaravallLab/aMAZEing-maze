@@ -5,7 +5,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QGroupBox,
                                QLineEdit, QPushButton, QSpinBox, QVBoxLayout, QWidget, QLabel)
 
-from amazeing.app.config_form import PathPicker
+from amazeing.app.widgets import PathPicker
 from amazeing.app.launcher import command_for
 from amazeing.app.process_panel import ProcessPanel
 

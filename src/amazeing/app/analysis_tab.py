@@ -10,7 +10,7 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QMessageBox,
                                QPushButton, QSplitter, QVBoxLayout, QWidget)
 
-from amazeing.app.config_form import PathPicker
+from amazeing.app.widgets import PathPicker
 from amazeing.app.launcher import command_for
 from amazeing.app.process_panel import ProcessPanel
 
