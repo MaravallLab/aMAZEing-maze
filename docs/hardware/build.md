@@ -9,7 +9,7 @@ How to go from parts to a working maze. The design is deliberately reconfigurabl
 ```mermaid
 flowchart TB
     subgraph rig["The rig"]
-        cam[Infrared camera<br/>above the maze]
+        cam[Infrared camera<br/>below the floor plate]
         ill[Infrared illuminator]
         spk[Ultrasonic speaker]
         maze[Maze floor plate<br/>with movable walls]
@@ -27,7 +27,7 @@ flowchart TB
     ill --> maze
 ```
 
-The camera looks **down** at the maze in the auditory configuration and **up** from below in the tactile configuration, where the floor is infrared-transmitting so the animal is a silhouette against a bright background.
+The camera sits **below the floor plate, looking up**, and the illuminator above. The floor is infrared-transmitting, so the animal blocks the light and appears as a dark silhouette against a bright floor. This is the same in both configurations.
 
 ## Parts
 
@@ -76,7 +76,9 @@ Configure a simple layout first and run an animal before building something elab
 
 ### 3. Camera
 
-Mount the camera centrally above the maze, high enough to see the whole floor plus both entrance zones. The camera housing in `hardware/3dmodels/camera_holder/` is designed for this.
+Mount the camera centrally **below the floor plate, looking up through it**, far enough back to see the whole floor plus both entrance zones. The camera housing in `hardware/3dmodels/camera_holder/` is designed for this.
+
+The plate transmits infrared, so with the illuminator above, the floor reads bright and the animal reads dark. That silhouette is what detection works from, in both the auditory and the tactile configuration.
 
 Two things to get right:
 
@@ -85,7 +87,7 @@ Two things to get right:
 
 ### 4. Lighting
 
-Place the illuminator so the floor is evenly lit. Detection compares each arm against its own empty brightness, so uneven lighting is tolerable but drifting lighting is not. Avoid daylight reaching the maze.
+Place the illuminator **above** the maze so the floor is evenly lit from the side the camera is not on. Detection compares each arm against its own empty brightness, so uneven lighting is tolerable but drifting lighting is not. Avoid daylight reaching the maze.
 
 ### 5. Speaker
 
@@ -140,12 +142,6 @@ a reward that was not given. Run `firmware/arduino/testIR/testIR.ino`, watch the
 four readings, and drop pellets through by hand until each one registers
 reliably.
 
-### Camera, from below
-
-The tactile maze is filmed **through the floor**, which is infrared
-transmitting, so the animal appears as a silhouette against a bright background.
-Mount the camera below the plate, looking up, and the illuminator above.
-
 ### Electronics
 
 Arduino, connected by serial to the computer, driving the PCA9685 over I2C,
@@ -181,7 +177,7 @@ Before any real data. See [speaker calibration](../guide/speaker-calibration.md)
 ## A checklist before the first animal
 
 - [ ] Floor level
-- [ ] Camera sees the whole maze and both entrance zones, and is fixed
+- [ ] Camera below the plate sees the whole maze and both entrance zones, and is fixed
 - [ ] Binary view shows a clean silhouette
 - [ ] Arm boxes drawn and saved
 - [ ] Entries and exits logged correctly for a hand-moved object
@@ -196,4 +192,3 @@ Before any real data. See [speaker calibration](../guide/speaker-calibration.md)
 - [ ] All four infrared beams register a hand-dropped pellet reliably
 - [ ] Each reward port delivers exactly one pellet and then stops
 - [ ] `reward_sequences.csv` describes the training stages you intend
-- [ ] The camera below the plate sees the whole maze

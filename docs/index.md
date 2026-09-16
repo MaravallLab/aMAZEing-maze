@@ -48,7 +48,7 @@ Sound triggered by arm entry. Nothing is rewarded and nothing is required: the a
 
 ```mermaid
 flowchart LR
-    A[Camera above the maze] --> B[Arm occupancy<br/>infrared silhouette]
+    A[Camera below the floor plate] --> B[Arm occupancy<br/>infrared silhouette]
     B --> C{Animal entered<br/>an arm?}
     C -- yes --> D[Play that arm's stimulus]
     C -- no --> B
