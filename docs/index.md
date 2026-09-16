@@ -42,7 +42,7 @@ It runs as two paradigms, equally developed, sharing the hardware, the tracking 
 
 </div>
 
-## The auditory maze
+## The auditory maze { .amz-auditory }
 
 Sound triggered by arm entry. Nothing is rewarded and nothing is required: the animal explores, and **where it chooses to spend its time is the measurement**.
 
@@ -55,13 +55,17 @@ flowchart LR
     D --> E[Log the visit<br/>arm, stimulus, duration]
     E --> B
     E --> F[Figures at the end<br/>of the session]
+
+    style D fill:#1565C0,color:#fff
+    style E fill:#42A5F5,color:#fff
+    style F fill:#2E7D32,color:#fff
 ```
 
 The stimuli can be pure tones, musical intervals, amplitude modulation, tone sequences, artificial grammars or recorded vocalisations. A session runs a nine-block cycle of alternating silent and active periods, and the stimulus-to-arm mapping is reshuffled at the start of each active block. That reshuffle separates a preference for a **sound** from a preference for a **place**.
 
 [Experiment modes](guide/experiment-modes.md) covers the paradigms and their parameters.
 
-## The tactile maze
+## The tactile maze { .amz-tactile }
 
 A two-level binary decision tree with a right answer. The cue is texture, read by the whiskers, and the reward is a food pellet delivered automatically.
 
@@ -79,9 +83,11 @@ flowchart TB
     IR -->|no| P
     IR -->|yes| Done[Exactly one pellet delivered]
 
-    style J1 fill:#1565C0,color:#fff
-    style J2 fill:#1565C0,color:#fff
+    style J1 fill:#E65100,color:#fff
+    style J2 fill:#E65100,color:#fff
     style R fill:#2E7D32,color:#fff
+    style W fill:#9E9E9E,color:#fff
+    style Done fill:#2E7D32,color:#fff
 ```
 
 The reward port is closed-loop: a servo rocks the dispenser while an infrared beam watches the chute, and stops the moment a pellet is detected falling through. A trial recorded as rewarded really was rewarded, rather than the mechanism turning by a fixed amount and hoping.

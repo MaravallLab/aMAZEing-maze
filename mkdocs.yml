@@ -28,24 +28,28 @@ theme:
     - search.highlight
     - search.suggest
   palette:
-    # The accent follows the enriched-environment blue used in the figures,
-    # so the documentation, the application and the results agree on colour.
+    # Colours come from stylesheets/extra.css, which takes them from the
+    # figure palette so the site, the application and the results agree.
+    # Primary is the auditory blue, accent the tactile orange.
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
   icon:
     repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/extra.css
 
 markdown_extensions:
   - abbr
