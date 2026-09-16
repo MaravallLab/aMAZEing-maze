@@ -14,3 +14,23 @@ Set `experiment_mode` in `config.py` to one of:
 | `sequences` | Tone-pattern sequences (ABAB, AoAo, etc.) |
 | `vocalisation` | Each ROI plays a different vocalisation recording |
 | `custom` | Your own stimulus per ROI (tone, AM tone, .wav file or silent), declared in the session config file - see below |
+
+
+## The stimuli must fill the arms
+
+Some modes build a fixed set of stimuli, and that set has to match the number of arms exactly. The **Stimuli** line under Experiment states the arithmetic as you edit, for example:
+
+```
+8 stimuli for 8 arms: 2 control, 2 smooth, 2 constant AM, 2 complex AM
+```
+
+If the two disagree the line turns orange and says the session will not start. Starting one anyway is refused with a message naming both numbers, rather than building a trial table that does not match the maze.
+
+| Mode | Arms it fills |
+|---|---|
+| Musical intervals | one per interval, plus a unison arm and a silent arm |
+| Temporal envelope modulation | controls, plus one per smooth, constant-AM and complex-AM carrier |
+| Consonant vs dissonant | controls, the optional unison arms, plus one per consonant and dissonant interval |
+| Grammar, test day | always 8: six grammar arms, a vocalisation arm and a silent arm |
+| Pure tones | any number; a short frequency list is recycled |
+| Sequences, vocalisations, custom | any number; unlisted arms are silent |

@@ -6,7 +6,7 @@ Override them here or pass them when constructing the config.
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # Default base directory: ~/Desktop/auditory_maze_experiments/maze_recordings
 _DEFAULT_BASE = os.path.join(os.path.expanduser("~"), "Desktop", "auditory_maze_experiments", "maze_recordings")
@@ -247,6 +247,62 @@ class ExperimentConfig:
         if self.complex_include_rough is not None:
             preset["rough"] = bool(self.complex_include_rough)
         return preset
+
+    def stimulus_arm_plan(self) -> Optional[Tuple[int, str]]:
+        """How many arms this mode's stimuli fill, and how that number is made up.
+
+        Returns ``None`` for modes that adapt to whatever arm count you set
+        (pure tones recycle the frequency list, custom mode leaves unlisted
+        arms silent, and so on). For the modes that build a fixed set, the
+        count must equal ``rois_number`` or the trial table comes out
+        malformed, which is what :meth:`check_stimulus_count` prevents.
+        """
+        if self.experiment_mode == "simple_intervals":
+            n = len(self.simple_intervals_list)
+            return n + 2, (f"{n} intervals, plus a unison arm and a silent arm")
+
+        if self.experiment_mode == "temporal_envelope_modulation":
+            parts = [
+                (len(self.tem_controls), "control"),
+                (len(self.tem_smooth_freqs), "smooth"),
+                (len(self.tem_constant_rough_freqs), "constant AM"),
+                (len(self.tem_complex_rough_freqs), "complex AM"),
+            ]
+            total = sum(n for n, _ in parts)
+            return total, ", ".join(f"{n} {name}" for n, name in parts if n)
+
+        if self.experiment_mode == "complex_intervals":
+            day = self.resolve_complex_interval_day()
+            parts = [
+                (len(day["controls"]), "control"),
+                (1 if day["smooth"] else 0, "smooth unison"),
+                (1 if day["rough"] else 0, "rough unison"),
+                (len(day["consonant"]), "consonant"),
+                (len(day["dissonant"]), "dissonant"),
+            ]
+            total = sum(n for n, _ in parts)
+            return total, ", ".join(f"{n} {name}" for n, name in parts if n)
+
+        if self.experiment_mode == "grammar" and self.grammar_mode == "test":
+            return 8, "6 grammar arms, a vocalisation arm and a silent arm"
+
+        return None
+
+    def check_stimulus_count(self) -> None:
+        """Raise if this mode's stimuli do not fill exactly ``rois_number`` arms.
+
+        Before this existed the mismatch only printed a warning and the session
+        carried on with a trial table that did not match the maze.
+        """
+        plan = self.stimulus_arm_plan()
+        if plan is None:
+            return
+        total, breakdown = plan
+        if total != self.rois_number:
+            raise ValueError(
+                f"{self.experiment_mode} defines {total} stimuli ({breakdown}) "
+                f"but the maze has {self.rois_number} arms. Adjust the stimuli "
+                f"or the number of arms so the two agree.")
 
     def get_trial_lengths(self) -> List[float]:
 

@@ -118,6 +118,10 @@ class ExperimentFactory:
 
         experiment_type = cfg.experiment_mode
 
+        # Fail here rather than building a trial table that does not match
+        # the maze. Modes that adapt to any arm count are not affected.
+        cfg.check_stimulus_count()
+
         print(f"generating trials for {experiment_type}")
 
         if experiment_type == "simple_smooth":
@@ -1234,7 +1238,10 @@ class ExperimentFactory:
             interval_numerical_list.append(["0"])
             interval_string_names.append("no_interval")
         else:
-            print("please check that the number of intervals is rois_number - 2")
+            raise ValueError(
+                f"{len(intervals_list)} intervals given but {usable_rois} are needed "
+                f"for {rois_number} arms (one arm is the unison reference and one "
+                f"is the silent control).")
 
         return frequencies, interval_numerical_list, interval_string_names
 
@@ -1263,7 +1270,10 @@ class ExperimentFactory:
         sound_arrays = []
 
         if len(freqs) != rois_number:
-            print("Bestie, double check the number of stimuli and make sure they match the number of rois")
+            raise ValueError(
+                f"{len(freqs)} stimuli defined but the maze has {rois_number} arms. "
+                f"Adjust the control, smooth, constant-AM and complex-AM lists so "
+                f"they add up to the number of arms.")
 
         for item in controls:
             if item == "silent":

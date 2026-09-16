@@ -336,3 +336,16 @@ class TestPaletteAndHelp:
                     "consonant", "dissonant", "silent", "vocalisation",
                     "dominant EE", "rare SC", "pattern", "interval", "nonsense"):
             assert colour_for(cat).startswith("#")
+
+    def test_form_reports_the_stimulus_count(self, qapp):
+        from amazeing.app.config_form import ConfigForm
+        form = ConfigForm()
+        form.set_mode("temporal_envelope_modulation")
+        form.w["rois_number"].setValue(8)
+        assert "8 stimuli for 8 arms" in form.stimulus_label.text()
+        form.w["rois_number"].setValue(4)
+        assert "will not start" in form.stimulus_label.text()
+        with pytest.raises(ValueError, match="arms"):
+            form.check_ready()
+        form.w["rois_number"].setValue(8)
+        form.check_ready()

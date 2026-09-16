@@ -178,3 +178,67 @@ class TestShuffleTerminates:
         experiment_config.smooth_frequencies = []
         with pytest.raises(ValueError, match="at least one frequency"):
             ExperimentFactory.generate_trials(experiment_config, mock_audio)
+
+
+class TestStimulusCountMatchesArmCount:
+    """A mismatch used to print a warning and build a malformed trial table."""
+
+    def test_intervals_mismatch_is_refused(self, mock_audio, experiment_config):
+        from amazeing.auditory.experiments import ExperimentFactory
+        experiment_config.experiment_mode = "simple_intervals"
+        experiment_config.rois_number = 4            # needs 2 intervals, has 6
+        with pytest.raises(ValueError, match="8 stimuli.*4 arms"):
+            ExperimentFactory.generate_trials(experiment_config, mock_audio)
+
+    def test_tem_mismatch_is_refused(self, mock_audio, experiment_config):
+        from amazeing.auditory.experiments import ExperimentFactory
+        experiment_config.experiment_mode = "temporal_envelope_modulation"
+        experiment_config.rois_number = 4            # the default set fills 8
+        with pytest.raises(ValueError, match="8 stimuli.*4 arms"):
+            ExperimentFactory.generate_trials(experiment_config, mock_audio)
+
+    def test_complex_intervals_mismatch_is_refused(self, mock_audio, experiment_config):
+        from amazeing.auditory.experiments import ExperimentFactory
+        experiment_config.experiment_mode = "complex_intervals"
+        experiment_config.complex_interval_day = "w1day2"
+        experiment_config.rois_number = 5
+        with pytest.raises(ValueError, match="arms"):
+            ExperimentFactory.generate_trials(experiment_config, mock_audio)
+
+    @pytest.mark.parametrize("mode,arms", [
+        ("simple_intervals", 8),
+        ("temporal_envelope_modulation", 8),
+        ("complex_intervals", 8),
+    ])
+    def test_the_published_configurations_pass(self, mock_audio, experiment_config, mode, arms):
+        from amazeing.auditory.experiments import ExperimentFactory
+        experiment_config.experiment_mode = mode
+        experiment_config.rois_number = arms
+        df, _ = ExperimentFactory.generate_trials(experiment_config, mock_audio)
+        assert len(df) == 9 * arms
+
+    def test_the_plan_explains_the_breakdown(self):
+        from amazeing.auditory.config import ExperimentConfig
+        total, breakdown = ExperimentConfig(
+            experiment_mode="temporal_envelope_modulation").stimulus_arm_plan()
+        assert total == 8
+        assert "control" in breakdown and "complex AM" in breakdown
+
+        total, breakdown = ExperimentConfig(
+            experiment_mode="simple_intervals").stimulus_arm_plan()
+        assert total == 8
+        assert "unison" in breakdown and "silent" in breakdown
+
+    def test_adaptive_modes_have_no_fixed_count(self):
+        from amazeing.auditory.config import ExperimentConfig
+        for mode in ("simple_smooth", "sequences", "vocalisation", "custom"):
+            assert ExperimentConfig(experiment_mode=mode).stimulus_arm_plan() is None
+            ExperimentConfig(experiment_mode=mode).check_stimulus_count()   # no raise
+
+    def test_grammar_test_day_needs_eight_arms(self):
+        from amazeing.auditory.config import ExperimentConfig
+        cfg = ExperimentConfig(experiment_mode="grammar", grammar_mode="test", rois_number=6)
+        with pytest.raises(ValueError, match="8 stimuli.*6 arms"):
+            cfg.check_stimulus_count()
+        ExperimentConfig(experiment_mode="grammar", grammar_mode="test",
+                         rois_number=8).check_stimulus_count()

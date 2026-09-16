@@ -187,6 +187,9 @@ class ConfigForm(QWidget):
         self.schedule_label = QLabel()
         self.schedule_label.setWordWrap(True)
         f.addRow("Block schedule", self.schedule_label)
+        self.stimulus_label = QLabel()
+        self.stimulus_label.setWordWrap(True)
+        f.addRow("Stimuli", self.stimulus_label)
 
     def _build_devices(self):
         f = self._group("devices", "Devices")
@@ -417,7 +420,34 @@ class ConfigForm(QWidget):
 
     def _on_change(self, *_):
         self._update_schedule_label()
+        self._update_stimulus_label()
         self.changed.emit()
+
+    def _update_stimulus_label(self):
+        """State how the mode's stimuli fill the arms, and flag a mismatch."""
+        if not hasattr(self, "stimulus_label"):
+            return
+        try:
+            cfg = self.to_config()
+        except Exception:
+            # to_config already reports the problem through the caller.
+            self.stimulus_label.setText("")
+            return
+        plan = cfg.stimulus_arm_plan()
+        if plan is None:
+            self.stimulus_label.setText(
+                f"this mode fills all {cfg.rois_number} arms")
+            self.stimulus_label.setStyleSheet("")
+            return
+        total, breakdown = plan
+        if total == cfg.rois_number:
+            self.stimulus_label.setText(f"{total} stimuli for {cfg.rois_number} arms: {breakdown}")
+            self.stimulus_label.setStyleSheet("")
+        else:
+            self.stimulus_label.setText(
+                f"{total} stimuli ({breakdown}) but {cfg.rois_number} arms. "
+                f"The session will not start until these agree.")
+            self.stimulus_label.setStyleSheet("color: #EF6C00; font-weight: bold;")
 
     def _update_schedule_label(self):
         try:
@@ -664,6 +694,10 @@ class ConfigForm(QWidget):
         cfg.get_trial_lengths()      # fail here rather than at session start
         return cfg
 
+    def check_ready(self) -> None:
+        """Raise ValueError if the current form could not run a session."""
+        self.to_config().check_stimulus_count()
+
     def from_config(self, cfg: ExperimentConfig) -> None:
         w = self.w
         idx = w["experiment_mode"].findData(cfg.experiment_mode)
@@ -740,6 +774,7 @@ class ConfigForm(QWidget):
             "" if cfg.block_minutes is None else format_numbers(cfg.block_minutes))
         if hasattr(self, "schedule_label"):
             self._update_schedule_label()
+            self._update_stimulus_label()
 
 
 # ------------------------------------------------------------------ parsing

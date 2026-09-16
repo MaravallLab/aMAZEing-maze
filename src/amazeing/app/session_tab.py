@@ -119,6 +119,7 @@ class SessionTab(QWidget):
     def _write_working_config(self, tag: str) -> str:
         """Validate the form and write it to <recordings>/session_configs/."""
         cfg = self.form.to_config()
+        cfg.check_stimulus_count()
         folder = os.path.join(cfg.base_output_path, "session_configs")
         stamp = time.strftime("%Y-%m-%d_%H_%M_%S")
         path = os.path.join(folder, f"{stamp}_{tag}.yaml")
