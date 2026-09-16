@@ -125,7 +125,7 @@ The code used for the original behavioural experiments is tagged [`v1.0-thesis`]
 
 ## Contributors
 
-Miguel Maravall, Oluwaseyi Jesusanmi, Andre Maia Chagas, Yuri Elias Rodrigues, Maja Nowak, Marcus Burnell-Spector, Shahd Al Balushi, Isabel Maranhao, Alejandra Carriero, Moira Eley.
+Alejandra Carriero, Shahd Al Balushi, Andre Maia Chagas, Miguel Maravall, Oluwaseyi Jesusanmi, Yuri Elias Rodrigues, Maja Nowak, Marcus Burnell-Spector, Isabel Maranhao, Moira Eley.
 
 ## License
 
