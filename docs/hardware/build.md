@@ -9,10 +9,11 @@ How to go from parts to a working maze. The design is deliberately reconfigurabl
 ```mermaid
 flowchart TB
     subgraph rig["The rig"]
-        cam[Infrared camera<br/>below the floor plate]
-        ill[Infrared illuminator]
+        top[White maze top<br/>reflects the infrared back]
+        maze[Maze floor plate<br/>infrared transmitting<br/>with movable walls]
+        cam[Infrared camera<br/>below the plate, looking up]
+        ill[Infrared illuminator<br/>below the plate]
         spk[Ultrasonic speaker]
-        maze[Maze floor plate<br/>with movable walls]
         frame[Frame and legs]
     end
     pc[Computer]
@@ -24,10 +25,15 @@ flowchart TB
     pc -->|serial| ard
     ard -->|TTL| rec
     maze --- frame
-    ill --> maze
+    ill -->|up through the floor| top
+    top -->|reflected back down| cam
 ```
 
-The camera sits **below the floor plate, looking up**, and the illuminator above. The floor is infrared-transmitting, so the animal blocks the light and appears as a dark silhouette against a bright floor. This is the same in both configurations.
+**The room is dark and everything optical happens underneath.** The camera and the infrared illuminator both sit below the floor plate, looking up. The plate transmits infrared, so light from the illuminator passes up through it, reflects off the **white top of the maze**, and returns down to the camera.
+
+The camera therefore sees a bright field: the lit white top, seen through the floor. An animal in the maze sits between the two and blocks that returning light, so it appears black. **That dark silhouette against the bright top is the whole of the detection.** It is the same in both configurations.
+
+This is why the binary threshold and the detection sensitivity work the way they do: an empty arm is bright, and an occupied one drops.
 
 ## Parts
 
@@ -36,6 +42,7 @@ The camera sits **below the floor plate, looking up**, and the illuminator above
 | Part | Specification | Notes |
 |---|---|---|
 | Floor plate | 700 x 700 x 10 mm, black, infrared transmitting | Drilled with a regular grid of M3 holes so wall posts can go anywhere |
+| Maze top | White, covering the arena | Reflects the infrared back down to the camera. This is the bright field the animal is seen against, so it is not optional |
 | Wall panels | 50 x 50 x 3 mm acrylic, black | About 50 with spares |
 | Posts | MakerBeam XL, 15 x 15 mm, 50 mm long, black anodised | Panels slide into the T-slots |
 | Bolts | M3 x 16 mm with nuts, one per post | Nuts go under the floor plate |
@@ -78,7 +85,7 @@ Configure a simple layout first and run an animal before building something elab
 
 Mount the camera centrally **below the floor plate, looking up through it**, far enough back to see the whole floor plus both entrance zones. The camera housing in `hardware/3dmodels/camera_holder/` is designed for this.
 
-The plate transmits infrared, so with the illuminator above, the floor reads bright and the animal reads dark. That silhouette is what detection works from, in both the auditory and the tactile configuration.
+Everything the camera sees arrives through the plate, so keep its underside clean. A smear or a scuff is a permanent dark patch in the picture, and if it falls inside an arm box it shifts that arm's baseline.
 
 Two things to get right:
 
@@ -87,7 +94,9 @@ Two things to get right:
 
 ### 4. Lighting
 
-Place the illuminator **above** the maze so the floor is evenly lit from the side the camera is not on. Detection compares each arm against its own empty brightness, so uneven lighting is tolerable but drifting lighting is not. Avoid daylight reaching the maze.
+Place the illuminator **below the plate, beside the camera**, and fit the white top. Then turn the room lights off: sessions run in darkness, with the infrared the only illumination.
+
+Look at the picture and check the white top reads evenly bright across every arm. Detection compares each arm against its own empty brightness, so uneven lighting is tolerable but drifting lighting is not. Stray visible light reaching the camera is what causes drift, which is why the room is dark rather than merely dim.
 
 ### 5. Speaker
 
@@ -177,7 +186,8 @@ Before any real data. See [speaker calibration](../guide/speaker-calibration.md)
 ## A checklist before the first animal
 
 - [ ] Floor level
-- [ ] Camera below the plate sees the whole maze and both entrance zones, and is fixed
+- [ ] Camera and illuminator below the plate, white top fitted, room dark
+- [ ] Camera sees the whole maze and both entrance zones, and is fixed
 - [ ] Binary view shows a clean silhouette
 - [ ] Arm boxes drawn and saved
 - [ ] Entries and exits logged correctly for a hand-moved object

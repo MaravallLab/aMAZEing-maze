@@ -165,7 +165,7 @@ Settings that are still flags at the top of `simplerCode.py`:
 The regions of interest are `entrance1`, `entrance2` and `rewA` to `rewD`, drawn on first run and saved as `rois1.csv` next to the recordings.
 
 !!! note "Camera position differs from the auditory maze"
-    The maze is filmed **from below** through an infrared-transmitting floor, so the animal appears as a silhouette against a bright background. This is the same for the auditory paradigm.
+    The maze is filmed **from below**, through an infrared-transmitting floor, with the illuminator below as well and the room dark. The light reflects off the white top of the maze, so the animal appears black against a bright field. This is the same for the auditory paradigm.
 
 ## What a session saves
 

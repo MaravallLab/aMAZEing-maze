@@ -55,7 +55,7 @@ The `[analysis]` extra adds the plotting and statistics libraries the post-hoc p
 | Part | Requirement | Why |
 |---|---|---|
 | Camera | Any camera OpenCV can open, with infrared sensitivity | Arm occupancy is detected from an infrared silhouette |
-| Infrared illuminator | Even coverage of the maze floor | The detection compares each arm against an empty-maze baseline, so uneven light causes false entries |
+| Infrared illuminator | Mounted below the plate beside the camera, even coverage | Detection compares each arm against an empty-maze baseline, so uneven light causes false entries. Sessions run with the room dark |
 | Audio interface | Capable of 192 kHz output | Mouse-relevant sounds run well above human hearing; an ordinary sound card cannot produce them |
 | Speaker | Ultrasonic, with a known frequency response | Used for stimulus delivery and for the calibration curve |
 | Arduino | Uno or Nano, optional | Only needed to send TTL pulses for photometry synchronisation |
