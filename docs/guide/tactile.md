@@ -1,4 +1,4 @@
-# The tactile paradigm
+# :material-rodent: The tactile paradigm
 
 The tactile maze asks a different question from the auditory one. Instead of measuring where an animal chooses to spend time, it sets a task with a right answer and measures whether the animal learns it. The cue is texture, read by the whiskers, and the reward is a food pellet delivered automatically.
 

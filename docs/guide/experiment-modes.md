@@ -1,4 +1,4 @@
-# Experiment modes
+# :material-rodent: Experiment modes
 
 Each mode presents a different kind of stimulus set. Selecting one in the application shows a panel with that mode's parameters and hides the others. Every parameter below is also a field in the [session configuration](session-config.md), and the defaults reproduce the protocols used in the original experiments.
 

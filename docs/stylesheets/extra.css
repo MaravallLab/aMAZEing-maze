@@ -136,3 +136,68 @@
 .md-typeset code {
   border-radius: 3px;
 }
+
+/* -- room to see things -------------------------------------------------- */
+
+/* Material caps content at 61rem, about 976px. The interface screenshots are
+ * 1650px wide, so on a large monitor they were shown at roughly 60 per cent
+ * and their labels became unreadable. Widen the column on screens that have
+ * the room, while keeping lines of prose short enough to read comfortably. */
+@media screen and (min-width: 76.25em) {
+  .md-grid {
+    max-width: 78rem;
+  }
+}
+
+/* Wide figures use the full column. model.png is only 674px across, so it is
+ * left at its own size rather than being stretched into blur. */
+.md-typeset img:not([src*="model.png"]) {
+  height: auto;
+  width: 100%;
+}
+
+/* Diagrams are drawn in the browser, so they scale without losing anything. */
+.md-typeset .mermaid {
+  width: 100%;
+}
+
+.md-typeset .mermaid svg {
+  height: auto;
+  max-width: 100%;
+  width: 100%;
+}
+
+/* Every figure opens at its full resolution in a new tab, which is how you
+ * read a 1650px screenshot on any size of screen. */
+.md-typeset a.amz-zoom {
+  display: block;
+  line-height: 0;
+}
+
+.md-typeset a.amz-zoom img {
+  cursor: zoom-in;
+}
+
+/* -- the mice ------------------------------------------------------------ */
+
+/* Heading mice take the colour of the paradigm they introduce, so they read
+ * as part of the same signal as the rule underneath. */
+.md-typeset h1 .twemoji,
+.md-typeset h2 .twemoji {
+  height: 1.1em;
+  margin-right: 0.25em;
+  vertical-align: -0.15em;
+  width: 1.1em;
+}
+
+.md-typeset h2.amz-auditory .twemoji { color: var(--amz-auditory); }
+.md-typeset h2.amz-tactile .twemoji { color: var(--amz-tactile); }
+.md-typeset h1 .twemoji { color: var(--md-primary-fg-color); }
+
+/* The favicon is a white mouse on the auditory blue, so the header logo is
+ * given a little room rather than sitting flush against the title. */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 1.5rem;
+  width: 1.5rem;
+}

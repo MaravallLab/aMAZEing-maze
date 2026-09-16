@@ -27,8 +27,11 @@ def main(argv=None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT,
                     help=f"output folder (default: {DEFAULT_OUT})")
-    ap.add_argument("--width", type=int, default=1650)
-    ap.add_argument("--height", type=int, default=1020)
+    # Rendered larger than the site shows them, so the documentation displays a
+    # downscaled copy and the interface labels stay sharp on a high-resolution
+    # monitor. Below about 2000 wide the small print goes soft.
+    ap.add_argument("--width", type=int, default=2200)
+    ap.add_argument("--height", type=int, default=1360)
     ap.add_argument("--show", action="store_true",
                     help="use a real window instead of the offscreen renderer")
     args = ap.parse_args(argv)

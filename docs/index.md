@@ -8,7 +8,7 @@ It runs as two paradigms, equally developed, sharing the hardware, the tracking 
 
 <div class="grid cards" markdown>
 
--   :material-rocket-launch: **New here**
+-   :material-rodent: **New here**
 
     ---
 
@@ -42,7 +42,7 @@ It runs as two paradigms, equally developed, sharing the hardware, the tracking 
 
 </div>
 
-## The auditory maze { .amz-auditory }
+## :material-rodent: The auditory maze { .amz-auditory }
 
 Sound triggered by arm entry. Nothing is rewarded and nothing is required: the animal explores, and **where it chooses to spend its time is the measurement**.
 
@@ -65,7 +65,7 @@ The stimuli can be pure tones, musical intervals, amplitude modulation, tone seq
 
 [Experiment modes](guide/experiment-modes.md) covers the paradigms and their parameters.
 
-## The tactile maze { .amz-tactile }
+## :material-rodent: The tactile maze { .amz-tactile }
 
 A two-level binary decision tree with a right answer. The cue is texture, read by the whiskers, and the reward is a food pellet delivered automatically.
 

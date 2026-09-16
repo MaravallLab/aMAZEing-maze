@@ -15,6 +15,9 @@ site_dir: site
 theme:
   name: material
   language: en
+  # A mouse in the header and the browser tab. The maze exists for the animal,
+  # so it may as well be the thing you see first.
+  favicon: images/favicon.svg
   features:
     - navigation.instant
     - navigation.tracking
@@ -46,10 +49,14 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
   icon:
+    logo: material/rodent
     repo: fontawesome/brands/github
 
 extra_css:
   - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/zoom.js
 
 markdown_extensions:
   - abbr
