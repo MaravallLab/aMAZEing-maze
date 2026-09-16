@@ -42,7 +42,7 @@ This is why the binary threshold and the detection sensitivity work the way they
 | Part | Specification | Notes |
 |---|---|---|
 | Floor plate | 700 x 700 x 10 mm, black, infrared transmitting | Drilled with a regular grid of M3 holes so wall posts can go anywhere |
-| Maze top | White, covering the arena | Reflects the infrared back down to the camera. This is the bright field the animal is seen against, so it is not optional |
+| Maze top | 3D printed in white, one per configuration | Reflects the infrared back down to the camera. This is the bright field the animal is seen against, so it is not optional. Print in white filament: the brightness of the picture depends on it |
 | Wall panels | 50 x 50 x 3 mm acrylic, black | About 50 with spares |
 | Posts | MakerBeam XL, 15 x 15 mm, 50 mm long, black anodised | Panels slide into the T-slots |
 | Bolts | M3 x 16 mm with nuts, one per post | Nuts go under the floor plate |
@@ -66,6 +66,11 @@ Full measurements, including the dimensions taken from the Rosenberg maze this d
 ### Printed parts
 
 All in `hardware/3dmodels/` as FreeCAD sources and STLs: the camera housing, the electronics enclosure, the movable wall mechanism, the transfer tunnel and the reward chute.
+
+**The maze tops are printed too**, and there is one per maze configuration: a four-arm top for the tactile decision tree and an eight-arm top for the auditory maze. They go in `hardware/3dmodels/maze_tops/`.
+
+!!! warning "Not in the repository yet"
+    The maze top models have not been uploaded. Until they are, this page tells you that you need one without telling you how to make it, so anyone rebuilding the rig from scratch is stuck at this step. They are the reflective surface the whole detection depends on, so they matter as much as any part here.
 
 ## Assembly
 
