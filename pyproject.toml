@@ -13,7 +13,8 @@ authors = [
     { name = "Alejandra Carriero" },
     { name = "Maravall Lab, University of Sussex" },
 ]
-keywords = ["neuroscience", "behaviour", "maze", "rodent", "auditory", "opencv"]
+keywords = ["neuroscience", "behaviour", "maze", "rodent", "auditory", "tactile",
+            "whiskers", "opencv"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
