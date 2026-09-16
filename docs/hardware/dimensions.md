@@ -1,4 +1,8 @@
-***Converted/ extracted dimensions of Rosenberg Maze***
+# Dimensions
+
+Measurements of the maze, including the published design this one started from.
+
+## Converted/ extracted dimensions of Rosenberg Maze
 
 Whole maze dimensions Length: 609.6mm, Width: 609.6mm, Height (ie Floor to ceiling): 50.8mm
 
@@ -15,7 +19,7 @@ To the first junction (the first T) there are 7 panels. So the first corridor is
 
 Turning into the arms of the T there are 3 panels on each side, meaning an arm length of 121.89
 
-***Measurements for our project maze***
+## Measurements for our project maze
 
 Makerbeams: Height and width of 10mm. Variable length. They will be above and below the acrylic wall.
 
@@ -29,7 +33,7 @@ To form a T-maze only, these are the number of parts needed.
 Number of panels needed: 29  
 Number of (40mm) makerbeams needed: 58
 
-***Final part measurements used during construction***
+## Final part measurements used during construction
 
 *A few measurements to be reconfirmed with tool*
 

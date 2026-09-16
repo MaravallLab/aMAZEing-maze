@@ -1,0 +1,109 @@
+site_name: The aMAZEing maze
+site_description: >-
+  Open-source platform for studying how sensory cues shape active exploration
+  in rodents: maze hardware, experiment control, and analysis pipelines.
+site_url: https://maravalllab.github.io/aMAZEing-maze/
+repo_url: https://github.com/MaravallLab/aMAZEing-maze
+repo_name: MaravallLab/aMAZEing-maze
+edit_uri: edit/main/docs/
+copyright: >-
+  Maravall Lab, University of Sussex. Released under the GPL-3.0-or-later licence.
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - search.highlight
+    - search.suggest
+  palette:
+    # The accent follows the enriched-environment blue used in the figures,
+    # so the documentation, the application and the results agree on colour.
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  # Material icons in :colon: form, used by the cards on the home page.
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences:
+      custom_fences:
+        # Mermaid diagrams: text in git, rendered in the browser.
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Tutorial - run your first session: getting-started/first-session.md
+  - Running experiments:
+      - The application: guide/application.md
+      - Experiment modes: guide/experiment-modes.md
+      - Session configuration: guide/session-config.md
+      - Speaker calibration: guide/speaker-calibration.md
+      - What a session saves: guide/outputs.md
+      - Tactile paradigm: guide/tactile.md
+  - Analysis:
+      - Overview: analysis/index.md
+      - Tutorial - analyse a set of sessions: analysis/tutorial.md
+      - Auditory pipeline: analysis/auditory.md
+      - Tactile pipeline: analysis/tactile.md
+      - Pose estimation pipeline: analysis/pose.md
+      - Cropping and aligning videos: analysis/crop-align.md
+  - Hardware:
+      - Tutorial - build and set up the rig: hardware/build.md
+      - Dimensions: hardware/dimensions.md
+      - Materials: hardware/materials.md
+      - Firmware: hardware/firmware.md
+  - Development:
+      - Architecture: development/architecture.md
+      - Testing: development/testing.md
+      - Building the application: development/packaging.md

@@ -53,6 +53,10 @@ build = [
     "PySide6>=6.6",
     "pyinstaller>=6.0",
 ]
+# Building the documentation site.
+docs = [
+    "mkdocs-material>=9.5",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=3.0",
