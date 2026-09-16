@@ -130,3 +130,23 @@ def sample_grating_maps_csv(tmp_path):
     })
     df.to_csv(csv_path, index=False)
     return csv_path
+
+
+# -- fixtures: Qt ----------------------------------------------------
+@pytest.fixture(scope="session")
+def qapp():
+    """The one QApplication for the whole run, torn down cleanly.
+
+    Widgets left alive when the interpreter shuts down are destroyed after
+    the Qt application object itself, which aborts the process with
+    0xC0000409 on Windows. Every test then reports as passed and the exit
+    code says otherwise, so anything gating on that code, such as the build
+    script, refuses to go on. Deleting the top-level widgets here keeps the
+    order right.
+    """
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    yield app
+    for widget in list(app.topLevelWidgets()):
+        widget.deleteLater()
+    app.processEvents()
