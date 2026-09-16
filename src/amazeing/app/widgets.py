@@ -119,6 +119,46 @@ class CheckableList(QListWidget):
         self._order = names
 
 
+class CollapsibleHelp(QWidget):
+    """A 'What does this do?' toggle holding a paragraph of explanation.
+
+    Kept closed by default so the form stays compact, and remembers nothing:
+    the point is that the explanation is one click away when you need it, not
+    that it competes with the fields for attention.
+    """
+
+    def __init__(self, text: str, title: str = "What does this do?", parent=None):
+        super().__init__(parent)
+        from PySide6.QtWidgets import QLabel, QToolButton, QVBoxLayout
+
+        self.button = QToolButton()
+        self.button.setText(title)
+        self.button.setCheckable(True)
+        self.button.setChecked(False)
+        self.button.setArrowType(Qt.RightArrow)
+        self.button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.button.setAutoRaise(True)
+        self.button.toggled.connect(self._toggled)
+
+        self.body = QLabel(text)
+        self.body.setWordWrap(True)
+        self.body.setTextFormat(Qt.RichText)
+        self.body.setOpenExternalLinks(True)
+        self.body.setProperty("help", True)
+        self.body.setVisible(False)
+        self.body.setContentsMargins(18, 2, 4, 6)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+        lay.addWidget(self.button)
+        lay.addWidget(self.body)
+
+    def _toggled(self, on: bool) -> None:
+        self.button.setArrowType(Qt.DownArrow if on else Qt.RightArrow)
+        self.body.setVisible(on)
+
+
 def parse_float_list(text: str, label: str) -> List[float]:
     """Parse '10000, 20000' into [10000.0, 20000.0]; empty text gives []."""
     text = (text or "").strip().strip("[]")

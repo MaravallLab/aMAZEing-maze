@@ -283,3 +283,56 @@ class TestMainWindow:
                                sequence_tone_map={"A": 8000, "B": 9000})
         out = preview_stimuli(cfg, duration_s=0.02)
         assert len(out) == 2
+
+
+class TestPaletteAndHelp:
+
+    def test_every_section_has_an_explanation(self, qapp):
+        from amazeing.app.config_form import ConfigForm
+        from amazeing.app.help_text import SECTION_HELP
+        form = ConfigForm()
+        assert set(form.boxes) == set(SECTION_HELP), "a section is missing its help text"
+        assert set(form.help_widgets) == set(SECTION_HELP)
+
+    def test_help_starts_collapsed_and_toggles(self, qapp):
+        from amazeing.app.config_form import ConfigForm
+        form = ConfigForm()
+        form.show()
+        h = form.help_widgets["detection"]
+        assert not h.body.isVisible()
+        h.button.setChecked(True)
+        assert h.body.isVisible()
+        h.button.setChecked(False)
+        assert not h.body.isVisible()
+
+    def test_help_text_is_substantial(self):
+        from amazeing.app.help_text import SECTION_HELP
+        for key, text in SECTION_HELP.items():
+            assert len(text) > 200, f"{key} help is too thin to be worth a click"
+
+    def test_grammar_categories_match_the_analysis_palette(self):
+        from amazeing.app.palette import STIMULUS_COLORS
+        from amazeing.auditory.analysis import STIM_COLORS
+        for key, colour in STIM_COLORS.items():
+            assert STIMULUS_COLORS[key] == colour, f"{key} differs from the figures"
+
+    def test_category_assignment(self):
+        from amazeing.app.stimulus_preview import preview_stimuli
+        from amazeing.auditory.config import ExperimentConfig
+        cfg = ExperimentConfig(experiment_mode="temporal_envelope_modulation",
+                               rois_number=8)
+        cats = {p.category for p in preview_stimuli(cfg, duration_s=0.02)}
+        assert {"smooth", "rough", "rough_complex"} <= cats
+        cfg = ExperimentConfig(experiment_mode="custom", rois_number=2,
+                               custom_stimuli=[{"roi": "1", "kind": "tone",
+                                                "frequency": 9000}])
+        out = preview_stimuli(cfg, duration_s=0.02)
+        assert out[0].category == "tone"
+        assert out[1].category == "silent"
+
+    def test_every_category_has_a_colour(self):
+        from amazeing.app.palette import colour_for
+        for cat in ("tone", "am_tone", "wav", "smooth", "rough", "rough_complex",
+                    "consonant", "dissonant", "silent", "vocalisation",
+                    "dominant EE", "rare SC", "pattern", "interval", "nonsense"):
+            assert colour_for(cat).startswith("#")

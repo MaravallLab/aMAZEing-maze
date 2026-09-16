@@ -20,6 +20,7 @@ from amazeing.auditory.config import ExperimentConfig
 class StimulusPreview:
     arm: str                 # ROI name, e.g. "1"
     label: str               # human-readable stimulus description
+    category: str            # colour key, see amazeing.app.palette
     samplerate: int
     wave: np.ndarray         # mono float waveform
     is_silent: bool
@@ -49,6 +50,38 @@ def _label_for(row) -> str:
             return base or "silent"
         return f"{base} ({freq:.0f} Hz)" if base else f"{freq:.0f} Hz"
     return base or "stimulus"
+
+
+def _category_for(row) -> str:
+    """Classify a stimulus so it can be coloured consistently.
+
+    Grammar arms use the tier and environment keys the session figures use;
+    the other modes fall back to the sound_type / interval_type column the
+    trial factory already writes.
+    """
+    freq = row.get("frequency", None)
+    if freq == "grammar":
+        tier = str(row.get("tier", "")).strip()
+        env = str(row.get("environment_association", "")).strip()
+        if tier and env:
+            return f"{tier} {env}"
+        return "unknown"
+    if freq == "vocalisation" or (isinstance(freq, str) and freq.lower().endswith(".wav")):
+        return "vocalisation"
+    for col in ("sound_type", "interval_type"):
+        val = row.get(col, None)
+        if isinstance(val, str) and val:
+            if val in ("silent_trial", "silent"):
+                return "silent"
+            return val
+    if isinstance(row.get("pattern", None), str) and row.get("pattern") not in ("", "0"):
+        pat = row["pattern"]
+        return "silent" if pat == "silence" else ("vocalisation" if pat == "vocalisation" else "pattern")
+    if isinstance(row.get("interval_name", None), str) and row.get("interval_name") not in ("", "0"):
+        return "interval"
+    if isinstance(freq, (int, float)) and freq == 0:
+        return "silent"
+    return "tone"
 
 
 def _to_wave(clip, audio, arm: str) -> Optional[np.ndarray]:
@@ -110,9 +143,11 @@ def preview_stimuli(cfg: ExperimentConfig, duration_s: float = 0.3) -> List[Stim
         silent = wave is None or not np.any(wave)
         if wave is None:
             wave = np.zeros(int(c.samplerate * duration_s))
-        out.append(StimulusPreview(arm=arm, label=_label_for(row),
-                                   samplerate=c.samplerate, wave=np.asarray(wave, dtype=float),
-                                   is_silent=silent))
+        out.append(StimulusPreview(
+            arm=arm, label=_label_for(row),
+            category="silent" if silent else _category_for(row),
+            samplerate=c.samplerate, wave=np.asarray(wave, dtype=float),
+            is_silent=silent))
     return out
 
 

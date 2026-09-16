@@ -20,9 +20,10 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout
                                QPushButton, QScrollArea, QSpinBox, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
-from amazeing.app.widgets import (CheckableList, PathPicker, format_numbers,
-                                  parse_float_list, parse_str_list,
-                                  protect_from_scroll)
+from amazeing.app.help_text import SECTION_HELP
+from amazeing.app.widgets import (CheckableList, CollapsibleHelp, PathPicker,
+                                  format_numbers, parse_float_list,
+                                  parse_str_list, protect_from_scroll)
 from amazeing.auditory.config import (COMPLEX_INTERVAL_DAYS, INTERVAL_NAMES,
                                       ExperimentConfig)
 
@@ -92,6 +93,7 @@ class ConfigForm(QWidget):
         super().__init__(parent)
         self.w: Dict[str, Any] = {}
         self.boxes: Dict[str, QGroupBox] = {}
+        self.help_widgets: Dict[str, CollapsibleHelp] = {}
         self._rows: Dict[str, List[QWidget]] = {}
 
         outer = QVBoxLayout(self)
@@ -144,6 +146,11 @@ class ConfigForm(QWidget):
         box = QGroupBox(title)
         form = QFormLayout(box)
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        help_text = SECTION_HELP.get(key)
+        if help_text:
+            help_widget = CollapsibleHelp(help_text)
+            form.addRow(help_widget)
+            self.help_widgets[key] = help_widget
         self.inner_layout.addWidget(box)
         self.boxes[key] = box
         return form
