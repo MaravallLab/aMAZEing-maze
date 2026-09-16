@@ -341,6 +341,10 @@ class TestPaletteAndHelp:
         from amazeing.app.config_form import ConfigForm
         form = ConfigForm()
         form.set_mode("temporal_envelope_modulation")
+        # Drop the vocalisation arm so this test is only about the count;
+        # the file check has its own test below.
+        form.w["tem_control_voc"].setChecked(False)
+        form.w["tem_smooth_freqs"].setText("10000, 20000, 30000")
         form.w["rois_number"].setValue(8)
         assert "8 stimuli for 8 arms" in form.stimulus_label.text()
         form.w["rois_number"].setValue(4)
@@ -348,4 +352,21 @@ class TestPaletteAndHelp:
         with pytest.raises(ValueError, match="arms"):
             form.check_ready()
         form.w["rois_number"].setValue(8)
+        form.check_ready()
+
+    def test_form_reports_a_missing_recording(self, qapp, tmp_path):
+        """A missing .wav plays as silence, so the form must say so and block."""
+        from amazeing.app.config_form import ConfigForm
+        form = ConfigForm()
+        form.set_mode("temporal_envelope_modulation")
+        form.w["rois_number"].setValue(8)
+        form.w["path_to_vocalisation_control"].setText("")
+        assert "control vocalisation" in form.files_label.text()
+        with pytest.raises(ValueError, match="control vocalisation"):
+            form.check_ready()
+
+        wav = tmp_path / "call.wav"
+        wav.write_bytes(b"RIFF")
+        form.w["path_to_vocalisation_control"].setText(str(wav))
+        assert "were found" in form.files_label.text()
         form.check_ready()

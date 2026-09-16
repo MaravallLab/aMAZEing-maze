@@ -145,7 +145,13 @@ SECTION_HELP = {
     "voc_files": (
         "The folder supplies one arm per file in vocalisation mode. The control "
         "file is the single recording used on the vocalisation arm of the mixed "
-        "designs; leave it empty and that arm is silent, which the session will "
-        "warn about at startup rather than failing."
+        "designs.<br><br>"
+        "A missing file is not loud: the loader returns silence, so the session "
+        "would run with a silent arm where a recording was meant to be, and "
+        "nothing in the data would say so. The Sound files line under Experiment "
+        "therefore checks, and a session will not start until every recording "
+        "the mode needs has been found.<br><br>"
+        "If you do not want a vocalisation arm at all, untick it in the mode's "
+        "control arms rather than leaving the file empty."
     ),
 }

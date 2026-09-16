@@ -288,6 +288,59 @@ class ExperimentConfig:
 
         return None
 
+    def missing_audio_files(self) -> List[str]:
+        """Problems with the sound files this mode needs, as readable lines.
+
+        A missing file is not a crash: ``Audio.load_wav`` returns silence and
+        prints a note, so the session runs with a silent arm where a recording
+        was intended. That is a scientifically meaningful failure hiding in
+        console output, which is why it is reported here instead.
+        """
+        problems: List[str] = []
+
+        def needs_control(reason: str) -> None:
+            if not self.path_to_vocalisation_control:
+                problems.append(f"{reason} needs a control vocalisation .wav, "
+                                f"but none is set")
+            elif not os.path.isfile(self.path_to_vocalisation_control):
+                problems.append(f"{reason}: the control vocalisation file does "
+                                f"not exist ({self.path_to_vocalisation_control})")
+
+        mode = self.experiment_mode
+        if mode == "temporal_envelope_modulation" and "vocalisation" in self.tem_controls:
+            needs_control("the vocalisation control arm")
+        elif mode == "complex_intervals":
+            if "vocalisation" in self.resolve_complex_interval_day()["controls"]:
+                needs_control("the vocalisation control arm")
+        elif mode == "sequences" and "vocalisation" in self.sequence_patterns:
+            needs_control("the vocalisation pattern")
+        elif mode == "grammar" and self.grammar_mode == "test":
+            needs_control("the grammar test's vocalisation arm")
+        elif mode == "vocalisation":
+            folder = self.path_to_vocalisation_folder
+            if not folder or not os.path.isdir(folder):
+                problems.append(f"vocalisation mode needs a folder of .wav files "
+                                f"({folder or 'none set'} is not a folder)")
+            else:
+                wavs = [f for f in os.listdir(folder) if f.lower().endswith(".wav")]
+                if not wavs:
+                    problems.append(f"no .wav files in {folder}")
+        elif mode == "custom":
+            for spec in self.custom_stimuli:
+                if str(spec.get("kind", "")).lower() != "wav":
+                    continue
+                path = spec.get("path", "")
+                if not path or not os.path.isfile(path):
+                    problems.append(f"arm {spec.get('roi', '?')}: the .wav file does "
+                                    f"not exist ({path or 'none set'})")
+        return problems
+
+    def check_audio_files(self) -> None:
+        """Raise if a sound file this mode needs is missing."""
+        problems = self.missing_audio_files()
+        if problems:
+            raise ValueError("; ".join(problems))
+
     def check_stimulus_count(self) -> None:
         """Raise if this mode's stimuli do not fill exactly ``rois_number`` arms.
 

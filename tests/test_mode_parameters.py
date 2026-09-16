@@ -242,3 +242,82 @@ class TestStimulusCountMatchesArmCount:
             cfg.check_stimulus_count()
         ExperimentConfig(experiment_mode="grammar", grammar_mode="test",
                          rois_number=8).check_stimulus_count()
+
+
+class TestMissingAudioFiles:
+    """A missing recording plays as silence, so it must be reported."""
+
+    def test_vocalisation_control_not_set(self):
+        from amazeing.auditory.config import ExperimentConfig
+        cfg = ExperimentConfig(experiment_mode="temporal_envelope_modulation")
+        problems = cfg.missing_audio_files()
+        assert problems and "control vocalisation" in problems[0]
+        with pytest.raises(ValueError, match="control vocalisation"):
+            cfg.check_audio_files()
+
+    def test_vocalisation_control_set_but_absent(self, tmp_path):
+        from amazeing.auditory.config import ExperimentConfig
+        cfg = ExperimentConfig(experiment_mode="complex_intervals",
+                               path_to_vocalisation_control=str(tmp_path / "nope.wav"))
+        assert "does not exist" in cfg.missing_audio_files()[0]
+
+    def test_a_real_file_satisfies_it(self, tmp_path):
+        from amazeing.auditory.config import ExperimentConfig
+        wav = tmp_path / "call.wav"
+        wav.write_bytes(b"RIFF")
+        cfg = ExperimentConfig(experiment_mode="temporal_envelope_modulation",
+                               path_to_vocalisation_control=str(wav))
+        assert cfg.missing_audio_files() == []
+        cfg.check_audio_files()
+
+    def test_no_control_arm_means_no_file_needed(self):
+        from amazeing.auditory.config import ExperimentConfig
+        cfg = ExperimentConfig(experiment_mode="temporal_envelope_modulation",
+                               tem_controls=["silent"])
+        assert cfg.missing_audio_files() == []
+
+    def test_vocalisation_mode_needs_a_folder_with_wavs(self, tmp_path):
+        from amazeing.auditory.config import ExperimentConfig
+        cfg = ExperimentConfig(experiment_mode="vocalisation",
+                               path_to_vocalisation_folder=str(tmp_path))
+        assert "no .wav files" in cfg.missing_audio_files()[0]
+        (tmp_path / "a.wav").write_bytes(b"RIFF")
+        assert ExperimentConfig(experiment_mode="vocalisation",
+                                path_to_vocalisation_folder=str(tmp_path)
+                                ).missing_audio_files() == []
+
+    def test_custom_wav_arm_is_checked(self, tmp_path):
+        from amazeing.auditory.config import ExperimentConfig
+        cfg = ExperimentConfig(experiment_mode="custom", rois_number=2,
+                               custom_stimuli=[{"roi": "1", "kind": "wav",
+                                                "path": str(tmp_path / "x.wav")}])
+        assert "arm 1" in cfg.missing_audio_files()[0]
+
+    def test_preview_explains_the_silence(self):
+        from amazeing.app.stimulus_preview import preview_stimuli
+        from amazeing.auditory.config import ExperimentConfig
+        cfg = ExperimentConfig(experiment_mode="temporal_envelope_modulation",
+                               rois_number=8)
+        voc = [p for p in preview_stimuli(cfg, duration_s=0.02)
+               if p.label == "vocalisation"]
+        assert voc, "no vocalisation arm in the preview"
+        assert voc[0].is_silent
+        assert "vocalisation" in voc[0].note.lower()
+
+    def test_a_deliberately_silent_arm_has_no_note(self):
+        from amazeing.app.stimulus_preview import preview_stimuli
+        from amazeing.auditory.config import ExperimentConfig
+        cfg = ExperimentConfig(experiment_mode="custom", rois_number=2,
+                               custom_stimuli=[{"roi": "1", "kind": "tone",
+                                                "frequency": 9000}])
+        silent = preview_stimuli(cfg, duration_s=0.02)[1]
+        assert silent.is_silent and silent.note == ""
+
+    def test_label_does_not_read_interval_vocalisation(self):
+        from amazeing.app.stimulus_preview import preview_stimuli
+        from amazeing.auditory.config import ExperimentConfig
+        labels = [p.label for p in preview_stimuli(
+            ExperimentConfig(experiment_mode="complex_intervals", rois_number=8),
+            duration_s=0.02)]
+        assert "vocalisation" in labels
+        assert not any(l.startswith("interval vocalisation") for l in labels)

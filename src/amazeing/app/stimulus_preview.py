@@ -24,6 +24,12 @@ class StimulusPreview:
     samplerate: int
     wave: np.ndarray         # mono float waveform
     is_silent: bool
+    note: str = ""           # why it is silent, when that is not by design
+
+
+# Values that name a stimulus outright, so they should not be prefixed with
+# "interval" or "pattern" ("interval vocalisation" reads badly).
+_SELF_DESCRIBING = {"vocalisation", "silent", "silence", "silent_arm", "control"}
 
 
 def _label_for(row) -> str:
@@ -33,7 +39,7 @@ def _label_for(row) -> str:
                      ("pattern", "pattern {}")):
         val = row.get(key, None)
         if isinstance(val, str) and val and val not in ("0", "none"):
-            base = fmt.format(val)
+            base = val if val in _SELF_DESCRIBING else fmt.format(val)
             break
     else:
         base = ""
@@ -136,6 +142,9 @@ def preview_stimuli(cfg: ExperimentConfig, duration_s: float = 0.3) -> List[Stim
     finally:
         builtins.input = real_input
     active = df[df["trial_ID"] == 2] if (df["trial_ID"] == 2).any() else df
+    # Any missing sound file, so a silent arm can explain itself.
+    problems = c.missing_audio_files()
+    file_problems = {"vocalisation": problems[0]} if problems else {}
     out: List[StimulusPreview] = []
     for _, row in active.iterrows():
         arm = str(row["ROIs"])
@@ -143,11 +152,18 @@ def preview_stimuli(cfg: ExperimentConfig, duration_s: float = 0.3) -> List[Stim
         silent = wave is None or not np.any(wave)
         if wave is None:
             wave = np.zeros(int(c.samplerate * duration_s))
+        category = _category_for(row)
+        note = ""
+        if silent and category not in ("silent", "silent_trial"):
+            # An arm that was meant to carry a recording came out empty,
+            # which means the file is missing rather than the arm being silent.
+            note = file_problems.get(category, "") or (
+                "no sound was produced for this arm; check the file it uses")
         out.append(StimulusPreview(
             arm=arm, label=_label_for(row),
-            category="silent" if silent else _category_for(row),
+            category="silent" if silent else category,
             samplerate=c.samplerate, wave=np.asarray(wave, dtype=float),
-            is_silent=silent))
+            is_silent=silent, note=note))
     return out
 
 

@@ -34,3 +34,28 @@ If the two disagree the line turns orange and says the session will not start. S
 | Grammar, test day | always 8: six grammar arms, a vocalisation arm and a silent arm |
 | Pure tones | any number; a short frequency list is recycled |
 | Sequences, vocalisations, custom | any number; unlisted arms are silent |
+
+
+## Recordings the mode needs
+
+Several modes play a `.wav` file: the vocalisation control arm of the modulation
+and interval designs, the vocalisation pattern in sequences, the vocalisation
+arm of the grammar test, every arm in vocalisation mode, and any `wav` row in
+custom mode.
+
+A missing file does not stop anything on its own. The loader returns silence and
+prints a note, so the session would run with a **silent arm where a recording was
+intended**, and nothing in the data would say so.
+
+The form therefore checks. A **Sound files** line under Experiment says either
+that everything was found, or which file is missing, and Start session refuses
+until it is resolved. The stimulus preview says the same thing for the affected
+arm, rather than describing it as silent:
+
+> the vocalisation control arm needs a control vocalisation .wav, but none is set
+
+Set the file in the **Vocalisation files** section: the folder supplies one arm
+per file in vocalisation mode, and the control file is the single recording used
+on the vocalisation arm of the mixed designs. If you do not want a vocalisation
+arm at all, untick it in the mode's control arms instead of leaving the file
+empty.

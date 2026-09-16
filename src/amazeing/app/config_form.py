@@ -190,6 +190,9 @@ class ConfigForm(QWidget):
         self.stimulus_label = QLabel()
         self.stimulus_label.setWordWrap(True)
         f.addRow("Stimuli", self.stimulus_label)
+        self.files_label = QLabel()
+        self.files_label.setWordWrap(True)
+        f.addRow("Sound files", self.files_label)
 
     def _build_devices(self):
         f = self._group("devices", "Devices")
@@ -421,7 +424,28 @@ class ConfigForm(QWidget):
     def _on_change(self, *_):
         self._update_schedule_label()
         self._update_stimulus_label()
+        self._update_files_label()
         self.changed.emit()
+
+    def _update_files_label(self):
+        """Report any recording the mode needs but cannot find.
+
+        A missing file is silent rather than loud: the session would run with
+        a silent arm where a recording was intended.
+        """
+        if not hasattr(self, "files_label"):
+            return
+        try:
+            problems = self.to_config().missing_audio_files()
+        except Exception:
+            self.files_label.setText("")
+            return
+        if problems:
+            self.files_label.setText("; ".join(problems))
+            self.files_label.setStyleSheet("color: #EF6C00; font-weight: bold;")
+        else:
+            self.files_label.setText("all the recordings this mode needs were found")
+            self.files_label.setStyleSheet("")
 
     def _update_stimulus_label(self):
         """State how the mode's stimuli fill the arms, and flag a mismatch."""
@@ -696,7 +720,9 @@ class ConfigForm(QWidget):
 
     def check_ready(self) -> None:
         """Raise ValueError if the current form could not run a session."""
-        self.to_config().check_stimulus_count()
+        cfg = self.to_config()
+        cfg.check_stimulus_count()
+        cfg.check_audio_files()
 
     def from_config(self, cfg: ExperimentConfig) -> None:
         w = self.w
@@ -775,6 +801,7 @@ class ConfigForm(QWidget):
         if hasattr(self, "schedule_label"):
             self._update_schedule_label()
             self._update_stimulus_label()
+            self._update_files_label()
 
 
 # ------------------------------------------------------------------ parsing

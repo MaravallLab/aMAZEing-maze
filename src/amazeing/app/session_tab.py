@@ -120,6 +120,7 @@ class SessionTab(QWidget):
         """Validate the form and write it to <recordings>/session_configs/."""
         cfg = self.form.to_config()
         cfg.check_stimulus_count()
+        cfg.check_audio_files()
         folder = os.path.join(cfg.base_output_path, "session_configs")
         stamp = time.strftime("%Y-%m-%d_%H_%M_%S")
         path = os.path.join(folder, f"{stamp}_{tag}.yaml")

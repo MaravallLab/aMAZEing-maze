@@ -167,8 +167,11 @@ class WaveformPanel(QWidget):
         if p is None:
             return
         if p.is_silent:
-            lab = QLabel("This arm is silent.")
+            lab = QLabel(p.note or "This arm is silent by design.")
+            lab.setWordWrap(True)
             lab.setAlignment(Qt.AlignCenter)
+            if p.note:
+                lab.setStyleSheet("color: #EF6C00;")
             self.canvas_layout.addWidget(lab)
             return
         fig, Canvas = self._figure(5.4)
