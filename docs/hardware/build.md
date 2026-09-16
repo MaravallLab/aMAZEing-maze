@@ -160,7 +160,7 @@ Upload `firmware/arduino/servo_control/servo_control.ino`, and use
 
 ### Check the picture
 
-Start the application, set the camera index in **Devices**, and press **Draw ROIs**. You should see the maze. Wrong room means wrong index.
+Start the application, set the camera index in **Devices**, and press **Check camera**. You should see the maze. Wrong room means wrong index.
 
 ### Draw the arms
 
@@ -168,9 +168,11 @@ Draw `entrance1` and `entrance2` across the connecting corridor in that order, s
 
 ### Tune the detection
 
-Run a short session with **Testing mode** ticked and watch the **Binary Debug View**: the floor should be white and anything on it black. If the floor is grey and patchy, adjust the illumination or the binary threshold.
+Stay in the same live view. The floor should be white and anything on it black in the binary window; if the floor is grey and patchy, adjust the illumination or the binary threshold until it is not.
 
-Move a dark object into an arm. Its box should turn red promptly and turn blue again when you remove it. Adjust **Detection sensitivity** if entries are missed or spurious.
+Move a dark object into an arm. Its box should turn red promptly and turn blue again when you remove it. With the maze empty, every bar in the readout should be green: an amber one is an arm that will trip on a shadow, so lower the sensitivity or fix the lighting over that arm.
+
+This is worth doing before an animal is involved, because the alternative is finding out from the data afterwards. Press ++s++ to save the settled values back to the config.
 
 ### Calibrate the speaker
 

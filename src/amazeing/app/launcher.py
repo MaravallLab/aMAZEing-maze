@@ -26,6 +26,7 @@ ENTRY_MODULES: Dict[str, str] = {
     "tactile": "amazeing.simplermaze.simplerCode",
     "tactile-segments": "amazeing.simplermaze.post_process_session",
     "draw-rois": "amazeing.app.draw_rois",
+    "camera-check": "amazeing.auditory.camera_check",
 }
 
 

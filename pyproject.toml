@@ -75,6 +75,7 @@ amaze-analyse-session = "amazeing.auditory.run_analysis:main"
 amaze-summary = "amazeing.auditory.run_summary_analysis:main"
 amaze-summary-csv = "amazeing.auditory.run_summary_csv:main"
 amaze-grammar = "amazeing.auditory.grammar_stimuli.run:main"
+amaze-camera-check = "amazeing.auditory.camera_check:main"
 amaze-tactile = "amazeing.simplermaze:main"
 amaze-tactile-segments = "amazeing.simplermaze.post_process_session:main"
 

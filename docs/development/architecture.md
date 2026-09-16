@@ -167,6 +167,7 @@ flowchart LR
 | `amazeing.auditory.experiments` | `ExperimentFactory`: turns a config into a trial table plus waveforms |
 | `amazeing.auditory.audio` | Synthesis, speaker compensation, playback |
 | `amazeing.auditory.vision` | `ROIMonitor`: occupancy with debouncing |
+| `amazeing.auditory.camera_check` | Live camera and detection view used to set both up before a session |
 | `amazeing.auditory.hardware` | Camera and Arduino |
 | `amazeing.auditory.data_manager` | Session folders, visit logs, the manifest and its column units |
 | `amazeing.auditory.analysis` | Per-session figures, and the colour palette shared with the application |

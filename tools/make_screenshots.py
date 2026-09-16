@@ -35,6 +35,17 @@ def main(argv=None) -> int:
 
     if not args.show:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        # Qt no longer ships fonts, and the offscreen renderer finds none on its
+        # own: without this every label is grabbed as a row of empty boxes.
+        if "QT_QPA_FONTDIR" not in os.environ:
+            for candidate in (r"C:\Windows\Fonts", "/usr/share/fonts",
+                              "/System/Library/Fonts"):
+                if os.path.isdir(candidate):
+                    os.environ["QT_QPA_FONTDIR"] = candidate
+                    break
+            else:
+                print("No font directory found; the text in these images will be "
+                      "boxes. Set QT_QPA_FONTDIR, or pass --show.", file=sys.stderr)
     args.out.mkdir(parents=True, exist_ok=True)
 
     from PySide6.QtCore import QTimer
@@ -63,11 +74,12 @@ def main(argv=None) -> int:
         return fn
 
     @add
-    def _session_custom():
+    def _session_tones():
+        # Pure tones, eight arms: the configuration the first-session tutorial
+        # walks through, and one that previews without anything left to fill in.
         tabs.setCurrentIndex(0)
-        form.set_mode("custom")
-        form.w["rois_number"].setValue(4)
-        form._fill_rows()
+        form.set_mode("simple_smooth")
+        form.w["rois_number"].setValue(8)
         session.mouse_id.setText("6224")
         waveform.refresh()
 
@@ -77,8 +89,6 @@ def main(argv=None) -> int:
 
     @add
     def _detail_view():
-        # These modes expect eight arms; the custom shot above used four.
-        form.w["rois_number"].setValue(8)
         form.set_mode("temporal_envelope_modulation")
         waveform.view_combo.setCurrentText("One arm in detail")
         waveform.refresh()

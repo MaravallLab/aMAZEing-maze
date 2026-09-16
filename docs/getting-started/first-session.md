@@ -40,7 +40,9 @@ In the **Experiment** section set **Number of arm ROIs** to the number of arms y
 
 Set **Recordings folder** to where the data should go. Everything the session writes lands under here.
 
-Now press **Draw ROIs**. A window opens showing the live camera. This is the moment to confirm the camera index is right: if you see the wrong room, close the window and change it.
+Now press **Check camera**. A window opens showing the live camera. This is the moment to confirm the camera index is right: if you see the wrong room, close the window and change it.
+
+The first time, there are no arm boxes yet, so you are asked to draw them straight away. Afterwards, press ++d++ in the live view whenever you want to draw them again.
 
 You will be asked to draw rectangles in a fixed order, and the names are printed as you go:
 
@@ -53,13 +55,22 @@ The layout is saved next to your recordings as `rois1.csv` and reused for every 
 
 ## Step 3: check the detection
 
-Open **Mouse detection**. Two numbers matter.
+Stay in the live view from step 2. Two numbers matter, and both are sliders at the top of that window.
 
-**Binary threshold** is the pixel value that separates floor from animal, after the picture is turned black and white. The default of 160 suits a brightly lit infrared floor.
+**Binary threshold** is the pixel value that separates floor from animal, after the picture is turned black and white. The default of 160 suits a brightly lit infrared floor. Watch the binary window as you move it: the floor should be solid white and anything on it solid black.
 
-**Detection sensitivity** is the fraction of the empty-arm brightness below which an arm counts as occupied. At `0.6`, an arm is occupied once it is 40 per cent darker than when empty.
+**Detection sensitivity** is where the line sits that counts an arm as occupied. Every arm has a bar in the readout on the right, and an arm is occupied once its bar falls to the left of the line.
 
-You will tune these by watching the binary view during the session in step 6. Leave the defaults for now.
+Now the part worth doing properly. Walk a hand down each arm in turn. The box should turn red promptly and blue again when you take it away. Then look at the bars with the maze empty:
+
+- **Green** means the arm sits comfortably clear of the line.
+- **Amber** means it sits close to it. That arm will trip on a shadow. Lower the sensitivity until it goes green, or fix the lighting.
+- **Red** with nothing in the arm means the baseline is wrong. Press ++c++ to measure it again, with the maze empty this time.
+
+Press ++s++ to keep the values you settled on, then ++q++ to close. Both come back into the form.
+
+!!! note "An empty arm reads above 1.00, not at it"
+    The baseline is a sum over the grey picture and the reading is a sum over the black and white one, so they are on different scales and a healthy empty arm often sits near `1.6`. Do not try to make it read `1.00`. What matters is the gap between empty and occupied, and putting the line in the middle of it.
 
 !!! warning "Keep the maze empty at the start"
     The session measures each arm's empty brightness in its first few seconds. If anything is in the maze then, every later comparison is against the wrong baseline.

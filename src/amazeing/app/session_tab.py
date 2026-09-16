@@ -39,23 +39,31 @@ class SessionTab(QWidget):
         # -- buttons -------------------------------------------------------
         self.load_btn = QPushButton("Load config...")
         self.save_btn = QPushButton("Save config as...")
+        self.check_btn = QPushButton("Check camera")
+        self.check_btn.setToolTip(
+            "Live camera view with the arm boxes drawn on it. Tune the binary threshold "
+            "and detection sensitivity and watch the effect. Nothing is recorded.")
         self.rois_btn = QPushButton("Draw ROIs")
         self.start_btn = QPushButton("Start session")
         self.start_btn.setStyleSheet("font-weight: bold;")
         self.load_btn.clicked.connect(self.load_config_dialog)
         self.save_btn.clicked.connect(self.save_config_dialog)
+        self.check_btn.clicked.connect(self.check_camera)
         self.rois_btn.clicked.connect(self.draw_rois)
         self.start_btn.clicked.connect(self.start_session)
         self.config_label = QLabel("No config file loaded (defaults)")
         self.config_label.setWordWrap(True)
 
         btn_row = QHBoxLayout()
-        for b in (self.load_btn, self.save_btn, self.rois_btn, self.start_btn):
+        for b in (self.load_btn, self.save_btn, self.check_btn, self.rois_btn, self.start_btn):
             btn_row.addWidget(b)
 
+        # Set by check_camera so the values tuned in the live view come back to the form.
+        self._check_path: str = ""
+
         self.panel = ProcessPanel()
-        self.panel.started.connect(lambda: self.start_btn.setEnabled(False))
-        self.panel.finished.connect(lambda _c: self.start_btn.setEnabled(True))
+        self.panel.started.connect(self._process_started)
+        self.panel.finished.connect(self._process_finished)
 
         right = QWidget()
         rl = QVBoxLayout(right)
@@ -116,11 +124,18 @@ class SessionTab(QWidget):
             self.current_config_path = p
             self.config_label.setText(f"Config: {p}")
 
-    def _write_working_config(self, tag: str) -> str:
-        """Validate the form and write it to <recordings>/session_configs/."""
+    def _write_working_config(self, tag: str, check_stimuli: bool = True) -> str:
+        """Validate the form and write it to <recordings>/session_configs/.
+
+        ``check_stimuli`` is off for the camera check, which touches neither
+        the sounds nor the stimulus-to-arm plan. Setting the camera up is the
+        first thing you do, often before the stimuli are decided, so a
+        half-finished Experiment section should not stand in the way of it.
+        """
         cfg = self.form.to_config()
-        cfg.check_stimulus_count()
-        cfg.check_audio_files()
+        if check_stimuli:
+            cfg.check_stimulus_count()
+            cfg.check_audio_files()
         folder = os.path.join(cfg.base_output_path, "session_configs")
         stamp = time.strftime("%Y-%m-%d_%H_%M_%S")
         path = os.path.join(folder, f"{stamp}_{tag}.yaml")
@@ -128,7 +143,46 @@ class SessionTab(QWidget):
         self.config_label.setText(f"Config written: {path}")
         return path
 
+    # -- process state -----------------------------------------------------------
+    def _process_started(self) -> None:
+        for b in (self.start_btn, self.check_btn, self.rois_btn):
+            b.setEnabled(False)
+
+    def _process_finished(self, _code: int) -> None:
+        for b in (self.start_btn, self.check_btn, self.rois_btn):
+            b.setEnabled(True)
+        self._apply_checked_detection()
+
+    def _apply_checked_detection(self) -> None:
+        """Bring back any detection values saved from the live camera view."""
+        path, self._check_path = self._check_path, ""
+        if not path or not os.path.exists(path):
+            return
+        try:
+            cfg = load_config(path)
+        except Exception:
+            return
+        w = self.form.w
+        changed = (w["binary_threshold"].value() != cfg.binary_threshold
+                   or abs(w["detection_sensitivity"].value() - cfg.detection_sensitivity) > 1e-9)
+        if not changed:
+            return
+        w["binary_threshold"].setValue(cfg.binary_threshold)
+        w["detection_sensitivity"].setValue(cfg.detection_sensitivity)
+        self.config_label.setText(
+            f"From the camera check: binary threshold {cfg.binary_threshold}, "
+            f"detection sensitivity {cfg.detection_sensitivity:.2f}. Save the config to keep them.")
+
     # -- actions -----------------------------------------------------------------
+    def check_camera(self) -> None:
+        try:
+            path = self._write_working_config("check", check_stimuli=False)
+        except ValueError as e:
+            QMessageBox.warning(self, "Check the form", str(e))
+            return
+        self._check_path = path
+        self.panel.start(command_for("camera-check", ["--config", path]))
+
     def draw_rois(self) -> None:
         try:
             path = self._write_working_config("rois")

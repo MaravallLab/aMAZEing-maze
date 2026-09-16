@@ -58,6 +58,26 @@ Colours mean the same thing here as in your results figures. Grammar arms use th
 
 ![Grammar mode](../images/app-grammar.png)
 
+## Checking the camera and the detection
+
+**Check camera** opens a live view before anything is recorded. It measures the empty-maze baselines exactly as a session does, then shows the picture with the arm boxes drawn on it, the binary picture detection works from, and a bar for every arm showing how far its current reading sits from the line that counts as occupied.
+
+**Binary threshold** and **detection sensitivity** are sliders in that window, so the effect of moving them is visible in the same instant. Walk a hand down the maze and watch the boxes turn red. A bar that sits close to the line turns amber: that arm will trip on a shadow, and it is the one to fix.
+
+| Key | Does |
+|---|---|
+| ++d++ | Redraw the arm boxes, then return to the live view |
+| ++c++ | Measure the empty-maze baselines again |
+| ++s++ | Write the threshold and sensitivity you have settled on back to the config |
+| ++q++ | Close |
+
+After ++s++, closing the window brings both values back into the form, and the line under the buttons says what came back. Save the config to keep them.
+
+This is deliberately usable before the rest of the form is finished: the camera check does not look at the stimuli or the sound files, because setting the camera up is the first thing you do and often the stimuli are not decided yet.
+
+!!! tip "The numbers are not fractions of one"
+    An empty arm normally reads well above `1.00`. The baseline is a sum over the grey picture and the reading is a sum over the black and white one, so they are on different scales. What matters is the gap: put the sensitivity line between where an arm sits empty and where it sits with the animal in it.
+
 ## Running a session
 
 Enter a **Mouse ID**, and optionally the metadata fields, then press **Start session**. The application writes the configuration to `<recordings folder>/session_configs/` with a timestamp, and launches the session with that file. The console panel shows progress; the camera windows open as usual.

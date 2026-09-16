@@ -4,7 +4,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-yellow.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-178%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-216%20passing-brightgreen.svg)](#testing)
 [![Documentation](https://img.shields.io/badge/docs-website-blue.svg)](https://maravalllab.github.io/aMAZEing-maze/)
 
 ![The maze with tuneable walls](hardware/drawings/model.png)
@@ -75,6 +75,7 @@ amaze-tactile
 |---|---|
 | `amaze-app` | The graphical application |
 | `amaze-auditory` | Run one auditory session |
+| `amaze-camera-check` | Live camera and detection check, before anything is recorded |
 | `amaze-tactile` | Run one tactile session |
 | `amaze-grammar` | Continuous grammar playback for training days |
 | `amaze-analyse-session` | Figures for one recorded session |

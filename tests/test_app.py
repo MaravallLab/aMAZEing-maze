@@ -370,3 +370,59 @@ class TestPaletteAndHelp:
         form.w["path_to_vocalisation_control"].setText(str(wav))
         assert "were found" in form.files_label.text()
         form.check_ready()
+
+
+class TestCameraCheck:
+    """The live camera check, as the session tab drives it."""
+
+    def _tab(self, tmp_path):
+        from amazeing.app.session_tab import SessionTab
+        tab = SessionTab()
+        tab.form.w["base_output_path"].setText(str(tmp_path))
+        return tab
+
+    def test_the_button_is_there(self, qapp, tmp_path):
+        tab = self._tab(tmp_path)
+        assert tab.check_btn.text() == "Check camera"
+
+    def test_it_runs_before_the_stimuli_are_settled(self, qapp, tmp_path):
+        """Setting the camera up must not wait on a finished Experiment section.
+
+        The stimulus count and the sound files are checked for a session and
+        for drawing ROIs, but the camera check looks at neither, so a
+        half-filled form cannot stand in the way of pointing the camera.
+        """
+        tab = self._tab(tmp_path)
+        tab.form.set_mode("temporal_envelope_modulation")
+        tab.form.w["rois_number"].setValue(7)          # deliberately mismatched
+        tab.form.w["path_to_vocalisation_control"].setText("")
+
+        with pytest.raises(ValueError):
+            tab._write_working_config("rois")
+        path = tab._write_working_config("check", check_stimuli=False)
+        assert os.path.exists(path)
+
+    def test_saved_values_come_back_to_the_form(self, qapp, tmp_path):
+        """What you tune in the live view lands in the form when it closes."""
+        from amazeing.auditory.session_config import load_config, save_config
+        tab = self._tab(tmp_path)
+        path = tab._write_working_config("check", check_stimuli=False)
+
+        cfg = load_config(path)                        # the live view's s key
+        cfg.binary_threshold = 190
+        cfg.detection_sensitivity = 0.42
+        save_config(cfg, path)
+
+        tab._check_path = path
+        tab._process_finished(0)
+        assert tab.form.w["binary_threshold"].value() == 190
+        assert tab.form.w["detection_sensitivity"].value() == pytest.approx(0.42)
+        assert "camera check" in tab.config_label.text()
+
+    def test_an_ordinary_run_leaves_the_form_alone(self, qapp, tmp_path):
+        """Finishing a session must not rewrite the detection values."""
+        tab = self._tab(tmp_path)
+        tab.form.w["binary_threshold"].setValue(160)
+        tab._check_path = ""
+        tab._process_finished(0)
+        assert tab.form.w["binary_threshold"].value() == 160

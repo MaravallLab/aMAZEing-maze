@@ -233,7 +233,7 @@ class ConfigForm(QWidget):
         self.w["roi_csv_path"] = PathPicker("save", "CSV (*.csv)")
         f.addRow("ROI file", self.w["roi_csv_path"])
         f.addRow("", _hint("Leave the ROI file empty to use <recordings folder>/rois1.csv. "
-                           "Use Draw ROIs to create or replace it."))
+                           "Check camera shows the boxes live and can redraw them."))
 
     def _build_sounds(self):
         f = self._group("sound", "Sound defaults")
