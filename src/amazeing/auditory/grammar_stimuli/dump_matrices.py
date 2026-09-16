@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import TextIO
+from typing import Dict, TextIO
 
 from . import config as cfg
 from .sequence_sampler import MarkovSampler

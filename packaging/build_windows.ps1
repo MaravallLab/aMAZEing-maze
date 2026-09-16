@@ -51,8 +51,15 @@ if ($LASTEXITCODE -ne 0) { Write-Host "Smoke test failed." -ForegroundColor Red;
 Write-Host "Copying the launchers into dist..." -ForegroundColor Cyan
 Copy-Item (Join-Path $repo "packaging\dist_launchers\*.cmd") (Join-Path $repo "dist") -Force
 
+# The download is named in the README and the installation page, so build it
+# here rather than leaving the name to whoever makes the release.
+$zip = Join-Path $repo "dist\amazeing-app.zip"
+Write-Host "Zipping for release..." -ForegroundColor Cyan
+if (Test-Path $zip) { Remove-Item $zip -Force }
+Compress-Archive -Path (Join-Path $repo "dist\amazeing-app") -DestinationPath $zip
+
 Write-Host "`nBuilt: $exe" -ForegroundColor Green
-Write-Host "Zip the dist\amazeing-app folder to distribute it."
+Write-Host "Upload $zip to the release page; the README tells people to download that name."
 Write-Host "To run it yourself, dist now holds both launchers:"
 Write-Host "  Run the packaged app.cmd   the build above"
 Write-Host "  Run from source.cmd        the live repository code"

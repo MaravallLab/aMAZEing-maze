@@ -8,7 +8,7 @@ python -m venv .venv-build
 .\packaging\build_windows.ps1
 ```
 
-This runs the tests, builds `dist\amazeing-app\amazeing-app.exe` with PyInstaller, and smoke-tests the executable. Zip the `dist\amazeing-app` folder to distribute it. The same executable runs the command-line tools (for example `amazeing-app.exe --entry auditory --config session.yaml`), which is how the application launches sessions on a machine without Python.
+This runs the tests, builds `dist\amazeing-app\amazeing-app.exe` with PyInstaller, smoke-tests the executable, and zips the result as `dist\amazeing-app.zip`, which is the file name the README and the installation page tell people to download. The same executable runs the command-line tools (for example `amazeing-app.exe --entry auditory --config session.yaml`), which is how the application launches sessions on a machine without Python.
 
 ## Starting the application on this machine
 

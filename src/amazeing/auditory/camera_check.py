@@ -56,6 +56,7 @@ FONT = cv.FONT_HERSHEY_SIMPLEX
 OCCUPIED = (60, 60, 255)   # BGR
 MARGINAL = (0, 180, 255)
 CLEAR = (90, 210, 90)
+OFF_VIEW = (200, 90, 200)
 INK = (225, 225, 225)
 FAINT = (140, 140, 140)
 GROUND = (38, 38, 38)
@@ -70,8 +71,11 @@ class RoiReading:
     total: float           # sum over the arm now
     ratio: float           # total / baseline
     occupied: bool         # the session's own debounced answer
+    in_frame: bool = True  # False when the box falls outside the picture
 
     def status(self, sensitivity: float) -> str:
+        if not self.in_frame:
+            return "off view"
         if self.occupied:
             return "occupied"
         if self.ratio < sensitivity + MARGIN:
@@ -79,19 +83,33 @@ class RoiReading:
         return "clear"
 
     def colour(self, sensitivity: float):
-        return {"occupied": OCCUPIED, "marginal": MARGINAL, "clear": CLEAR}[self.status(sensitivity)]
+        return {"off view": OFF_VIEW, "occupied": OCCUPIED,
+                "marginal": MARGINAL, "clear": CLEAR}[self.status(sensitivity)]
 
 
 def read_rois(monitor, binary_frame: np.ndarray) -> List[RoiReading]:
-    """Current reading for every arm the monitor has a baseline for."""
+    """Current reading for every arm the monitor has a baseline for.
+
+    A box drawn against a different camera resolution falls partly or wholly
+    outside the picture. Cropping it then yields nothing, which sums to zero
+    and reads as permanently occupied: the arm would appear red and never
+    release. That case is reported as its own state instead, because it is a
+    setup mistake rather than a detection setting.
+    """
     readings: List[RoiReading] = []
+    height, width = binary_frame.shape[:2]
     for name in monitor.roiNames:
         if name not in monitor.thresholds:
             continue
+        coords = monitor.rois_df[name]
+        x, y = int(coords["xstart"]), int(coords["ystart"])
+        w, h = int(coords["xlen"]), int(coords["ylen"])
+        in_frame = w > 0 and h > 0 and x >= 0 and y >= 0 and x + w <= width and y + h <= height
         baseline = float(monitor.thresholds[name])
-        total = float(np.sum(monitor._crop_roi(binary_frame, name)))
+        total = float(np.sum(binary_frame[y:y + h, x:x + w]))
         ratio = total / baseline if baseline > 0 else 0.0
-        readings.append(RoiReading(name, baseline, total, ratio, bool(monitor.is_occupied[name])))
+        readings.append(RoiReading(name, baseline, total, ratio,
+                                   bool(monitor.is_occupied[name]), in_frame))
     return readings
 
 
@@ -118,6 +136,10 @@ def render_panel(readings: List[RoiReading], sensitivity: float, threshold: int,
             break
         colour = r.colour(sensitivity)
         cv.putText(panel, r.name[:9], (14, y + 11), FONT, 0.45, INK, 1)
+        if not r.in_frame:
+            cv.putText(panel, "box is outside the picture", (95, y + 11), FONT, 0.4, colour, 1)
+            y += 20
+            continue
         cv.putText(panel, f"{r.ratio:4.2f}", (95, y + 11), FONT, 0.45, colour, 1)
         cv.rectangle(panel, (BAR_LEFT, y), (BAR_RIGHT, y + 14), (58, 58, 58), -1)
         filled = int(BAR_LEFT + (min(r.ratio, RATIO_SCALE) / RATIO_SCALE) * (BAR_RIGHT - BAR_LEFT))
@@ -181,9 +203,12 @@ def _live_view(cfg, names: List[str], config_path: str) -> str:
         cv.resizeWindow(VIEW_WINDOW, 1280, 720)
         cv.namedWindow(BINARY_WINDOW, cv.WINDOW_NORMAL)
         cv.resizeWindow(BINARY_WINDOW, 640, 480)
-        cv.createTrackbar("Binary threshold", VIEW_WINDOW, int(cfg.binary_threshold), 255, _nothing)
-        cv.createTrackbar("Sensitivity /100", VIEW_WINDOW, int(round(cfg.detection_sensitivity * 100)),
-                          99, _nothing)
+        # Old config files exist with a sensitivity of 5.0, from before the
+        # value was understood as a fraction; clamp rather than refuse to open.
+        start_threshold = min(255, max(0, int(cfg.binary_threshold)))
+        start_sensitivity = min(99, max(1, int(round(cfg.detection_sensitivity * 100))))
+        cv.createTrackbar("Binary threshold", VIEW_WINDOW, start_threshold, 255, _nothing)
+        cv.createTrackbar("Sensitivity /100", VIEW_WINDOW, start_sensitivity, 99, _nothing)
 
         print("\nLive view. Nothing is being recorded.")
         print("  Move the sliders and watch the bars. Walk a hand down the maze.")
@@ -219,6 +244,9 @@ def _live_view(cfg, names: List[str], config_path: str) -> str:
             if key in (ord("q"), 27):
                 break
             if key == ord("d"):
+                # Keep what the sliders are at, so redrawing does not undo tuning.
+                cfg.binary_threshold = threshold
+                cfg.detection_sensitivity = sensitivity
                 outcome = "redraw"
                 break
             if key == ord("c"):

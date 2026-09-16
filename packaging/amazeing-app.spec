@@ -49,7 +49,9 @@ a = Analysis(
     hiddenimports=hidden,
     hookspath=[],
     runtime_hooks=[],
-    excludes=["tkinter", "PyQt5", "PyQt6", "IPython", "notebook", "jupyter", "pytest",
+    # tkinter is NOT excluded: the tactile session and its post-processing open
+    # file dialogs with it, so excluding it breaks those in the packaged app.
+    excludes=["PyQt5", "PyQt6", "IPython", "notebook", "jupyter", "pytest",
               "numba", "llvmlite", "plotly", "statsmodels", "seaborn", "PIL.ImageQt"],
     noarchive=False,
 )

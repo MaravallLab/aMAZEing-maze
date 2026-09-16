@@ -10,8 +10,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from amazeing.auditory.camera_check import (CLEAR, MARGINAL, OCCUPIED, PANEL_WIDTH,
-                                            RoiReading, read_rois, render_panel)
+from amazeing.auditory.camera_check import (CLEAR, MARGINAL, OCCUPIED, OFF_VIEW,
+                                            PANEL_WIDTH, RoiReading, read_rois,
+                                            render_panel)
 
 
 @pytest.fixture
@@ -50,6 +51,19 @@ class TestReadings:
         monitor.roiNames = monitor.roiNames + ["nowhere"]
         readings = read_rois(monitor, np.full((20, 60), 255, dtype=np.uint8))
         assert "nowhere" not in [r.name for r in readings]
+
+    def test_a_box_outside_the_picture_is_named_as_such(self, monitor):
+        """Boxes drawn at another resolution would otherwise read as always occupied."""
+        monitor.rois_df.loc["xstart", "2"] = 500          # far past the frame edge
+        by_name = {r.name: r for r in read_rois(monitor, np.full((20, 60), 255, dtype=np.uint8))}
+        assert by_name["2"].in_frame is False
+        assert by_name["2"].colour(0.6) == OFF_VIEW
+        assert by_name["1"].in_frame is True
+
+    def test_a_box_hanging_over_the_edge_counts_as_outside(self, monitor):
+        monitor.rois_df.loc["xlen", "2"] = 40             # 40 + 40 > the 60 wide frame
+        by_name = {r.name: r for r in read_rois(monitor, np.full((20, 60), 255, dtype=np.uint8))}
+        assert by_name["2"].in_frame is False
 
     def test_a_zero_baseline_does_not_divide_by_zero(self, monitor):
         monitor.thresholds["1"] = 0.0
@@ -97,6 +111,11 @@ class TestPanel:
         readings = [RoiReading("1", 100.0, 100.0, 1.0, False)]
         panel = render_panel(readings, sensitivity=0.6, threshold=160, height=120)
         assert panel.shape[1:] == (PANEL_WIDTH, 3)
+
+    def test_an_out_of_frame_arm_renders_without_a_bar(self):
+        readings = [RoiReading("1", 100.0, 0.0, 0.0, False, in_frame=False)]
+        panel = render_panel(readings, sensitivity=0.6, threshold=160, height=480)
+        assert panel.shape == (480, PANEL_WIDTH, 3)
 
     def test_an_off_scale_ratio_stays_inside_the_panel(self):
         """Bars are clipped to the axis rather than drawn past the edge."""

@@ -14,15 +14,18 @@ outside the maze.
 
 ## The pipeline at a glance
 
-```
- raw videos                                                        analysis-ready
- (per mouse/        Stage 1            Stage 2          Stage 3        Stage 4
-  session)        crop & align      pose inference    export        in-maze filter
-     │                 │                  │              │               │
-     ▼                 ▼                  ▼              ▼               ▼
-  *.mp4   ──►  *_cropped.mp4   ──►  *.predictions.slp ─► *.keypoints.csv ─► *.keypoints.filtered.csv
-                 (+calibration       (sleap-nn,          *.labeled.mp4      *.predictions.filtered.slp
-                  per rig)            GPU)               (overlay video)    (+ verification overlay)
+```mermaid
+flowchart LR
+    v["raw videos<br/>*.mp4<br/>per mouse and session"]
+    c["*_cropped.mp4<br/>plus a calibration per rig"]
+    pr["*.predictions.slp<br/>*.labeled.mp4"]
+    k["*.keypoints.csv"]
+    f["*.keypoints.filtered.csv<br/>*.predictions.filtered.slp"]
+
+    v -->|"Stage 1<br/>crop and align"| c
+    c -->|"Stage 2<br/>pose inference, GPU"| pr
+    pr -->|"Stage 3<br/>export"| k
+    k -->|"Stage 4<br/>in-maze filter"| f
 ```
 
 | Stage | Script | What it does | Engine |
@@ -102,7 +105,7 @@ Full details live in [cropping and aligning the videos](crop-align.md). The esse
    ```powershell
    & $py analysis\crop_and_align_maze.py --calibrate --input_dir <videos> --output_dir <out>
    ```
-   This writes `calibration.json` (and `calibration_rig2.json`, … for extra
+   This writes `calibration.json` (and `calibration_rig2.json`, ... for extra
    rigs) into `<out>`.
 
 2. **Run the batch** - locates the maze in every video and warps it to a
@@ -137,7 +140,7 @@ dataset; override them as needed:
 
 ```powershell
 python run_pipeline.py --input_dir D:\simplermaze_output `
-    --models_dir "C:\Users\shahd\OneDrive\Desktop\CROPPED_VIDEOS_FOR_SLEAP\models" `
+    --models_dir "D:\sleap_models" `
     --calibration_dir D:\simplermaze_output
 ```
 
@@ -222,7 +225,7 @@ $exp = "<repo>\analysis\slp_export.py"
 video timeline:
 
 ```
-frame_idx, instance_score, nose.x, nose.y, nose.score, headbase.x, … , RH_paw.score
+frame_idx, instance_score, nose.x, nose.y, nose.score, headbase.x, ... , RH_paw.score
 ```
 
 Undetected points are blank (score `0.0`); frames with no mouse are fully blank,
@@ -323,7 +326,7 @@ Always sanity-check on a few videos first:
 
 ## Output files, named consistently
 
-For a source video `…/<name>_cropped.mp4`:
+For a source video `.../<name>_cropped.mp4`:
 
 | File | Stage | Contents |
 |------|-------|----------|
