@@ -10,6 +10,17 @@ python -m venv .venv-build
 
 This runs the tests, builds `dist\amazeing-app\amazeing-app.exe` with PyInstaller, and smoke-tests the executable. Zip the `dist\amazeing-app` folder to distribute it. The same executable runs the command-line tools (for example `amazeing-app.exe --entry auditory --config session.yaml`), which is how the application launches sessions on a machine without Python.
 
+## Starting the application on this machine
+
+`dist\` holds two launchers, so there is one folder to look in rather than two places to remember. The build script copies them in from `packaging/dist_launchers/`, and they are not part of the release zip.
+
+| Double-click | What it starts |
+|---|---|
+| `Run from source.cmd` | The code in `src/` as it stands now, through your Python install. Use this while working on the code: an edit shows up the next time you start it. The console window it leaves open is where a failure to start is reported. |
+| `Run the packaged app.cmd` | The build above, with Python and every library bundled inside it. It is a snapshot, so a code change does not reach it until the build script is run again. |
+
+To edit what the launchers do, change the files in `packaging/dist_launchers/` and run the build script, or copy them into `dist\` by hand.
+
 Refreshing the pins after upgrading a library: install the new version, run the tests, then `pip freeze --exclude-editable > packaging/requirements-lock.txt`.
 
 ---

@@ -48,5 +48,11 @@ Write-Host "Smoke test: writing a config template with the built executable..." 
 & $exe --entry auditory --write-config (Join-Path $env:TEMP "amazeing_smoke.yaml")
 if ($LASTEXITCODE -ne 0) { Write-Host "Smoke test failed." -ForegroundColor Red; exit 1 }
 
+Write-Host "Copying the launchers into dist..." -ForegroundColor Cyan
+Copy-Item (Join-Path $repo "packaging\dist_launchers\*.cmd") (Join-Path $repo "dist") -Force
+
 Write-Host "`nBuilt: $exe" -ForegroundColor Green
 Write-Host "Zip the dist\amazeing-app folder to distribute it."
+Write-Host "To run it yourself, dist now holds both launchers:"
+Write-Host "  Run the packaged app.cmd   the build above"
+Write-Host "  Run from source.cmd        the live repository code"
