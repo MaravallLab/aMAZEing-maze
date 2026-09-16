@@ -2,7 +2,9 @@
 
 **A modular, automated, sensory-engaging open-source platform for studying how sensory cues shape active exploration in rodents.**
 
-The maze is a reconfigurable arena filmed from above under infrared light. Software watches which arm the animal is in and, the moment it enters, plays the stimulus assigned to that arm. Nothing is rewarded and nothing is required: the animal explores, and where it chooses to spend its time is the measurement.
+The maze is a reconfigurable arena filmed under infrared light, built on a drilled floor plate so the walls move and the same rig becomes a different maze. Software tracks which arm the animal is in and drives the stimuli in real time.
+
+It runs as two paradigms, equally developed, sharing the hardware, the tracking and the analysis tooling.
 
 <div class="grid cards" markdown>
 
@@ -10,17 +12,17 @@ The maze is a reconfigurable arena filmed from above under infrared light. Softw
 
     ---
 
-    Install the software and run a short session end to end.
+    Install the software and run a short auditory session end to end.
 
     [Run your first session](getting-started/first-session.md)
 
--   :material-tune-variant: **Designing an experiment**
+-   :material-gesture-tap-button: **The tactile task**
 
     ---
 
-    Choose a paradigm, map stimuli to arms, and see the sounds before you play them.
+    Gratings, automated reward ports, training stages and the electronics.
 
-    [Experiment modes](guide/experiment-modes.md)
+    [The tactile paradigm](guide/tactile.md)
 
 -   :material-chart-line: **You have data**
 
@@ -40,14 +42,9 @@ The maze is a reconfigurable arena filmed from above under infrared light. Softw
 
 </div>
 
-## Two paradigms
+## The auditory maze
 
-| Paradigm | What it presents | What it measures |
-|---|---|---|
-| **Auditory maze** | Sounds triggered by arm entry: pure tones, musical intervals, amplitude modulation, tone sequences, artificial grammars, recorded vocalisations | Where the animal chooses to spend time, and therefore which sounds it approaches or avoids |
-| **Tactile maze** | Servo-driven gratings in a two-level binary decision tree, with food reward | Choice accuracy and trajectory as the animal learns which texture predicts reward |
-
-## How a session works
+Sound triggered by arm entry. Nothing is rewarded and nothing is required: the animal explores, and **where it chooses to spend its time is the measurement**.
 
 ```mermaid
 flowchart LR
@@ -60,7 +57,38 @@ flowchart LR
     E --> F[Figures at the end<br/>of the session]
 ```
 
-Every session runs a nine-block cycle of alternating silent and active periods, and the stimulus-to-arm mapping is reshuffled at the start of each active block. That reshuffle is what separates a preference for a **sound** from a preference for a **place**.
+The stimuli can be pure tones, musical intervals, amplitude modulation, tone sequences, artificial grammars or recorded vocalisations. A session runs a nine-block cycle of alternating silent and active periods, and the stimulus-to-arm mapping is reshuffled at the start of each active block. That reshuffle separates a preference for a **sound** from a preference for a **place**.
+
+[Experiment modes](guide/experiment-modes.md) covers the paradigms and their parameters.
+
+## The tactile maze
+
+A two-level binary decision tree with a right answer. The cue is texture, read by the whiskers, and the reward is a food pellet delivered automatically.
+
+**Three pairs of servo-driven 3D-printed gratings**, one pair before every decision point, face each other across the corridor. **The vertical grating marks the correct way**; the other is horizontal. Follow vertical at both junctions and you reach the rewarded arm.
+
+```mermaid
+flowchart TB
+    E[Animal enters the maze] --> J1{First junction<br/>grating pair}
+    J1 -->|follows vertical| J2{Second junction<br/>grating pair}
+    J1 -->|follows horizontal| W[Wrong branch]
+    J2 -->|follows vertical| R[Reward arm]
+    J2 -->|follows horizontal| W
+    R --> P[Camera detects arrival<br/>pellet released]
+    P --> IR{IR beam sees<br/>a pellet fall?}
+    IR -->|no| P
+    IR -->|yes| Done[Exactly one pellet delivered]
+
+    style J1 fill:#1565C0,color:#fff
+    style J2 fill:#1565C0,color:#fff
+    style R fill:#2E7D32,color:#fff
+```
+
+The reward port is closed-loop: a servo rocks the dispenser while an infrared beam watches the chute, and stops the moment a pellet is detected falling through. A trial recorded as rewarded really was rewarded, rather than the mechanism turning by a fixed amount and hoping.
+
+A trial runs from the animal entering the maze to leaving it, and is scored as a hit, an incorrect choice, or a miss. Training proceeds through four stages of increasing difficulty.
+
+[The tactile paradigm](guide/tactile.md) has the task, the hardware and the configuration files.
 
 ## Two ways to drive it
 

@@ -88,6 +88,50 @@ The reshuffle is the load-bearing part of the design. If an animal returns to th
 
 Because each active block needs a mapping that has not been used yet, and there are only as many mappings as there are orderings of the arms, a maze with fewer than three arms cannot supply four distinct mappings. The search gives up after a bounded number of attempts and reuses one rather than looping forever.
 
+## The tactile paradigm
+
+The tactile maze runs a different loop. Instead of a stimulus following the
+animal, the apparatus is configured per trial and the animal's route is scored
+against it.
+
+```mermaid
+sequenceDiagram
+    participant M as Session loop<br/>simplerCode.py
+    participant A as Arduino + PCA9685
+    participant C as Camera
+    participant D as Data
+
+    loop every trial
+        M->>A: all gratings to neutral
+        M->>A: grating positions for this trial's reward arm
+        Note over M,C: trial starts when the animal passes<br/>entrance1 then entrance2
+        loop every frame
+            C->>M: frame
+            alt animal in a reward arm
+                alt it is the rewarded arm, no earlier mistake
+                    M->>A: rew<arm>
+                    A->>A: rock the dispenser until the IR beam breaks
+                    M->>D: hit
+                else wrong arm
+                    M->>D: incorrect
+                end
+            end
+        end
+        Note over M,C: trial ends when the animal passes<br/>entrance2 then entrance1
+        M->>D: append the trial row, with start and end video frames
+    end
+```
+
+Two files drive it: `grating_maps.csv` gives the grating positions that cue each
+reward arm, and `reward_sequences.csv` gives the training stages from which the
+trial list is drawn. Both sit beside the script and are described on [the
+tactile paradigm](../guide/tactile.md) page.
+
+The script has not been rebuilt on the shared modules. Its settings are flags at
+the top of the file rather than a session configuration, and the application
+runs it as it is. That is deliberate, since it is the code that produced the
+data, and rewriting it would mean revalidating it against the animals.
+
 ## Data flow through an experiment
 
 ```mermaid
@@ -128,7 +172,7 @@ flowchart LR
 | `amazeing.auditory.analysis` | Per-session figures, and the colour palette shared with the application |
 | `amazeing.auditory.summary_analysis` | Cross-session figures and tables |
 | `amazeing.auditory.grammar_stimuli` | Markov grammars, tone synthesis, training-day playback |
-| `amazeing.simplermaze` | Tactile paradigm |
+| `amazeing.simplermaze` | Tactile paradigm: session loop, trial generation from the training stages, grating and reward commands |
 | `amazeing.app` | The graphical interface |
 
 ## Design rules

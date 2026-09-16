@@ -1,4 +1,20 @@
-# Welcome to the tactile experiment component of the aMAZEing maze
+# The tactile paradigm
+
+A two-level binary decision tree cued by whisker-read texture.
+
+**Three pairs of servo-driven 3D-printed gratings**, one pair before every
+decision point, face each other across the corridor. The vertical grating marks
+the correct way; the other is horizontal. Reaching the rewarded arm is detected
+by the camera and releases a pellet from an automated port, where a servo rocks
+the dispenser until an infrared beam sees a pellet fall through.
+
+Full documentation, including the task, the servo channel map, the reward
+routine and the configuration files:
+**<https://maravalllab.github.io/aMAZEing-maze/guide/tactile/>**
+
+Run it with `amaze-tactile`, or from the Tactile session tab of `amaze-app`.
+
+---
 
 ## Configuration files
 

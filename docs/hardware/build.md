@@ -97,6 +97,65 @@ Measure the level at several arm positions with a sound level meter and adjust p
 
 Upload `firmware/ttl_bnc/TTL_bnc.ino`, connect pin 8 to the digital input of your recording system, and note the COM port. See [firmware](firmware.md).
 
+## Configuring the tactile maze
+
+The auditory configuration above is the simpler one. The tactile maze adds
+gratings, reward ports and their electronics.
+
+### Walls and gratings
+
+Build the two-level binary decision tree: an entrance corridor, a first
+junction, then two second junctions, each leading to a pair of reward arms.
+
+Fit **three pairs of gratings**, one pair before each junction, mounted facing
+each other across the corridor so the animal whisks against one on each side as
+it approaches the choice. The printed parts are in
+`hardware/3dmodels/archive/gratings/`, and the movable wall mechanism that
+carries them is in `hardware/3dmodels/moveable_wall/`.
+
+Each grating has its own servo. Wire them to the PCA9685 on the channels the
+firmware expects, listed on the [firmware](firmware.md) page, or change the
+`#define` lines to match your wiring.
+
+**Check the angles before anything else.** Send a command by hand and watch:
+
+```
+grtL 0
+grtL 90
+```
+
+Note which angle gives vertical and which gives horizontal, then put those
+numbers in `grating_maps.csv`. The values shipped in the repository are a
+template, not a measurement of your rig.
+
+### Reward ports
+
+One per reward arm, each combining the servo-driven dispenser from
+`hardware/3dmodels/reward delivery/` with an infrared emitter and detector
+placed across the chute so a falling pellet breaks the beam.
+
+Alignment matters more than anything else here. If the beam never breaks, the
+servo rocks forever; if it reads broken with nothing there, every trial reports
+a reward that was not given. Run `firmware/arduino/testIR/testIR.ino`, watch the
+four readings, and drop pellets through by hand until each one registers
+reliably.
+
+### Camera, from below
+
+The tactile maze is filmed **through the floor**, which is infrared
+transmitting, so the animal appears as a silhouette against a bright background.
+Mount the camera below the plate, looking up, and the illuminator above.
+
+### Electronics
+
+Arduino, connected by serial to the computer, driving the PCA9685 over I2C,
+which drives the ten servos. The four infrared detectors go to the Arduino's
+digital pins. A BeeHive board developed at the University of Sussex is used
+alongside these.
+
+Upload `firmware/arduino/servo_control/servo_control.ino`, and use
+`firmware/arduino/i2c_scanner/` first if the PCA9685 does not respond.
+
 ## First run
 
 ### Check the picture
@@ -127,3 +186,12 @@ Before any real data. See [speaker calibration](../guide/speaker-calibration.md)
 - [ ] Sound level comparable at every arm
 - [ ] Speaker calibration curve loaded
 - [ ] A test session runs end to end and writes figures
+
+### Additionally, for the tactile maze
+
+- [ ] Every grating reaches both positions, and you know which angle is vertical
+- [ ] `grating_maps.csv` holds your measured angles, not the template values
+- [ ] All four infrared beams register a hand-dropped pellet reliably
+- [ ] Each reward port delivers exactly one pellet and then stops
+- [ ] `reward_sequences.csv` describes the training stages you intend
+- [ ] The camera below the plate sees the whole maze

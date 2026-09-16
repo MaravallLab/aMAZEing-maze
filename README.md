@@ -9,20 +9,36 @@
 
 ![The maze with tuneable walls](hardware/drawings/model.png)
 
-The maze is a reconfigurable arena filmed under infrared light. Software watches which arm the animal is in and, the moment it enters, plays the stimulus assigned to that arm. Nothing is rewarded and nothing is required: the animal explores, and where it chooses to spend its time is the measurement.
+The maze is a reconfigurable arena filmed under infrared light, built on a drilled floor plate so the walls move and the same rig becomes a different maze. Software tracks which arm the animal is in and drives the stimuli in real time.
 
-Two paradigms are supported:
+It runs as **two paradigms**, equally developed, sharing the hardware, the tracking and the analysis tooling.
 
-| Paradigm | What it presents |
-|---|---|
-| **Auditory maze** | Sounds triggered by arm entry: pure tones, musical intervals, amplitude modulation, tone sequences, artificial grammars, recorded vocalisations |
-| **Tactile maze** | Servo-driven gratings in a two-level binary decision tree, with food reward |
+### Auditory maze
+
+Sound triggered by arm entry: pure tones, musical intervals, amplitude modulation, tone sequences, artificial grammars, recorded vocalisations. Nothing is rewarded and nothing is required. The animal explores, the stimulus-to-arm mapping is reshuffled between blocks, and **where it chooses to spend its time is the measurement**.
+
+### Tactile maze
+
+A two-level binary decision tree with a right answer. The cue is texture, read by the whiskers.
+
+**Three pairs of servo-driven 3D-printed gratings**, one pair before every decision point, face each other across the corridor. **The vertical grating marks the correct way**; the other is horizontal. If the reward is in the bottom right arm, the right grating is vertical at the first junction and again at the second, so the animal follows vertical twice and arrives at the reward.
+
+Reaching the correct arm is detected by the camera and releases a food pellet from an **automated reward port**: a servo rocks the dispenser while an **infrared beam watches the chute**, and stops the moment a pellet is detected falling through. The loop is closed, so a trial recorded as rewarded really was rewarded, rather than the mechanism turning by a fixed amount and hoping.
+
+A trial runs from the animal entering the maze to leaving it, and is scored as a hit, an incorrect choice, or a miss. Training proceeds through four stages of increasing difficulty.
+
+The electronics are an Arduino driving an Adafruit PCA9685 sixteen-channel PWM controller for the ten servos (six gratings, four reward ports) and four infrared detectors, alongside a BeeHive board developed at the University of Sussex.
 
 ## Documentation
 
 **[maravalllab.github.io/aMAZEing-maze](https://maravalllab.github.io/aMAZEing-maze/)** has the tutorials, the guide and the reference.
 
-Start with **[run your first session](https://maravalllab.github.io/aMAZEing-maze/getting-started/first-session/)**, which walks through a short recording end to end. If you are building a rig, start with **[build and set up the rig](https://maravalllab.github.io/aMAZEing-maze/hardware/build/)**.
+| If you want to | Start at |
+|---|---|
+| Run an auditory session | [Run your first session](https://maravalllab.github.io/aMAZEing-maze/getting-started/first-session/) |
+| Run the tactile task | [The tactile paradigm](https://maravalllab.github.io/aMAZEing-maze/guide/tactile/) |
+| Build a rig | [Build and set up the rig](https://maravalllab.github.io/aMAZEing-maze/hardware/build/) |
+| Analyse recordings | [Analyse a set of sessions](https://maravalllab.github.io/aMAZEing-maze/analysis/tutorial/) |
 
 ## Install
 
@@ -42,11 +58,17 @@ pip install -e ".[gui,analysis]"
 amaze-app
 ```
 
+The application has a tab per task: auditory session, speaker calibration, analysis, grammar training, tactile session.
+
 Or from a terminal, which runs exactly the same code:
 
 ```bash
+# auditory
 amaze-auditory --write-config my_protocol.yaml   # get a template to edit
 amaze-auditory --config my_protocol.yaml         # run it
+
+# tactile
+amaze-tactile
 ```
 
 | Command | What it does |
@@ -64,11 +86,11 @@ amaze-auditory --config my_protocol.yaml         # run it
 ```
 ├── src/amazeing/       Installable package
 │   ├── auditory/         Auditory paradigm: config, session loop, audio, vision, analysis
-│   ├── simplermaze/      Tactile paradigm
+│   ├── simplermaze/      Tactile paradigm: session loop, grating maps, reward stages
 │   └── app/              Graphical interface
 ├── analysis/           Post-hoc research pipelines (preference index, pose estimation, models)
 ├── hardware/           CAD sources, STLs, drawings, construction photos
-├── firmware/           Arduino and MicroPython sketches
+├── firmware/           Arduino and MicroPython sketches: grating and reward servos, TTL sync
 ├── docs/               Documentation site sources
 ├── packaging/          Application build: PyInstaller spec, build script, pinned versions
 ├── tools/              Utilities, including documentation screenshot generation
