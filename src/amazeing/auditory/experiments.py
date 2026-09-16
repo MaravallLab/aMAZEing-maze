@@ -150,9 +150,16 @@ class ExperimentFactory:
     def _make_simple_smooth(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
         frequencies = list(cfg.smooth_frequencies)
 
+        if not frequencies:
+            raise ValueError("smooth_frequencies is empty: give at least one frequency.")
         if len(frequencies) < len(rois):
-            print("not enough frequencies for ROIs. Recycling. If you want to add/modify, go to experiments.py,  _make_simple_smooth().")
-            frequencies = (frequencies * 2)[:len(rois)]
+            # Repeat as many times as needed. Doubling once was not enough when
+            # there were fewer than half as many frequencies as arms, which
+            # left the list short and raised IndexError further down.
+            print(f"Only {len(frequencies)} frequencies for {len(rois)} arms; recycling them. "
+                  f"Set smooth_frequencies to give each arm its own tone.")
+            repeats = -(-len(rois) // len(frequencies))          # ceiling division
+            frequencies = (frequencies * repeats)[:len(rois)]
 
         #create trial structure
         return ExperimentFactory._create_simple_trials_logic(rois, frequencies, audio)

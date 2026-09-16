@@ -159,3 +159,22 @@ class TestShuffleTerminates:
         experiment_config.smooth_frequencies = [8000]
         df, _ = ExperimentFactory.generate_trials(experiment_config, mock_audio)
         assert len(df) == 9
+
+    @pytest.mark.parametrize("n_freqs,n_arms", [(1, 8), (3, 8), (2, 5), (8, 8)])
+    def test_short_frequency_list_is_recycled_to_fill_every_arm(
+            self, mock_audio, experiment_config, n_freqs, n_arms):
+        """Doubling the list once was not enough below half the arm count."""
+        from amazeing.auditory.experiments import ExperimentFactory
+        experiment_config.experiment_mode = "simple_smooth"
+        experiment_config.rois_number = n_arms
+        experiment_config.smooth_frequencies = [10000 + 100 * k for k in range(n_freqs)]
+        df, _ = ExperimentFactory.generate_trials(experiment_config, mock_audio)
+        assert len(df) == 9 * n_arms
+        assert len(df[df["trial_ID"] == 2]) == n_arms
+
+    def test_empty_frequency_list_is_reported(self, mock_audio, experiment_config):
+        from amazeing.auditory.experiments import ExperimentFactory
+        experiment_config.experiment_mode = "simple_smooth"
+        experiment_config.smooth_frequencies = []
+        with pytest.raises(ValueError, match="at least one frequency"):
+            ExperimentFactory.generate_trials(experiment_config, mock_audio)
