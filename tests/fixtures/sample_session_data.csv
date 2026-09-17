@@ -1,0 +1,13 @@
+trial_ID,ROIs,frequency,time_spent,visitation_count,time_in_maze_ms,trial_start_time,end_trial_time
+1,ROI1,0,,,,0,,
+1,ROI2,0,,,,0,,
+1,ROI3,0,,,,0,,
+1,ROI4,0,,,,0,,
+2,ROI1,10000,,,,0,,
+2,ROI2,12000,,,,0,,
+2,ROI3,14000,,,,0,,
+2,ROI4,16000,,,,0,,
+3,ROI1,0,,,,0,,
+3,ROI2,0,,,,0,,
+3,ROI3,0,,,,0,,
+3,ROI4,0,,,,0,,

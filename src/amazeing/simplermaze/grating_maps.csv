@@ -1,0 +1,5 @@
+rewlocation,motor L,motor R,motor LL,motor LR,motor RL,motor RR
+A,L 90,R 0,LL 90,LR 0,RL 0,RR 0
+B,L 90,R 0,LL 0,LR 90,RL 0,RR 0
+C,L 0,R 90,LL 0,LR 0,RL 90,RR 0
+D,L 0,R 90,LL 0,LR 0,RL 0,RR 90

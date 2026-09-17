@@ -1,0 +1,299 @@
+# here we handle all things related to the outputs of the scripts
+#This means we need a class that handles: 
+# creation of a new folder that will go inside the parent folder that was defined in config.py as base_output_path (line 52)
+    # create a subdirectory with the session type (so we organise straight away)
+    # extrapolate date/time of the experiment
+    # prompt user for mouse info (This will be handled later in main.py - should be the equivalent of collect_metadata)
+    #create sub-subdirectory with mouse ID and time info inside the session directory
+# create df and csv with mouse metadata
+# get the stimulus string
+# create visitation log with roi and stimulus info
+#
+
+import os
+import csv
+import time
+import pandas as pd
+import numpy as np
+from typing import List, Dict, Any, Tuple, Optional
+
+
+class DataManager:
+
+    def __init__(self, base_output_path: str):
+        self.base_output_path = base_output_path
+        self.session_directory = ""
+        self.mouseID = ""
+        self.timestamp = ""
+
+    def setup_session(self, cfg, mouse_id: Optional[str] = None) -> Tuple[str, str]:
+        # create folder structure : base_output_path / experiment_session / time_YYYY...mouseID /
+        # return session_directory_path, full mouse ID
+        # mouse_id: pass it to skip the console prompt (the graphical interface
+        # and the --mouse-id flag do this); None prompts as before.
+
+        self.timestamp = time.strftime('%Y-%m-%d_%H_%M_%S', time.localtime())
+
+        if mouse_id is None:
+            mouse_id = input("insert mouse ID (number only):\n")
+        mouse_id = str(mouse_id).strip()
+        if mouse_id.lower().startswith("mouse"):
+            mouse_id = mouse_id[5:]
+        self.mouseID = f"mouse{mouse_id}"
+
+        #create directory structure by creating the experiment session folder
+        experiment_dir_name = cfg.experiment_mode
+
+        #since we have different days of intervals experiments, if the experiment session involves intervals, we name them after the session and day of the session
+        if cfg.experiment_mode == "complex_intervals":
+            experiment_dir_name = f"{cfg.experiment_mode}_{cfg.complex_interval_day}"
+
+        day_label = getattr(cfg, "experiment_day", "")
+        if day_label:
+            exp_sess_dir = os.path.join(self.base_output_path, experiment_dir_name, day_label)
+        else:
+            exp_sess_dir = os.path.join(self.base_output_path, experiment_dir_name)
+
+        if not os.path.exists(exp_sess_dir):
+            os.makedirs(exp_sess_dir)
+            print(f"couldn't find directory, created session directory: {exp_sess_dir}")
+        else:
+            print(f"using existing directory {exp_sess_dir}")
+
+        # now we create the mouse specific subdirectory inside the session directory
+        mouse_dir_name = f"time_{self.timestamp}{self.mouseID}"
+        self.session_directory = os.path.join(exp_sess_dir, mouse_dir_name)
+
+        if not os.path.exists(self.session_directory):
+            os.makedirs(self.session_directory)
+            print(f"created directory {self.session_directory}")
+
+        return self.session_directory, self.mouseID
+    
+
+    def save_metadata(self, metadata: Optional[Dict[str, str]] = None):
+        # save the mouse information into a metadata csv. If ``metadata`` is
+        # given (keys ear_mark, birth_date, gender; missing keys = empty) no
+        # console prompt is shown; otherwise prompt as before.
+        if metadata is None:
+            print("Mouse info (press enter to skip)")
+            ear_mark = input("ear mark identifiers?\n").strip()
+            birth_date= input("insert mouse birth date:\n").strip()
+            gender= input("insert mouse gender (m/f/whatever the mouse identifies with):\n").strip().lower()
+        else:
+            ear_mark = str(metadata.get("ear_mark", "")).strip()
+            birth_date = str(metadata.get("birth_date", "")).strip()
+            gender = str(metadata.get("gender", "")).strip().lower()
+
+        data = {
+            "animal ID": self.mouseID,
+            "session_date": self.timestamp,
+            "ear_mark": ear_mark,
+            "birth_date": birth_date,
+            "gender":gender
+        }
+
+        filename = f"{self.mouseID}_{self.timestamp}_metadata.csv"
+
+        path = os.path.join(self.session_directory, filename)
+
+        pd.DataFrame([data]).to_csv(path, index = False)
+        print(f"Metadata csv saved to {filename}")
+
+    def init_visit_log(self, cfg):
+        # create the csv file that is going to contain the visitation log (sequence of visitations)
+        # cfg can be a config object (with .experiment_mode) or a plain string
+        experiment_mode = cfg if isinstance(cfg, str) else cfg.experiment_mode
+        filename = f"{self.mouseID}_{experiment_mode}_detailed_visits.csv"
+        full_path = os.path.join(self.session_directory, filename)
+        
+        headers = ["trial_ID", "ROI_visited", "stimulus","sound_on_time" , "sound_off_time","time_spent_seconds"]
+        
+        with open(full_path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            
+        return full_path
+
+    # keep old name as alias for backward compatibility
+    initialise_visit_log = init_visit_log
+
+    def init_maze_log(self, cfg) -> str:
+        experiment_mode = cfg if isinstance(cfg, str) else cfg.experiment_mode
+        filename = f"{self.mouseID}_{experiment_mode}_maze_entries.csv"
+        full_path = os.path.join(self.session_directory, filename)
+        headers = ["trial_ID", "event", "timestamp", "time_in_maze_seconds"]
+        with open(full_path, 'w', newline='') as f:
+            csv.writer(f).writerow(headers)
+        return full_path
+
+    @staticmethod
+    def log_maze_event(csv_path: str, trial_id: int, event: str, timestamp: float, duration: float):
+        with open(csv_path, 'a', newline='') as f:
+            csv.writer(f).writerow([trial_id, event, timestamp, f"{duration:.3f}" if duration is not None else ""])
+
+    @staticmethod
+
+    def get_stimulus_string(trials_df:pd.DataFrame, trial_id:int, roi:str) -> str:
+        
+        #Extract relevant stimulus info for a specific Trial/ROI combination and combine them into a single descriptive string.
+
+        # Filter the dataframe for the specific trial and ROI
+        condition = (trials_df['trial_ID'] == trial_id) & (trials_df['ROIs'] == roi)
+        row = trials_df.loc[condition]
+
+        if row.empty:
+            return "Unknown_Stimulus"
+
+        # List of potential columns to look for (based on your different experiment types)
+        cols_to_check = [
+            'frequency',
+            'sound_type',
+            'interval_type',
+            'interval_ratio',
+            'interval_name',
+            'pattern',
+            'temporal_modulation'
+        ]
+
+        details = []
+
+        for col in cols_to_check:
+            if col in row.columns:
+                val = row[col].values[0]
+
+                # --- handle arrays/lists vs scalars safely ---
+
+                # Case 1: numpy array or Python list
+                if isinstance(val, (np.ndarray, list)):
+                    arr = np.array(val)
+
+                    # skip if completely empty or all NaN
+                    if arr.size == 0 or np.all(pd.isna(arr)):
+                        continue
+
+                    # make a compact string representation
+                    flat = arr.flatten()
+                    if flat.size > 5:
+                        val_str = "[" + ", ".join(map(str, flat[:5])) + ", ...]"
+                    else:
+                        val_str = "[" + ", ".join(map(str, flat)) + "]"
+
+                else:
+                    # Case 2: scalar-like value
+                    # only treat as missing if pandas thinks so
+                    if pd.isna(val):
+                        continue
+                    val_str = str(val)
+
+                details.append(f"{col}:{val_str}")
+
+        return " | ".join(details) if details else "No_Stimulus_Info"
+
+    
+    @staticmethod
+    def log_individual_visit(csv_path:str, trial_id:int , roi:str, stimulus_str:str, sound_onset:float, sound_offset:float, duration:float):
+        #Appends to the log csv a single visit event
+        with open(csv_path, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([trial_id, roi, stimulus_str, sound_onset, sound_offset, duration])
+
+    # Units of every column the session writes. Analysis code should read
+    # these from the manifest rather than assuming (v1 recordings stored
+    # time_spent in milliseconds; v2 stores seconds).
+    OUTPUT_SCHEMA: Dict[str, Dict[str, str]] = {
+        "trials_csv": {
+            "trial_ID": "block number, 1-based; odd = silent block, even = active block",
+            "ROIs": "ROI name",
+            "frequency": "Hz, 0 = silent, or a label (grammar / vocalisation / file path)",
+            "time_spent": "seconds, summed over all visits in the block",
+            "visitation_count": "count of visits in the block",
+        },
+        "detailed_visits_csv": {
+            "trial_ID": "block number",
+            "ROI_visited": "ROI name",
+            "stimulus": "stimulus description string",
+            "sound_on_time": "unix time in seconds, visit start",
+            "sound_off_time": "unix time in seconds, visit end",
+            "time_spent_seconds": "seconds",
+        },
+        "maze_entries_csv": {
+            "trial_ID": "block number",
+            "event": "entered / exited / session_end_still_inside",
+            "timestamp": "unix time in seconds",
+            "time_in_maze_seconds": "seconds, only on exit events",
+        },
+    }
+
+    @staticmethod
+    def write_manifest(session_dir: str, cfg: Any, files: Dict[str, Optional[str]],
+                       status: str, extra: Optional[Dict[str, Any]] = None) -> str:
+        """Write ``session_manifest.json`` describing this session.
+
+        The manifest records the exact configuration used, the package
+        version, the files produced and the units of their columns, so an
+        analysis tool (or a person, years later) can read a session folder
+        without guessing. Called once when the session starts (status
+        "running") and again when it ends (status "completed" or "aborted").
+        """
+        import dataclasses
+        import json
+        try:
+            from amazeing import __version__ as pkg_version
+        except Exception:  # pragma: no cover
+            pkg_version = "unknown"
+
+        manifest = {
+            "manifest_version": 1,
+            "amazeing_version": pkg_version,
+            "status": status,
+            "written_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+            "config": dataclasses.asdict(cfg) if dataclasses.is_dataclass(cfg) else dict(cfg),
+            "files": {k: (os.path.basename(v) if v else None) for k, v in files.items()},
+            "columns": DataManager.OUTPUT_SCHEMA,
+        }
+        if extra:
+            manifest.update(extra)
+        path = os.path.join(session_dir, "session_manifest.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(manifest, fh, indent=2, default=str)
+        return path
+
+    @staticmethod
+    def close_open_visits(csv_path: str, trials_df: pd.DataFrame, trial_id: int,
+                          visit_start_times: Dict[str, Optional[float]],
+                          end_time: float) -> int:
+        """Log and account for every visit still open when a trial block ends.
+
+        Before this existed, a visit that straddled a block boundary was
+        silently dropped (v2) or its duration inflated (v1). Here the visit
+        is closed at ``end_time`` (the block end), written to the visit log
+        like any other visit, and its duration is added to ``time_spent`` for
+        the (trial, ROI) row. Entries in ``visit_start_times`` are reset to
+        None. Returns the number of visits closed.
+        """
+        closed = 0
+        for roi, start_t in list(visit_start_times.items()):
+            if start_t is None:
+                continue
+            visit_dur = max(0.0, end_time - start_t)
+            stim_info = DataManager.get_stimulus_string(trials_df, trial_id, roi)
+            DataManager.log_individual_visit(csv_path, trial_id, roi, stim_info,
+                                             start_t, end_time, visit_dur)
+            mask = (trials_df['trial_ID'] == trial_id) & (trials_df['ROIs'] == roi)
+            if mask.any():
+                current = trials_df.loc[mask, 'time_spent'].values[0]
+                trials_df.loc[mask, 'time_spent'] = (
+                    visit_dur if pd.isna(current) else current + visit_dur
+                )
+            visit_start_times[roi] = None
+            closed += 1
+        return closed
+
+
+
+
+
+
+
+

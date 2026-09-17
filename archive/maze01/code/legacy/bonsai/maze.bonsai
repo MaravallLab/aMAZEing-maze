@@ -1,0 +1,1142 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<WorkflowBuilder Version="2.7.3"
+                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xmlns:io="clr-namespace:Bonsai.IO;assembly=Bonsai.System"
+                 xmlns:rx="clr-namespace:Bonsai.Reactive;assembly=Bonsai.Core"
+                 xmlns:cv="clr-namespace:Bonsai.Vision;assembly=Bonsai.Vision"
+                 xmlns:dsp="clr-namespace:Bonsai.Dsp;assembly=Bonsai.Dsp"
+                 xmlns:ipy="clr-namespace:Bonsai.Scripting.IronPython;assembly=Bonsai.Scripting.IronPython"
+                 xmlns:ard="clr-namespace:Bonsai.Arduino;assembly=Bonsai.Arduino"
+                 xmlns="https://bonsai-rx.org/2018/workflow">
+  <Workflow>
+    <Nodes>
+      <Expression xsi:type="io:CsvReader">
+        <io:FileName>trials.csv</io:FileName>
+        <io:ListSeparator>,</io:ListSeparator>
+        <io:ScanPattern>%h</io:ScanPattern>
+        <io:SkipRows>1</io:SkipRows>
+      </Expression>
+      <Expression xsi:type="io:CsvReader">
+        <io:FileName>trials_2columns.csv</io:FileName>
+        <io:ListSeparator>,</io:ListSeparator>
+        <io:ScanPattern>%h</io:ScanPattern>
+        <io:SkipRows>1</io:SkipRows>
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="rx:Concat" />
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="PropertyMapping">
+          <PropertyMappings>
+            <Property Name="Value" />
+          </PropertyMappings>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="cv:FileCapture">
+          <cv:FileName>C:\Users\Andre Maia Chagas\Desktop\8487_14_29_12__3012023_train_all.mp4</cv:FileName>
+          <cv:PlaybackRate>0</cv:PlaybackRate>
+          <cv:StartPosition>0</cv:StartPosition>
+          <cv:PositionUnits>Frames</cv:PositionUnits>
+          <cv:Loop>false</cv:Loop>
+          <cv:Playing>true</cv:Playing>
+        </Combinator>
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="cv:Grayscale" />
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="cv:Crop">
+          <cv:RegionOfInterest>
+            <cv:X>73</cv:X>
+            <cv:Y>50</cv:Y>
+            <cv:Width>334</cv:Width>
+            <cv:Height>360</cv:Height>
+          </cv:RegionOfInterest>
+        </Combinator>
+      </Expression>
+      <Expression xsi:type="GroupWorkflow">
+        <Name>entrance1</Name>
+        <Workflow>
+          <Nodes>
+            <Expression xsi:type="WorkflowInput">
+              <Name>Source1</Name>
+            </Expression>
+            <Expression xsi:type="Combinator">
+              <Combinator xsi:type="cv:Crop">
+                <cv:RegionOfInterest>
+                  <cv:X>91</cv:X>
+                  <cv:Y>186</cv:Y>
+                  <cv:Width>25</cv:Width>
+                  <cv:Height>18</cv:Height>
+                </cv:RegionOfInterest>
+              </Combinator>
+            </Expression>
+            <Expression xsi:type="Combinator">
+              <Combinator xsi:type="cv:Threshold">
+                <cv:ThresholdValue>148</cv:ThresholdValue>
+                <cv:MaxValue>255</cv:MaxValue>
+                <cv:ThresholdType>BinaryInv</cv:ThresholdType>
+              </Combinator>
+            </Expression>
+            <Expression xsi:type="Combinator">
+              <Combinator xsi:type="dsp:Sum" />
+            </Expression>
+            <Expression xsi:type="MemberSelector">
+              <Selector>Val0</Selector>
+            </Expression>
+            <Expression xsi:type="GreaterThan">
+              <Operand xsi:type="DoubleProperty">
+                <Value>50000</Value>
+              </Operand>
+            </Expression>
+            <Expression xsi:type="WorkflowOutput" />
+          </Nodes>
+          <Edges>
+            <Edge From="0" To="1" Label="Source1" />
+            <Edge From="1" To="2" Label="Source1" />
+            <Edge From="2" To="3" Label="Source1" />
+            <Edge From="3" To="4" Label="Source1" />
+            <Edge From="4" To="5" Label="Source1" />
+            <Edge From="5" To="6" Label="Source1" />
+          </Edges>
+        </Workflow>
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="rx:DistinctUntilChanged" />
+      </Expression>
+      <Expression xsi:type="GroupWorkflow">
+        <Name>entrance2</Name>
+        <Workflow>
+          <Nodes>
+            <Expression xsi:type="WorkflowInput">
+              <Name>Source1</Name>
+            </Expression>
+            <Expression xsi:type="Combinator">
+              <Combinator xsi:type="cv:Crop">
+                <cv:RegionOfInterest>
+                  <cv:X>106</cv:X>
+                  <cv:Y>186</cv:Y>
+                  <cv:Width>31</cv:Width>
+                  <cv:Height>16</cv:Height>
+                </cv:RegionOfInterest>
+              </Combinator>
+            </Expression>
+            <Expression xsi:type="Combinator">
+              <Combinator xsi:type="cv:Threshold">
+                <cv:ThresholdValue>148</cv:ThresholdValue>
+                <cv:MaxValue>255</cv:MaxValue>
+                <cv:ThresholdType>BinaryInv</cv:ThresholdType>
+              </Combinator>
+            </Expression>
+            <Expression xsi:type="Combinator">
+              <Combinator xsi:type="dsp:Sum" />
+            </Expression>
+            <Expression xsi:type="MemberSelector">
+              <Selector>Val0</Selector>
+            </Expression>
+            <Expression xsi:type="GreaterThan">
+              <Operand xsi:type="DoubleProperty">
+                <Value>50000</Value>
+              </Operand>
+            </Expression>
+            <Expression xsi:type="WorkflowOutput" />
+          </Nodes>
+          <Edges>
+            <Edge From="0" To="1" Label="Source1" />
+            <Edge From="1" To="2" Label="Source1" />
+            <Edge From="2" To="3" Label="Source1" />
+            <Edge From="3" To="4" Label="Source1" />
+            <Edge From="4" To="5" Label="Source1" />
+            <Edge From="5" To="6" Label="Source1" />
+          </Edges>
+        </Workflow>
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="rx:DistinctUntilChanged" />
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="rx:Zip" />
+      </Expression>
+      <Expression xsi:type="BitwiseAnd" />
+      <Expression xsi:type="rx:Condition">
+        <Workflow>
+          <Nodes>
+            <Expression xsi:type="WorkflowInput">
+              <Name>Source1</Name>
+            </Expression>
+            <Expression xsi:type="WorkflowOutput" />
+          </Nodes>
+          <Edges>
+            <Edge From="0" To="1" Label="Source1" />
+          </Edges>
+        </Workflow>
+      </Expression>
+      <Expression xsi:type="Combinator">
+        <Combinator xsi:type="rx:Zip" />
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>entrance2</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="cv:Crop">
+                  <cv:RegionOfInterest>
+                    <cv:X>30</cv:X>
+                    <cv:Y>144</cv:Y>
+                    <cv:Width>22</cv:Width>
+                    <cv:Height>34</cv:Height>
+                  </cv:RegionOfInterest>
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="cv:Threshold">
+                  <cv:ThresholdValue>148</cv:ThresholdValue>
+                  <cv:MaxValue>255</cv:MaxValue>
+                  <cv:ThresholdType>BinaryInv</cv:ThresholdType>
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="dsp:Sum" />
+              </Expression>
+              <Expression xsi:type="MemberSelector">
+                <Selector>Val0</Selector>
+              </Expression>
+              <Expression xsi:type="GreaterThan">
+                <Operand xsi:type="DoubleProperty">
+                  <Value>50000</Value>
+                </Operand>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="2" Label="Source1" />
+              <Edge From="2" To="3" Label="Source1" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+              <Edge From="5" To="6" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="rx:DistinctUntilChanged" />
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="BitwiseAnd">
+          <Operand xsi:type="BooleanProperty">
+            <Value>false</Value>
+          </Operand>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="MemberSelector">
+          <Selector>Item1</Selector>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="ipy:PythonTransform">
+          <ipy:Script>@returns(int)
+def process(value):
+  if value:
+    output = 1
+  else:
+    output = 0
+  return output</ipy:Script>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="rx:Accumulate" />
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="rx:DistinctUntilChanged" />
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>trial_counter</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Slice">
+                  <rx:Start>0</rx:Start>
+                  <rx:Step>6</rx:Step>
+                  <rx:Stop xsi:nil="true" />
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source2</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Zip" />
+              </Expression>
+              <Expression xsi:type="ipy:PythonTransform">
+                <ipy:Script>@returns(int)
+def process(value):
+  
+  output=value[1]
+  
+  
+  return output</ipy:Script>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="3" Label="Source2" />
+              <Edge From="2" To="3" Label="Source1" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>motor1</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Slice">
+                  <rx:Start>1</rx:Start>
+                  <rx:Step>6</rx:Step>
+                  <rx:Stop xsi:nil="true" />
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source2</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Zip" />
+              </Expression>
+              <Expression xsi:type="ipy:PythonTransform">
+                <ipy:Script>@returns(int)
+def process(value):
+  
+  output=value[1]
+  
+  
+  return output</ipy:Script>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="3" Label="Source2" />
+              <Edge From="2" To="3" Label="Source1" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="ard:ServoOutput">
+            <ard:Pin>0</ard:Pin>
+          </Combinator>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>motor2</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Slice">
+                  <rx:Start>2</rx:Start>
+                  <rx:Step>6</rx:Step>
+                  <rx:Stop xsi:nil="true" />
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source2</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Zip" />
+              </Expression>
+              <Expression xsi:type="ipy:PythonTransform">
+                <ipy:Script>@returns(int)
+def process(value):
+  
+  output=value[1]
+  
+  
+  return output</ipy:Script>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="3" Label="Source2" />
+              <Edge From="2" To="3" Label="Source1" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="ard:ServoOutput">
+            <ard:Pin>0</ard:Pin>
+          </Combinator>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>motor3</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Slice">
+                  <rx:Start>3</rx:Start>
+                  <rx:Step>6</rx:Step>
+                  <rx:Stop xsi:nil="true" />
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source2</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Zip" />
+              </Expression>
+              <Expression xsi:type="ipy:PythonTransform">
+                <ipy:Script>@returns(int)
+def process(value):
+  
+  output=value[1]
+  
+  
+  return output</ipy:Script>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="3" Label="Source2" />
+              <Edge From="2" To="3" Label="Source1" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="ard:ServoOutput">
+            <ard:Pin>0</ard:Pin>
+          </Combinator>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>motor4</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Slice">
+                  <rx:Start>4</rx:Start>
+                  <rx:Step>6</rx:Step>
+                  <rx:Stop xsi:nil="true" />
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source2</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Zip" />
+              </Expression>
+              <Expression xsi:type="ipy:PythonTransform">
+                <ipy:Script>@returns(int)
+def process(value):
+  
+  output=value[1]
+  
+  
+  return output</ipy:Script>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="3" Label="Source2" />
+              <Edge From="2" To="3" Label="Source1" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="ard:ServoOutput">
+            <ard:Pin>0</ard:Pin>
+          </Combinator>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>rewLoc</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Slice">
+                  <rx:Start>5</rx:Start>
+                  <rx:Step>6</rx:Step>
+                  <rx:Stop xsi:nil="true" />
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source2</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="rx:Zip" />
+              </Expression>
+              <Expression xsi:type="ipy:PythonTransform">
+                <ipy:Script>@returns(int)
+def process(value):
+  
+  output=value[1]
+  
+  
+  return output</ipy:Script>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="3" Label="Source2" />
+              <Edge From="2" To="3" Label="Source1" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>rewLogic1</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="GroupWorkflow">
+                <Name>rewArea1</Name>
+                <Workflow>
+                  <Nodes>
+                    <Expression xsi:type="WorkflowInput">
+                      <Name>Source1</Name>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="cv:Crop">
+                        <cv:RegionOfInterest>
+                          <cv:X>104</cv:X>
+                          <cv:Y>55</cv:Y>
+                          <cv:Width>15</cv:Width>
+                          <cv:Height>28</cv:Height>
+                        </cv:RegionOfInterest>
+                      </Combinator>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="cv:Threshold">
+                        <cv:ThresholdValue>134</cv:ThresholdValue>
+                        <cv:MaxValue>255</cv:MaxValue>
+                        <cv:ThresholdType>BinaryInv</cv:ThresholdType>
+                      </Combinator>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="dsp:Sum" />
+                    </Expression>
+                    <Expression xsi:type="MemberSelector">
+                      <Selector>Val0</Selector>
+                    </Expression>
+                    <Expression xsi:type="GreaterThan">
+                      <Operand xsi:type="DoubleProperty">
+                        <Value>50000</Value>
+                      </Operand>
+                    </Expression>
+                    <Expression xsi:type="WorkflowOutput" />
+                  </Nodes>
+                  <Edges>
+                    <Edge From="0" To="1" Label="Source1" />
+                    <Edge From="1" To="2" Label="Source1" />
+                    <Edge From="2" To="3" Label="Source1" />
+                    <Edge From="3" To="4" Label="Source1" />
+                    <Edge From="4" To="5" Label="Source1" />
+                    <Edge From="5" To="6" Label="Source1" />
+                  </Edges>
+                </Workflow>
+              </Expression>
+              <Expression xsi:type="PropertyMapping">
+                <PropertyMappings>
+                  <Property Name="Value" />
+                </PropertyMappings>
+              </Expression>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source2</Name>
+              </Expression>
+              <Expression xsi:type="Equal">
+                <Operand xsi:type="IntProperty">
+                  <Value>1</Value>
+                </Operand>
+              </Expression>
+              <Expression xsi:type="BitwiseAnd">
+                <Operand xsi:type="BooleanProperty">
+                  <Value>false</Value>
+                </Operand>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="2" Label="Source1" />
+              <Edge From="2" To="5" Label="Source2" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+              <Edge From="5" To="6" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>rewLogic2</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="GroupWorkflow">
+                <Name>rewArea2</Name>
+                <Workflow>
+                  <Nodes>
+                    <Expression xsi:type="WorkflowInput">
+                      <Name>Source1</Name>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="cv:Crop">
+                        <cv:RegionOfInterest>
+                          <cv:X>173</cv:X>
+                          <cv:Y>53</cv:Y>
+                          <cv:Width>20</cv:Width>
+                          <cv:Height>24</cv:Height>
+                        </cv:RegionOfInterest>
+                      </Combinator>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="cv:Threshold">
+                        <cv:ThresholdValue>187</cv:ThresholdValue>
+                        <cv:MaxValue>255</cv:MaxValue>
+                        <cv:ThresholdType>BinaryInv</cv:ThresholdType>
+                      </Combinator>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="dsp:Sum" />
+                    </Expression>
+                    <Expression xsi:type="MemberSelector">
+                      <Selector>Val0</Selector>
+                    </Expression>
+                    <Expression xsi:type="GreaterThan">
+                      <Operand xsi:type="DoubleProperty">
+                        <Value>50000</Value>
+                      </Operand>
+                    </Expression>
+                    <Expression xsi:type="WorkflowOutput" />
+                  </Nodes>
+                  <Edges>
+                    <Edge From="0" To="1" Label="Source1" />
+                    <Edge From="1" To="2" Label="Source1" />
+                    <Edge From="2" To="3" Label="Source1" />
+                    <Edge From="3" To="4" Label="Source1" />
+                    <Edge From="4" To="5" Label="Source1" />
+                    <Edge From="5" To="6" Label="Source1" />
+                  </Edges>
+                </Workflow>
+              </Expression>
+              <Expression xsi:type="PropertyMapping">
+                <PropertyMappings>
+                  <Property Name="Value" />
+                </PropertyMappings>
+              </Expression>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source2</Name>
+              </Expression>
+              <Expression xsi:type="Equal">
+                <Operand xsi:type="IntProperty">
+                  <Value>2</Value>
+                </Operand>
+              </Expression>
+              <Expression xsi:type="BitwiseAnd">
+                <Operand xsi:type="BooleanProperty">
+                  <Value>true</Value>
+                </Operand>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="2" Label="Source1" />
+              <Edge From="2" To="5" Label="Source2" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+              <Edge From="5" To="6" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>rewLogic3</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="GroupWorkflow">
+                <Name>rewArea3</Name>
+                <Workflow>
+                  <Nodes>
+                    <Expression xsi:type="WorkflowInput">
+                      <Name>Source1</Name>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="cv:Crop">
+                        <cv:RegionOfInterest>
+                          <cv:X>97</cv:X>
+                          <cv:Y>259</cv:Y>
+                          <cv:Width>17</cv:Width>
+                          <cv:Height>17</cv:Height>
+                        </cv:RegionOfInterest>
+                      </Combinator>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="cv:Threshold">
+                        <cv:ThresholdValue>187</cv:ThresholdValue>
+                        <cv:MaxValue>255</cv:MaxValue>
+                        <cv:ThresholdType>BinaryInv</cv:ThresholdType>
+                      </Combinator>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="dsp:Sum" />
+                    </Expression>
+                    <Expression xsi:type="MemberSelector">
+                      <Selector>Val0</Selector>
+                    </Expression>
+                    <Expression xsi:type="GreaterThan">
+                      <Operand xsi:type="DoubleProperty">
+                        <Value>50000</Value>
+                      </Operand>
+                    </Expression>
+                    <Expression xsi:type="WorkflowOutput" />
+                  </Nodes>
+                  <Edges>
+                    <Edge From="0" To="1" Label="Source1" />
+                    <Edge From="1" To="2" Label="Source1" />
+                    <Edge From="2" To="3" Label="Source1" />
+                    <Edge From="3" To="4" Label="Source1" />
+                    <Edge From="4" To="5" Label="Source1" />
+                    <Edge From="5" To="6" Label="Source1" />
+                  </Edges>
+                </Workflow>
+              </Expression>
+              <Expression xsi:type="PropertyMapping">
+                <PropertyMappings>
+                  <Property Name="Value" />
+                </PropertyMappings>
+              </Expression>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source2</Name>
+              </Expression>
+              <Expression xsi:type="Equal">
+                <Operand xsi:type="IntProperty">
+                  <Value>3</Value>
+                </Operand>
+              </Expression>
+              <Expression xsi:type="BitwiseAnd">
+                <Operand xsi:type="BooleanProperty">
+                  <Value>false</Value>
+                </Operand>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="2" Label="Source1" />
+              <Edge From="2" To="5" Label="Source2" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+              <Edge From="5" To="6" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>rewLogic4</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="GroupWorkflow">
+                <Name>rewArea4</Name>
+                <Workflow>
+                  <Nodes>
+                    <Expression xsi:type="WorkflowInput">
+                      <Name>Source1</Name>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="cv:Crop">
+                        <cv:RegionOfInterest>
+                          <cv:X>168</cv:X>
+                          <cv:Y>252</cv:Y>
+                          <cv:Width>17</cv:Width>
+                          <cv:Height>30</cv:Height>
+                        </cv:RegionOfInterest>
+                      </Combinator>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="cv:Threshold">
+                        <cv:ThresholdValue>187</cv:ThresholdValue>
+                        <cv:MaxValue>255</cv:MaxValue>
+                        <cv:ThresholdType>BinaryInv</cv:ThresholdType>
+                      </Combinator>
+                    </Expression>
+                    <Expression xsi:type="Combinator">
+                      <Combinator xsi:type="dsp:Sum" />
+                    </Expression>
+                    <Expression xsi:type="MemberSelector">
+                      <Selector>Val0</Selector>
+                    </Expression>
+                    <Expression xsi:type="GreaterThan">
+                      <Operand xsi:type="DoubleProperty">
+                        <Value>50000</Value>
+                      </Operand>
+                    </Expression>
+                    <Expression xsi:type="WorkflowOutput" />
+                  </Nodes>
+                  <Edges>
+                    <Edge From="0" To="1" Label="Source1" />
+                    <Edge From="1" To="2" Label="Source1" />
+                    <Edge From="2" To="3" Label="Source1" />
+                    <Edge From="3" To="4" Label="Source1" />
+                    <Edge From="4" To="5" Label="Source1" />
+                    <Edge From="5" To="6" Label="Source1" />
+                  </Edges>
+                </Workflow>
+              </Expression>
+              <Expression xsi:type="PropertyMapping">
+                <PropertyMappings>
+                  <Property Name="Value" />
+                </PropertyMappings>
+              </Expression>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source2</Name>
+              </Expression>
+              <Expression xsi:type="Equal">
+                <Operand xsi:type="IntProperty">
+                  <Value>4</Value>
+                </Operand>
+              </Expression>
+              <Expression xsi:type="BitwiseAnd">
+                <Operand xsi:type="BooleanProperty">
+                  <Value>false</Value>
+                </Operand>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="2" Label="Source1" />
+              <Edge From="2" To="5" Label="Source2" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+              <Edge From="5" To="6" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="io:CreateSerialPort">
+            <io:Name>arduino1</io:Name>
+            <io:PortName>COM1</io:PortName>
+            <io:BaudRate>9600</io:BaudRate>
+            <io:Parity>None</io:Parity>
+            <io:ParityReplace>63</io:ParityReplace>
+            <io:DataBits>8</io:DataBits>
+            <io:StopBits>One</io:StopBits>
+            <io:Handshake>None</io:Handshake>
+            <io:DiscardNull>false</io:DiscardNull>
+            <io:DtrEnable>false</io:DtrEnable>
+            <io:RtsEnable>false</io:RtsEnable>
+            <io:ReadBufferSize>4096</io:ReadBufferSize>
+            <io:WriteBufferSize>2048</io:WriteBufferSize>
+            <io:ReceivedBytesThreshold>1</io:ReceivedBytesThreshold>
+          </Combinator>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="io:SerialStringWrite">
+            <io:PortName>COM1</io:PortName>
+            <io:NewLine>\r\n</io:NewLine>
+          </Combinator>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="cv:FileCapture">
+            <cv:FileName>C:\Users\Andre Maia Chagas\Desktop\8487_14_29_12__3012023_train_all.mp4</cv:FileName>
+            <cv:PlaybackRate>120</cv:PlaybackRate>
+            <cv:StartPosition>0</cv:StartPosition>
+            <cv:PositionUnits>Frames</cv:PositionUnits>
+            <cv:Loop>false</cv:Loop>
+            <cv:Playing>true</cv:Playing>
+          </Combinator>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="cv:Grayscale" />
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="cv:Crop">
+            <cv:RegionOfInterest>
+              <cv:X>166</cv:X>
+              <cv:Y>82</cv:Y>
+              <cv:Width>230</cv:Width>
+              <cv:Height>328</cv:Height>
+            </cv:RegionOfInterest>
+          </Combinator>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>entrance1</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="cv:Crop">
+                  <cv:RegionOfInterest>
+                    <cv:X>12</cv:X>
+                    <cv:Y>142</cv:Y>
+                    <cv:Width>15</cv:Width>
+                    <cv:Height>38</cv:Height>
+                  </cv:RegionOfInterest>
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="cv:Threshold">
+                  <cv:ThresholdValue>148</cv:ThresholdValue>
+                  <cv:MaxValue>255</cv:MaxValue>
+                  <cv:ThresholdType>BinaryInv</cv:ThresholdType>
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="dsp:Sum" />
+              </Expression>
+              <Expression xsi:type="MemberSelector">
+                <Selector>Val0</Selector>
+              </Expression>
+              <Expression xsi:type="GreaterThan">
+                <Operand xsi:type="DoubleProperty">
+                  <Value>50000</Value>
+                </Operand>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="2" Label="Source1" />
+              <Edge From="2" To="3" Label="Source1" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+              <Edge From="5" To="6" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="GroupWorkflow">
+          <Name>entrance2</Name>
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="cv:Crop">
+                  <cv:RegionOfInterest>
+                    <cv:X>30</cv:X>
+                    <cv:Y>144</cv:Y>
+                    <cv:Width>22</cv:Width>
+                    <cv:Height>34</cv:Height>
+                  </cv:RegionOfInterest>
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="cv:Threshold">
+                  <cv:ThresholdValue>148</cv:ThresholdValue>
+                  <cv:MaxValue>255</cv:MaxValue>
+                  <cv:ThresholdType>BinaryInv</cv:ThresholdType>
+                </Combinator>
+              </Expression>
+              <Expression xsi:type="Combinator">
+                <Combinator xsi:type="dsp:Sum" />
+              </Expression>
+              <Expression xsi:type="MemberSelector">
+                <Selector>Val0</Selector>
+              </Expression>
+              <Expression xsi:type="GreaterThan">
+                <Operand xsi:type="DoubleProperty">
+                  <Value>50000</Value>
+                </Operand>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+              <Edge From="1" To="2" Label="Source1" />
+              <Edge From="2" To="3" Label="Source1" />
+              <Edge From="3" To="4" Label="Source1" />
+              <Edge From="4" To="5" Label="Source1" />
+              <Edge From="5" To="6" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="rx:Zip" />
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="rx:DistinctUntilChanged" />
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="BitwiseAnd" />
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="rx:Condition">
+          <Workflow>
+            <Nodes>
+              <Expression xsi:type="WorkflowInput">
+                <Name>Source1</Name>
+              </Expression>
+              <Expression xsi:type="WorkflowOutput" />
+            </Nodes>
+            <Edges>
+              <Edge From="0" To="1" Label="Source1" />
+            </Edges>
+          </Workflow>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="io:CsvReader">
+          <io:FileName>trials_2columns.csv</io:FileName>
+          <io:ListSeparator>,</io:ListSeparator>
+          <io:ScanPattern>%h</io:ScanPattern>
+          <io:SkipRows>1</io:SkipRows>
+        </Builder>
+      </Expression>
+      <Expression xsi:type="Disable">
+        <Builder xsi:type="Combinator">
+          <Combinator xsi:type="rx:Zip" />
+        </Builder>
+      </Expression>
+    </Nodes>
+    <Edges>
+      <Edge From="0" To="14" Label="Source2" />
+      <Edge From="1" To="2" Label="Source1" />
+      <Edge From="2" To="22" Label="Source1" />
+      <Edge From="2" To="23" Label="Source1" />
+      <Edge From="2" To="25" Label="Source1" />
+      <Edge From="2" To="27" Label="Source1" />
+      <Edge From="2" To="29" Label="Source1" />
+      <Edge From="2" To="31" Label="Source1" />
+      <Edge From="3" To="17" Label="Source2" />
+      <Edge From="4" To="5" Label="Source1" />
+      <Edge From="5" To="6" Label="Source1" />
+      <Edge From="6" To="7" Label="Source1" />
+      <Edge From="6" To="9" Label="Source1" />
+      <Edge From="6" To="32" Label="Source1" />
+      <Edge From="6" To="33" Label="Source1" />
+      <Edge From="6" To="34" Label="Source1" />
+      <Edge From="6" To="35" Label="Source1" />
+      <Edge From="6" To="15" Label="Source1" />
+      <Edge From="7" To="8" Label="Source1" />
+      <Edge From="8" To="11" Label="Source1" />
+      <Edge From="9" To="10" Label="Source1" />
+      <Edge From="10" To="11" Label="Source2" />
+      <Edge From="11" To="12" Label="Source1" />
+      <Edge From="12" To="13" Label="Source1" />
+      <Edge From="13" To="14" Label="Source1" />
+      <Edge From="15" To="16" Label="Source1" />
+      <Edge From="16" To="17" Label="Source1" />
+      <Edge From="18" To="19" Label="Source1" />
+      <Edge From="19" To="20" Label="Source1" />
+      <Edge From="20" To="21" Label="Source1" />
+      <Edge From="21" To="22" Label="Source2" />
+      <Edge From="21" To="23" Label="Source2" />
+      <Edge From="21" To="25" Label="Source2" />
+      <Edge From="21" To="27" Label="Source2" />
+      <Edge From="21" To="29" Label="Source2" />
+      <Edge From="21" To="31" Label="Source2" />
+      <Edge From="23" To="24" Label="Source1" />
+      <Edge From="25" To="26" Label="Source1" />
+      <Edge From="27" To="28" Label="Source1" />
+      <Edge From="29" To="30" Label="Source1" />
+      <Edge From="31" To="32" Label="Source2" />
+      <Edge From="31" To="33" Label="Source2" />
+      <Edge From="31" To="34" Label="Source2" />
+      <Edge From="31" To="35" Label="Source2" />
+      <Edge From="38" To="39" Label="Source1" />
+      <Edge From="39" To="40" Label="Source1" />
+      <Edge From="40" To="41" Label="Source1" />
+      <Edge From="40" To="42" Label="Source1" />
+      <Edge From="41" To="43" Label="Source1" />
+      <Edge From="42" To="43" Label="Source2" />
+      <Edge From="43" To="44" Label="Source1" />
+      <Edge From="44" To="45" Label="Source1" />
+      <Edge From="45" To="46" Label="Source1" />
+      <Edge From="46" To="48" Label="Source1" />
+      <Edge From="47" To="48" Label="Source2" />
+    </Edges>
+  </Workflow>
+</WorkflowBuilder>

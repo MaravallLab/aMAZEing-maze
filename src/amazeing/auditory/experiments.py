@@ -1,0 +1,1386 @@
+# here we handle all things related to the trials generations
+
+# basically anything that in version_1's supfun_sequences starts with create_ ..._trial or has info in their names
+
+import numpy as np
+import pandas as pd
+import random
+import os
+from dataclasses import dataclass, field
+from typing import Tuple, List, Any, Dict, Union, Optional
+from amazeing.auditory.audio import Audio
+from amazeing.auditory.config import ExperimentConfig
+
+# Grammar stimuli: samplers live at auditory/grammar_stimuli/.
+from amazeing.auditory.grammar_stimuli import config as gcfg
+from amazeing.auditory.grammar_stimuli.sequence_sampler import MarkovSampler
+from amazeing.auditory.grammar_stimuli.tone_generator import generate_melody, generate_silence_gap
+
+#this will be the structure of the output of the trial generation. A dataframe containing all the trials information + the list of the sound sound_arrays
+TrialData = Tuple[pd.DataFrame, List[Any]]
+
+# Each active block uses a stimulus-to-arm mapping that has not been used
+# before. With few arms there are fewer possible mappings than active blocks
+# (2 arms give only 2 orderings but the cycle has 4 active blocks), so the
+# search has to give up rather than loop forever; past this many tries a
+# repeat is accepted.
+_MAX_SHUFFLE_ATTEMPTS = 200
+
+
+@dataclass
+class GrammarStimulus:
+    """Sentinel placed into sound_array for grammar arms.
+
+    main.py detects this type on ROI entry, calls ``render(audio, roi,
+    trial_id)`` to produce a fresh melody waveform, and appends the symbol
+    sequence to ``history`` for downstream logging.
+
+    The same sentinel instance may appear at multiple ROIs across blocks
+    (the shuffle reassigns stimuli to ROIs each active block), so history
+    records the ROI at play time rather than at construction.
+    """
+    sampler: MarkovSampler
+    tier: str                       # "dominant" / "secondary" / "rare"
+    environment_association: str    # "EE" / "SC" - which cage this grammar was paired with
+    history: List[Dict[str, Any]] = field(default_factory=list)
+
+    def render(self, audio: Audio, roi: str = "", trial_id: int = 0,
+               n_repeats: int = 20, apply_speaker_gain: bool = True) -> np.ndarray:
+        """Generate n_repeats consecutive melody cycles (melody + inter-melody gap).
+
+        n_repeats=20 gives ~88 s of audio (20 × 4.4 s), which covers any
+        realistic arm visit without the mouse sitting in silence.
+
+        ``apply_speaker_gain`` equalises the six tones for the calibrated
+        speaker using ``Audio.relative_gains`` (the tone in the deepest notch
+        of the response curve is played at full nominal amplitude, the others
+        are attenuated relative to it). Pass False to reproduce sessions
+        recorded before compensation existed.
+        """
+        gain_fn = None
+        if apply_speaker_gain:
+            gains = audio.relative_gains(list(gcfg.TONES.values()))
+            gain_fn = lambda f: gains.get(float(f), 1.0)  # noqa: E731
+
+        gap = generate_silence_gap(sample_rate=audio.fs)
+        chunks = []
+        for _ in range(n_repeats):
+            meta = self.sampler.sample_melody(length=gcfg.MELODY_LENGTH)
+            wave = generate_melody(meta.symbols, sample_rate=audio.fs,
+                                   amplitude=gcfg.AMPLITUDE, gain_fn=gain_fn)
+            chunks.append(wave)
+            chunks.append(gap)
+            self.history.append({
+                "trial_ID": trial_id,
+                "ROI": roi,
+                "grammar": meta.grammar_name,
+                "tier": meta.tier,
+                "environment_association": self.environment_association,
+                "symbols": "".join(meta.symbols),
+                "mean_bits": meta.mean_bits,
+            })
+        return np.concatenate(chunks).astype(np.float32)
+
+# -- helpers ----------------------------------------------------------
+
+def _make_hashable(x):
+    """Convert lists to tuples so they can go in a set."""
+    if isinstance(x, list):
+        return tuple(x)
+    return x
+
+
+def _add_tracking_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Append the standard behavioural-tracking columns that main.py expects."""
+    n = len(df)
+    df["time_spent"] = [None] * n
+    df["visitation_count"] = [None] * n
+    df["time_in_maze_ms"] = [0] * n
+    df["trial_start_time"] = [None] * n
+    df["end_trial_time"] = [None] * n
+    return df
+
+
+class ExperimentFactory:
+
+    # this class will act like a "menu" that generates the correct trial structure based on the experiment mode in config.py
+    # we generate the sound data that will go in the df with the functions we defined in audio.py
+
+    # -- trial-structure constants ------------------------------------
+    TOTAL_REPETITIONS = 9   # how many blocks (silent + active interleaved)
+    SAMPLE_RATE = 192000    # used only for silence arrays
+
+    @staticmethod
+    def generate_trials(cfg: ExperimentConfig, audio: Audio) -> TrialData:
+
+        generic_rois = [str(i+1) for i in range(cfg.rois_number)]
+        rois_list = cfg.entrance_rois + generic_rois
+
+        experiment_type = cfg.experiment_mode
+
+        # Fail here rather than building a trial table that does not match
+        # the maze. Modes that adapt to any arm count are not affected.
+        cfg.check_stimulus_count()
+
+        print(f"generating trials for {experiment_type}")
+
+        if experiment_type == "simple_smooth":
+            return ExperimentFactory._make_simple_smooth(generic_rois, cfg, audio)
+        elif experiment_type == "simple_intervals":
+            return ExperimentFactory._make_simple_intervals(generic_rois, cfg, audio)
+        elif experiment_type == "temporal_envelope_modulation":
+            return ExperimentFactory._make_temporal_envelope_modulation(generic_rois, cfg, audio)
+        elif experiment_type == "complex_intervals":
+            return ExperimentFactory._make_complex_intervals(generic_rois, cfg, audio)
+        elif experiment_type == "sequences":
+            return ExperimentFactory._make_sequences(generic_rois, cfg, audio)
+        elif experiment_type == "vocalisation":
+            return ExperimentFactory._make_vocalisation(generic_rois, cfg, audio)
+        elif experiment_type == "grammar":
+            return ExperimentFactory._make_grammar(generic_rois, cfg, audio)
+        elif experiment_type == "custom":
+            return ExperimentFactory._make_custom(generic_rois, cfg, audio)
+        elif experiment_type == "semantic_predictive_complexity":
+            raise NotImplementedError("semantic_predictive_complexity is not yet implemented")
+        else:
+            raise ValueError(f"Unknown experiment mode: {experiment_type}")
+
+
+    # ============================================================
+    # EXPERIMENT-SPECIFIC SETUP
+    # ============================================================
+
+    @staticmethod
+    def _make_simple_smooth(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        frequencies = list(cfg.smooth_frequencies)
+
+        if not frequencies:
+            raise ValueError("smooth_frequencies is empty: give at least one frequency.")
+        if len(frequencies) < len(rois):
+            # Repeat as many times as needed. Doubling once was not enough when
+            # there were fewer than half as many frequencies as arms, which
+            # left the list short and raised IndexError further down.
+            print(f"Only {len(frequencies)} frequencies for {len(rois)} arms; recycling them. "
+                  f"Set smooth_frequencies to give each arm its own tone.")
+            repeats = -(-len(rois) // len(frequencies))          # ceiling division
+            frequencies = (frequencies * repeats)[:len(rois)]
+
+        #create trial structure
+        return ExperimentFactory._create_simple_trials_logic(rois, frequencies, audio)
+
+    @staticmethod
+    def _make_simple_intervals(rois: List[str], cfg: ExperimentConfig, audio: Audio, manual: bool = False) -> TrialData:
+        rois_number = cfg.rois_number
+
+        if manual: # if manual =True, prompt the user for the intervals
+            frequency, intervals, intervals_names = ExperimentFactory._ask_info_intervals(rois_number)
+        else:
+            tonal_centre = cfg.simple_interval_tonal_centre
+            intervals_list = list(cfg.simple_intervals_list)
+            frequency, intervals, intervals_names = ExperimentFactory._get_info_intervals_hard_coded(rois, tonal_centre, intervals_list)
+
+        return ExperimentFactory._create_intervals_trials_logic(rois, frequency, intervals, intervals_names, audio)
+
+    @staticmethod
+    def _make_temporal_envelope_modulation(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        rois_number = cfg.rois_number
+
+        # okay, so, this adds another layer of control. You user can choose which frequencies will be smooth, which with constant Amplitude Modulation, and which with variable AM
+
+        smooth_freqs = list(cfg.tem_smooth_freqs)
+        constant_rough_freqs = list(cfg.tem_constant_rough_freqs)
+        #constant temporal modulation
+        ctemporal_modulation = cfg.tem_constant_mod_freq
+        complex_rough_freqs = list(cfg.tem_complex_rough_freqs)
+
+        #complex temporal modulation
+        complex_temporal_modulation = list(cfg.tem_complex_mod_freqs)
+
+        controls = list(cfg.tem_controls)
+
+        path_to_vocalisation = cfg.path_to_vocalisation_control
+
+        frequencies, temporal_modulation, sound_type, sound_arrays = ExperimentFactory._get_info_tem_hard_coded(
+            rois_number,
+            controls,
+            smooth_freqs,
+            constant_rough_freqs,
+            complex_rough_freqs,
+            constant_rough_modulation=ctemporal_modulation,
+            complex_rough_mod=complex_temporal_modulation,
+            depth=cfg.tem_mod_depth,
+            audio=audio,
+            path_to_voc=path_to_vocalisation,
+        )
+
+        return ExperimentFactory._create_tem_trials_logic(rois, frequencies, temporal_modulation, sound_type, sound_arrays, audio)
+
+
+    @staticmethod
+    def _make_complex_intervals(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        day = cfg.resolve_complex_interval_day()
+
+        tonal_centre = cfg.complex_interval_tonal_centre
+        path_to_voc = cfg.path_to_vocalisation_control
+        smooth_freq = day["smooth"]
+        rough_freq = day["rough"]
+        controls = list(day["controls"])
+        consonant_intervals = list(day["consonant"])
+        dissonant_intervals = list(day["dissonant"])
+
+        frequencies, interval_numerical_list, interval_string_names, sound_type, sounds_arrays = ExperimentFactory._get_info_complex_intervals_hard_coded(
+            len(rois),
+            controls,
+            tonal_centre,
+            smooth_freq,
+            rough_freq,
+            consonant_intervals,
+            dissonant_intervals,
+            audio=audio,
+            path_to_voc=path_to_voc,
+        )
+
+        return ExperimentFactory._create_complex_intervals_trials_logic(
+            rois, frequencies, interval_numerical_list, interval_string_names, sound_type, sounds_arrays, audio
+        )
+
+
+    @staticmethod
+    def _make_sequences(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        # Config-driven path: used by the interface and by any session config
+        # that fills in sequence_patterns and sequence_tone_map. Falls back to
+        # the original console prompts when the tone map is empty.
+        if cfg.sequence_patterns and cfg.sequence_tone_map:
+            return ExperimentFactory._make_sequences_from_config(rois, cfg, audio)
+
+        # Interactive Setup (Ported from ask_music_info_sequences)
+        intervals_vs_custom = input("Would you like to add CUSTOM values or generate sequences based on INTERVALS? (c / i): ").lower().strip()
+
+        sequence_of_frequencies = []
+        pattern_list = []
+
+        if intervals_vs_custom in ("c", "custom"):
+            ask_input = input("Make new patterns? (y=insert manually, n=use defaults): ").lower().strip()
+
+            if ask_input == 'y':
+                # Manual Entry
+                for i in range(len(rois)):
+                    p = input(f"Insert pattern #{i+1} (e.g. AoAo, ABAB, random): ").strip()
+                    # Standardize names
+                    if p.lower() in ["random", "silence", "vocalisation"]:
+                        p = p.lower()
+                    elif p in ["AoAo", "aoao", "AOAO"]:
+                        p = "AoAo"
+                    else:
+                        p = p.upper()
+                    pattern_list.append(p)
+            else:
+                # Hardcoded defaults
+                defaults = ['AAAAA', 'AoAo', 'ABAB', 'ABCABC', 'BABA', 'ABBA', "silence", "vocalisation"]
+                # Adjust to ROI count
+                if len(rois) > len(defaults):
+                    defaults = (defaults * 2)
+                pattern_list = defaults[:len(rois)]
+
+            # Map characters to frequencies
+            # Exclude special keywords
+            patterns_nonpatterns = ["silence", "vocalisation", "random"]
+
+            # get the sorted individual events in the sequences and map them to frequencies
+            events = []
+            freqs = []
+            for i in sorted(pattern_list):
+                if i not in patterns_nonpatterns:
+                    for j in i:
+                        if j not in events:
+                            events.append(j)
+                            # ask the user the frequency for the event
+                            if j != 'o':
+                                freq = int(input(f"Insert frequency for sound {j}:\n"))
+                                freqs.append(freq)
+                            else:
+                                freqs.append(0)
+
+            # map frequency to event in a dictionary
+            sound_dict = dict(zip(events, freqs))
+
+            # Generate Sequences (Lists of frequencies)
+            repetitions = 50
+            for item in pattern_list:
+                if item == "random":
+                    # Random selection from defined events
+                    keys = list(sound_dict.keys())
+                    if not keys:
+                        keys = [10000]  # Fallback
+                    seq = [random.choice(keys) for _ in range(200)]
+                    sequence_of_frequencies.append([sound_dict.get(k, 0) for k in seq])
+
+                elif item == "vocalisation":
+                    sequence_of_frequencies.append("vocalisation")
+
+                elif item == "silence":
+                    sequence_of_frequencies.append([0] * 200)
+
+                else:
+                    # Standard pattern (e.g. ABAB)
+                    full_str = (item * repetitions)[:200]  # Cap length
+                    seq_freqs = []
+                    for char in full_str:
+                        seq_freqs.append(sound_dict.get(char, 0))
+                    sequence_of_frequencies.append(seq_freqs)
+
+        else:
+            # intervals mode (not fully implemented in legacy)
+            raise NotImplementedError("Intervals-based sequence generation is not implemented. Use custom mode instead.")
+
+        path_to_voc = cfg.path_to_vocalisation_control
+
+        return ExperimentFactory._create_sequence_trials_logic(rois, sequence_of_frequencies, pattern_list, audio, path_to_voc)
+
+
+    @staticmethod
+    def _make_sequences_from_config(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        """Build sequence stimuli from cfg.sequence_patterns / sequence_tone_map.
+
+        Mirrors the interactive path exactly: a pattern is repeated up to 200
+        tone slots, each letter is looked up in the tone map ("o" and any
+        unmapped letter are silent slots), and the special patterns "silence",
+        "vocalisation" and "random" behave as before.
+        """
+        patterns = list(cfg.sequence_patterns)
+        if len(patterns) < len(rois):
+            patterns = (patterns * ((len(rois) // max(len(patterns), 1)) + 1))
+        patterns = patterns[:len(rois)]
+
+        tone_map = {str(k): float(v) for k, v in cfg.sequence_tone_map.items()}
+        special = ("silence", "vocalisation", "random")
+        unmapped = {ch for p in patterns if p not in special for ch in p
+                    if ch != "o" and ch not in tone_map}
+        if unmapped:
+            raise ValueError(
+                f"sequence_tone_map has no frequency for {sorted(unmapped)}. "
+                f"Add an entry per tone letter used in sequence_patterns "
+                f"(use 'o' for a silent slot).")
+
+        sequence_of_frequencies: List[Any] = []
+        for item in patterns:
+            if item == "vocalisation":
+                sequence_of_frequencies.append("vocalisation")
+            elif item == "silence":
+                sequence_of_frequencies.append([0] * 200)
+            elif item == "random":
+                keys = list(tone_map) or ["A"]
+                sequence_of_frequencies.append(
+                    [tone_map.get(random.choice(keys), 0) for _ in range(200)])
+            else:
+                full = (item * cfg.sequence_repetitions)[:200]
+                sequence_of_frequencies.append([tone_map.get(ch, 0) for ch in full])
+
+        return ExperimentFactory._create_sequence_trials_logic(
+            rois, sequence_of_frequencies, patterns, audio,
+            cfg.path_to_vocalisation_control)
+
+    @staticmethod
+    def _make_vocalisation(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        """All-vocalisation experiment: each ROI plays a different vocalisation file."""
+        path_to_vocalisations_folder = cfg.path_to_vocalisation_folder
+        silent_arm = cfg.vocalisation_include_silent_arm
+
+        if not os.path.isdir(path_to_vocalisations_folder):
+            raise FileNotFoundError(f"Vocalisation folder not found: {path_to_vocalisations_folder}")
+
+        file_names = os.listdir(path_to_vocalisations_folder)
+        stimuli = [os.path.join(path_to_vocalisations_folder, f) for f in file_names]
+
+        if silent_arm:
+            stimuli.append("silent")
+
+        # Adjust to ROI count
+        if len(stimuli) < len(rois):
+            difference = len(rois) - len(stimuli)
+            for _ in range(difference):
+                stimuli.append(random.choice(stimuli[:-1]))  # don't duplicate "silent"
+        elif len(stimuli) > len(rois):
+            stimuli = stimuli[:len(rois)]
+
+        # Build per-ROI info (mirrors vocalisations_info_hc)
+        frequencies = []
+        interval_numerical_list = []
+        interval_string_names = []
+        sound_type = []
+        sounds_arrays = []
+
+        for stim in stimuli:
+            interval_numerical_list.append(0)
+            interval_string_names.append("none")
+            sound_type.append("control")
+
+            if stim == "silent":
+                frequencies.append(0)
+                z = np.zeros(int(audio.fs * audio.default_duration))
+                sounds_arrays.append([z, z])
+            else:
+                frequencies.append(stim)
+                voc = audio.load_wav(stim)
+                silence = np.zeros_like(voc)
+                sounds_arrays.append([voc, silence])
+
+        return ExperimentFactory._create_complex_intervals_trials_logic(
+            rois, frequencies, interval_numerical_list, interval_string_names,
+            sound_type, sounds_arrays, audio
+        )
+
+
+    @staticmethod
+    def _make_grammar(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        """Grammar-learning test-day stimuli (9-block shuffle structure).
+
+        Each mouse has alternated between EE and SC cages during training,
+        with one grammar paired to each cage. On test day the maze
+        presents both grammars at all three predictability tiers, so the
+        experiment can dissociate (a) the grammar-environment association
+        from (b) the predictability tier.
+
+        Builds the 8 canonical stimuli (3 EE-grammar x tier + 3 SC-grammar
+        x tier + vocalisation + silent) once, then assigns them to the 8
+        ROIs in the standard 9-block pattern: odd blocks silent, even
+        blocks shuffle the stimulus-to-ROI mapping.
+
+        Requires rois_number == 8. For training day playback (no video,
+        no ROI gating) use the standalone runner instead:
+
+            cd src/auditory
+            python -m grammar_stimuli.run --mode training \\
+                --grammar A --cage-ids "6224_EE,6225_SC" \\
+                --duration-seconds 14400
+        """
+        if cfg.grammar_mode == "training":
+            raise NotImplementedError(
+                "main.py is ROI-gated and records video; it is not the right driver "
+                "for continuous training playback. Run:\n"
+                "    python -m grammar_stimuli.run --mode training "
+                "--grammar <A or B> --cage-ids '...' --duration-seconds 14400\n"
+                "from src/auditory/ instead."
+            )
+
+        # -- silent_baseline mode (day 1 of the 3-day test protocol) ------
+        # No audio anywhere - just track which ROIs the mouse visits in the
+        # maze, with the camera + visit log on. Used to establish a
+        # baseline ROI preference before the audio-on test days.
+        if cfg.grammar_mode == "silent_baseline":
+            silence = np.zeros(int(audio.fs * audio.default_duration), dtype=np.float32)
+            n = len(rois)
+            df = pd.DataFrame({
+                "trial_ID": [1] * n,
+                "ROIs": list(rois),
+                "frequency": [0] * n,
+                "grammar": ["-"] * n,
+                "tier": ["-"] * n,
+                "environment_association": ["-"] * n,
+                "wave_arrays": [silence] * n,
+            })
+            df = _add_tracking_columns(df)
+            return df, [silence] * n
+
+        if cfg.grammar_mode != "test":
+            raise ValueError(
+                f"grammar_mode must be 'training', 'silent_baseline', or 'test', "
+                f"got {cfg.grammar_mode!r}"
+            )
+        if len(rois) != len(gcfg.TEST_ARM_PLAN):
+            raise ValueError(
+                f"grammar test mode needs {len(gcfg.TEST_ARM_PLAN)} ROIs "
+                f"(got {len(rois)}). Set rois_number=8 in config.py."
+            )
+
+        rng_master = np.random.default_rng(cfg.grammar_seed)
+
+        # The mouse has heard both grammars during training. cfg.enriched_grammar
+        # says which physical grammar (A/B) it heard in the EE cage; the other
+        # one is what it heard in the SC cage.
+        if cfg.enriched_grammar not in ("A", "B"):
+            raise ValueError(
+                f"enriched_grammar must be 'A' or 'B', got {cfg.enriched_grammar!r}"
+            )
+        ee_grammar = cfg.enriched_grammar
+        sc_grammar = "B" if ee_grammar == "A" else "A"
+        env_to_grammar: Dict[str, str] = {"EE": ee_grammar, "SC": sc_grammar}
+
+        # -- Build the 8 canonical stimuli (fixed pool, shuffled per block) --
+        stimuli: List[Any] = []      # one entry per TEST_ARM_PLAN slot
+        stim_labels: List[Dict[str, Any]] = []   # parallel metadata
+
+        for plan in gcfg.TEST_ARM_PLAN:
+            kind = plan["kind"]
+            if kind == "grammar":
+                env = plan["environment_association"]   # "EE" or "SC"
+                grammar_name = env_to_grammar[env]
+                tier = plan["tier"]
+                sampler = MarkovSampler(
+                    grammar_name=grammar_name, tier=tier,
+                    seed=int(rng_master.integers(0, 2**31 - 1)),
+                )
+                stimuli.append(GrammarStimulus(
+                    sampler=sampler, tier=tier,
+                    environment_association=env,
+                ))
+                stim_labels.append({
+                    "frequency": "grammar", "grammar": grammar_name,
+                    "tier": tier, "environment_association": env,
+                })
+            elif kind == "vocalisation":
+                voc_path = cfg.path_to_vocalisation_control
+                if voc_path and os.path.exists(voc_path):
+                    wave = audio.load_wav(voc_path)
+                else:
+                    print(f"[warn] No vocalisation at {voc_path!r}; voc arm will be silent.")
+                    wave = np.zeros(int(audio.fs * audio.default_duration), dtype=np.float32)
+                stimuli.append(wave)
+                stim_labels.append({
+                    "frequency": "vocalisation", "grammar": "-",
+                    "tier": "-", "environment_association": "-",
+                })
+            else:  # "silent"
+                stimuli.append(
+                    np.zeros(int(audio.fs * audio.default_duration), dtype=np.float32)
+                )
+                stim_labels.append({
+                    "frequency": 0, "grammar": "-",
+                    "tier": "-", "environment_association": "-",
+                })
+
+        # -- 9-block structure with per-block shuffle ------------------------
+        total_repetitions = 9
+        n = len(rois)
+        rois_repeated = rois * total_repetitions
+        trial_ids: List[int] = []
+        freq_col: List[Any] = []
+        grammar_col: List[str] = []
+        tier_col: List[str] = []
+        env_col: List[str] = []
+        wave_arrays: List[Any] = []
+        previous_perms: set = set()
+
+        for block in range(total_repetitions):
+            if block % 2 == 0:
+                # Silent block
+                silence = np.zeros(int(audio.fs * audio.default_duration), dtype=np.float32)
+                for _ in range(n):
+                    trial_ids.append(block + 1)
+                    freq_col.append(0)
+                    grammar_col.append("-")
+                    tier_col.append("-")
+                    env_col.append("-")
+                    wave_arrays.append(silence)
+            else:
+                # Active block: unique permutation of stimulus indices
+                attempts = 0
+                while True:
+                    attempts += 1
+                    if block == 1:
+                        perm = tuple(range(n))  # identity on first active block
+                    else:
+                        idxs = list(range(n))
+                        random.shuffle(idxs)
+                        perm = tuple(idxs)
+                    if perm not in previous_perms or attempts >= _MAX_SHUFFLE_ATTEMPTS:
+                        previous_perms.add(perm)
+                        break
+                for j, stim_idx in enumerate(perm):
+                    trial_ids.append(block + 1)
+                    lbl = stim_labels[stim_idx]
+                    freq_col.append(lbl["frequency"])
+                    grammar_col.append(lbl["grammar"])
+                    tier_col.append(lbl["tier"])
+                    env_col.append(lbl["environment_association"])
+                    wave_arrays.append(stimuli[stim_idx])
+
+        df = pd.DataFrame({
+            "trial_ID": trial_ids,
+            "ROIs": rois_repeated,
+            "frequency": freq_col,
+            "grammar": grammar_col,
+            "tier": tier_col,
+            "environment_association": env_col,
+            "wave_arrays": wave_arrays,
+        })
+        df = _add_tracking_columns(df)
+        return df, wave_arrays
+
+
+    @staticmethod
+    def _make_custom(rois: List[str], cfg: ExperimentConfig, audio: Audio) -> TrialData:
+        """User-defined stimulus per ROI, read from ``cfg.custom_stimuli``.
+
+        This is the mode the configuration file and the graphical interface
+        use. It does not touch the hard-coded experiment modes above: it
+        renders one waveform per ROI from a small declarative description
+        and then applies the standard 9-block silent/active structure with
+        per-block shuffling of the stimulus-to-ROI mapping.
+        """
+        by_roi: Dict[str, Dict[str, Any]] = {}
+        for entry in cfg.custom_stimuli:
+            if not isinstance(entry, dict) or "roi" not in entry:
+                raise ValueError(f"custom_stimuli entries need a 'roi' key: {entry!r}")
+            roi = str(entry["roi"])
+            if roi not in rois:
+                raise ValueError(
+                    f"custom_stimuli refers to ROI {roi!r} but rois_number={cfg.rois_number} "
+                    f"only defines {rois}")
+            if roi in by_roi:
+                raise ValueError(f"custom_stimuli defines ROI {roi!r} twice")
+            by_roi[roi] = entry
+
+        labels: List[str] = []
+        kinds: List[str] = []
+        freqs: List[Any] = []
+        waves: List[np.ndarray] = []
+        for roi in rois:
+            spec = by_roi.get(roi, {"kind": "silent"})
+            kind = str(spec.get("kind", "silent")).lower()
+            wave, freq = ExperimentFactory._render_custom_stimulus(spec, kind, audio)
+            labels.append(str(spec.get("label", kind if kind == "silent" else f"{kind}:{freq}")))
+            kinds.append(kind)
+            freqs.append(freq)
+            waves.append(wave)
+
+        return ExperimentFactory._create_custom_trials_logic(rois, freqs, kinds, labels, waves, audio)
+
+    @staticmethod
+    def _render_custom_stimulus(spec: Dict[str, Any], kind: str, audio: Audio):
+        """Return (waveform, frequency_or_path) for one custom_stimuli entry."""
+        if kind == "silent":
+            return np.zeros(int(audio.fs * audio.default_duration)), 0
+        if kind in ("tone", "am_tone"):
+            if "frequency" not in spec:
+                raise ValueError(f"custom stimulus of kind {kind!r} needs 'frequency': {spec!r}")
+            freq = float(spec["frequency"])
+            common = dict(
+                waveform=spec.get("waveform"),
+                duration_s=spec.get("duration_s"),
+                volume=spec.get("volume"),
+                ramp_duration_s=spec.get("ramp_s"),
+            )
+            if kind == "tone":
+                return audio.generate_sound_data(freq, **common), freq
+            return audio.generate_simple_tem_sound_data(
+                freq, modulated_frequency=float(spec.get("mod_freq", 50.0)),
+                depth=float(spec.get("depth", 0.5)), **common), freq
+        if kind == "wav":
+            path = spec.get("path", "")
+            if not path or not os.path.exists(path):
+                raise FileNotFoundError(f"custom stimulus .wav not found: {path!r}")
+            return audio.load_wav(path), path
+        raise ValueError(f"Unknown custom stimulus kind {kind!r} (use tone, am_tone, wav or silent)")
+
+    @staticmethod
+    def _create_custom_trials_logic(
+        rois: List[str],
+        frequencies: List[Any],
+        kinds: List[str],
+        labels: List[str],
+        waves: List[np.ndarray],
+        audio: Audio,
+        total_repetitions: int = 9,
+    ) -> TrialData:
+        """9-block structure for custom stimuli (odd blocks silent, active blocks shuffled)."""
+        rois_repeated = rois * total_repetitions
+        trial_ids: List[int] = []
+        freq_col: List[Any] = []
+        kind_col: List[str] = []
+        label_col: List[str] = []
+        wave_arrays: List[np.ndarray] = []
+        previous_perms: set = set()
+        n = len(rois)
+        silence = np.zeros(int(audio.fs * audio.default_duration))
+
+        for block in range(total_repetitions):
+            if block % 2 == 0:
+                for _ in rois:
+                    trial_ids.append(block + 1)
+                    freq_col.append(0)
+                    kind_col.append("silent_trial")
+                    label_col.append("silent")
+                    wave_arrays.append(silence)
+                continue
+            attempts = 0
+            while True:
+                attempts += 1
+                if block == 1:
+                    perm = tuple(range(n))
+                else:
+                    idxs = list(range(n))
+                    random.shuffle(idxs)
+                    perm = tuple(idxs)
+                # With 1 ROI every permutation is identical; don't loop forever.
+                if perm not in previous_perms or attempts >= _MAX_SHUFFLE_ATTEMPTS:
+                    previous_perms.add(perm)
+                    break
+            for stim_idx in perm:
+                trial_ids.append(block + 1)
+                freq_col.append(frequencies[stim_idx])
+                kind_col.append(kinds[stim_idx])
+                label_col.append(labels[stim_idx])
+                wave_arrays.append(waves[stim_idx])
+
+        df = pd.DataFrame({
+            "trial_ID": trial_ids,
+            "ROIs": rois_repeated,
+            "frequency": freq_col,
+            "sound_type": kind_col,
+            "stimulus_label": label_col,
+            "wave_arrays": wave_arrays,
+        })
+        df = _add_tracking_columns(df)
+        return df, wave_arrays
+
+    # ============================================================
+    # TRIAL CREATION LOGIC
+    # ============================================================
+    #
+    # These methods build the trials DataFrame + wave_arrays list.
+    # The pattern is the same for every experiment type:
+    #   - 9 blocks (total_repetitions), odd blocks are silent
+    #   - even blocks shuffle the ROI↔stimulus mapping
+    #   - first active block (i==1) keeps the original order
+    #   - subsequent active blocks are unique random permutations
+    # ------------------------------------------------------------
+
+    @staticmethod
+    def _create_simple_trials_logic(
+        rois: List[str],
+        frequencies: List[float],
+        audio: Audio,
+        total_repetitions: int = 9,
+    ) -> TrialData:
+        """Create trials for simple smooth sounds (one frequency per ROI)."""
+
+        rois_repeated = rois * total_repetitions
+        frequency_final = []
+        wave_arrays = []
+        repetition_numbers = []
+        previous_trials = set()
+
+        for i in range(total_repetitions):
+            if i % 2 == 0:
+                # Silent block
+                for _ in rois:
+                    repetition_numbers.append(i + 1)
+                    frequency_final.append(0)
+                    wave_arrays.append(np.zeros(int(audio.fs * audio.default_duration)))
+            else:
+                attempts = 0
+                while True:
+                    attempts += 1
+                    if i == 1:
+                        trial_tuple = tuple(frequencies)
+                    else:
+                        trial_list = list(frequencies)
+                        random.shuffle(trial_list)
+                        trial_tuple = tuple(trial_list)
+
+                    if trial_tuple not in previous_trials or attempts >= _MAX_SHUFFLE_ATTEMPTS:
+                        previous_trials.add(trial_tuple)
+                        for j in range(len(rois)):
+                            repetition_numbers.append(i + 1)
+                            freq = trial_tuple[j] if i != 1 else frequencies[j]
+                            frequency_final.append(freq)
+                            wave_arrays.append(audio.generate_sound_data(freq))
+                        break
+
+        df = pd.DataFrame({
+            "trial_ID": repetition_numbers,
+            "ROIs": rois_repeated,
+            "frequency": frequency_final,
+            "wave_arrays": wave_arrays,
+        })
+        df = _add_tracking_columns(df)
+        return df, wave_arrays
+
+
+    @staticmethod
+    def _create_intervals_trials_logic(
+        rois: List[str],
+        frequency: List,         # list of [f1, f2] pairs or "vocalisation"
+        intervals: List,         # interval ratio strings
+        intervals_names: List,   # interval name strings
+        audio: Audio,
+        total_repetitions: int = 9,
+    ) -> TrialData:
+        """Create trials for simple interval experiments (two-tone chords per ROI)."""
+
+        rois_repeated = rois * total_repetitions
+        frequency_final = []
+        intervals_final = []
+        intervals_names_final = []
+        wave_arrays = []
+        repetition_numbers = []
+        previous_trials = set()
+
+        # Pre-generate dual sound arrays for each ROI
+        dual_array_sounds = []
+        for freq_pair in frequency:
+            freq_sounds = []
+            if isinstance(freq_pair, str) and freq_pair == "vocalisation":
+                # handled at playback; store sentinel
+                freq_sounds = ["vocalisation"]
+            elif freq_pair[1] != 0:
+                for f in freq_pair:
+                    freq_sounds.append(audio.generate_sound_data(f))
+            else:
+                # Silent interval
+                for f in freq_pair:
+                    freq_sounds.append(audio.generate_sound_data(f))
+            dual_array_sounds.append(freq_sounds)
+
+        for i in range(total_repetitions):
+            if i % 2 == 0:
+                for _ in rois:
+                    repetition_numbers.append(i + 1)
+                    frequency_final.append(0)
+                    intervals_final.append(0)
+                    intervals_names_final.append(0)
+                    wave_arrays.append(np.zeros(int(audio.fs * audio.default_duration)))
+            else:
+                attempts = 0
+                while True:
+                    attempts += 1
+                    if i == 1:
+                        trial_list = list(zip(frequency, intervals, intervals_names, dual_array_sounds))
+                    else:
+                        trial_list = list(zip(frequency, intervals, intervals_names, dual_array_sounds))
+                        random.shuffle(trial_list)
+
+                    trial_tuple_as_tuple = tuple(item[2] for item in trial_list)
+
+                    if trial_tuple_as_tuple not in previous_trials or attempts >= _MAX_SHUFFLE_ATTEMPTS:
+                        previous_trials.add(trial_tuple_as_tuple)
+                        for j in range(len(rois)):
+                            repetition_numbers.append(i + 1)
+                            freq, inter, inter_name, wave = trial_list[j]
+                            frequency_final.append(freq)
+                            intervals_final.append(inter)
+                            intervals_names_final.append(inter_name)
+                            wave_arrays.append(tuple(wave))
+                        break
+
+        df = pd.DataFrame({
+            "trial_ID": repetition_numbers,
+            "ROIs": rois_repeated,
+            "interval": intervals_names_final,
+            "interval_ratio": intervals_final,
+            "frequency": frequency_final,
+            "wave_arrays": wave_arrays,
+        })
+        df = _add_tracking_columns(df)
+        return df, wave_arrays
+
+
+    @staticmethod
+    def _create_tem_trials_logic(
+        rois: List[str],
+        frequency: List,
+        temporal_modulation: List,
+        sound_type: List,
+        sounds_arrays: List,
+        audio: Audio,
+        total_repetitions: int = 9,
+    ) -> TrialData:
+        """Create trials for temporally envelope-modulated sounds."""
+
+        rois_repeated = rois * total_repetitions
+        frequency_final = []
+        temporal_modulations_final = []
+        sound_type_final = []
+        wave_arrays = []
+        repetition_numbers = []
+        previous_trials = set()
+
+        for i in range(total_repetitions):
+            if i % 2 == 0:
+                for _ in rois:
+                    repetition_numbers.append(i + 1)
+                    frequency_final.append(0)
+                    temporal_modulations_final.append("none")
+                    sound_type_final.append("silent_trial")
+                    wave_arrays.append(np.zeros(int(audio.fs * audio.default_duration)))
+            else:
+                attempts = 0
+                while True:
+                    attempts += 1
+                    if i == 1:
+                        trial_triples = []
+                        for idx in range(len(rois)):
+                            freq = frequency[idx]
+                            mod = _make_hashable(temporal_modulation[idx])
+                            typ = sound_type[idx]
+                            trial_triples.append((freq, mod, typ))
+                        trial_tuple_as_tuple = tuple(trial_triples)
+                        trial_list = list(zip(frequency, temporal_modulation, sound_type, sounds_arrays))
+                    else:
+                        combined = list(zip(frequency, temporal_modulation, sound_type, sounds_arrays))
+                        random.shuffle(combined)
+                        trial_triples = []
+                        for (freq, mod, typ, snd) in combined:
+                            trial_triples.append((freq, _make_hashable(mod), typ))
+                        trial_tuple_as_tuple = tuple(trial_triples)
+                        trial_list = combined
+
+                    if trial_tuple_as_tuple not in previous_trials or attempts >= _MAX_SHUFFLE_ATTEMPTS:
+                        previous_trials.add(trial_tuple_as_tuple)
+
+                        if i == 1:
+                            for idx in range(len(rois)):
+                                repetition_numbers.append(i + 1)
+                                frequency_final.append(frequency[idx])
+                                temporal_modulations_final.append(temporal_modulation[idx])
+                                sound_type_final.append(sound_type[idx])
+                                wave_arrays.append(sounds_arrays[idx])
+                        else:
+                            for (freq_shuf, mod_shuf, typ_shuf, sounds_shuf) in trial_list:
+                                repetition_numbers.append(i + 1)
+                                frequency_final.append(freq_shuf)
+                                temporal_modulations_final.append(mod_shuf)
+                                sound_type_final.append(typ_shuf)
+                                wave_arrays.append(sounds_shuf)
+                        break
+
+        df = pd.DataFrame({
+            "trial_ID": repetition_numbers,
+            "ROIs": rois_repeated,
+            "frequency": frequency_final,
+            "sound_type": sound_type_final,
+            "temporal_modulation": temporal_modulations_final,
+            "wave_arrays": wave_arrays,
+        })
+        df = _add_tracking_columns(df)
+        return df, wave_arrays
+
+
+    @staticmethod
+    def _create_complex_intervals_trials_logic(
+        rois: List[str],
+        frequency: List,
+        interval_numerical_list: List,
+        interval_string_names: List,
+        sound_type: List,
+        sounds_arrays: List,
+        audio: Audio,
+        total_repetitions: int = 9,
+    ) -> TrialData:
+        """Create trials for complex intervals / vocalisation experiments."""
+
+        rois_repeated = rois * total_repetitions
+        frequency_final = []
+        interval_numerical_list_final = []
+        interval_string_names_final = []
+        sound_type_final = []
+        wave_arrays = []
+        repetition_numbers = []
+        previous_trials = set()
+
+        for i in range(total_repetitions):
+            if i % 2 == 0:
+                for _ in rois:
+                    repetition_numbers.append(i + 1)
+                    frequency_final.append(0)
+                    interval_numerical_list_final.append(0)
+                    interval_string_names_final.append(0)
+                    sound_type_final.append("silent_trial")
+                    wave_arrays.append((0, 0))
+            else:
+                attempts = 0
+                while True:
+                    attempts += 1
+                    if i == 1:
+                        trial_triples = []
+                        for idx in range(len(rois)):
+                            freq = _make_hashable(frequency[idx])
+                            int_num = interval_numerical_list[idx]
+                            int_name = interval_string_names[idx]
+                            typ = sound_type[idx]
+                            trial_triples.append((freq, int_num, int_name, typ))
+                        trial_tuple_as_tuple = tuple(trial_triples)
+                        trial_list = list(zip(frequency, interval_numerical_list, interval_string_names, sound_type, sounds_arrays))
+                    else:
+                        combined = list(zip(frequency, interval_numerical_list, interval_string_names, sound_type, sounds_arrays))
+                        random.shuffle(combined)
+                        trial_triples = []
+                        for (freq, int_num, int_name, typ, snd) in combined:
+                            trial_triples.append((_make_hashable(freq), int_num, int_name, typ))
+                        trial_tuple_as_tuple = tuple(trial_triples)
+                        trial_list = combined
+
+                    if trial_tuple_as_tuple not in previous_trials or attempts >= _MAX_SHUFFLE_ATTEMPTS:
+                        previous_trials.add(trial_tuple_as_tuple)
+
+                        if i == 1:
+                            for idx in range(len(rois)):
+                                repetition_numbers.append(i + 1)
+                                frequency_final.append(frequency[idx])
+                                interval_numerical_list_final.append(interval_numerical_list[idx])
+                                interval_string_names_final.append(interval_string_names[idx])
+                                sound_type_final.append(sound_type[idx])
+                                wave_arrays.append(tuple(sounds_arrays[idx]))
+                        else:
+                            for (freq_shuf, int_num_shuf, int_name_shuf, typ_shuf, sounds_shuf) in trial_list:
+                                repetition_numbers.append(i + 1)
+                                frequency_final.append(freq_shuf)
+                                interval_numerical_list_final.append(int_num_shuf)
+                                interval_string_names_final.append(int_name_shuf)
+                                sound_type_final.append(typ_shuf)
+                                wave_arrays.append(tuple(sounds_shuf))
+                        break
+
+        df = pd.DataFrame({
+            "trial_ID": repetition_numbers,
+            "ROIs": rois_repeated,
+            "frequency": frequency_final,
+            "interval_type": sound_type_final,
+            "interval_ratio": interval_numerical_list_final,
+            "interval_name": interval_string_names_final,
+            "wave_arrays": wave_arrays,
+        })
+        df = _add_tracking_columns(df)
+        return df, wave_arrays
+
+
+    @staticmethod
+    def _create_sequence_trials_logic(
+        rois: List[str],
+        frequency: List,       # list of frequency-sequences per ROI, or "vocalisation"
+        patterns: List[str],   # pattern strings per ROI
+        audio: Audio,
+        path_to_voc: Optional[str] = None,
+        total_repetitions: int = 9,
+    ) -> TrialData:
+        """Create trials for sequence experiments (tone patterns per ROI)."""
+
+        rois_repeated = rois * total_repetitions
+        frequency_final = []
+        wave_arrays = []
+        repetition_numbers = []
+        patterns_final = []
+        previous_trials = set()
+
+        for i in range(total_repetitions):
+            if i % 2 == 0:
+                for _ in rois:
+                    repetition_numbers.append(i + 1)
+                    frequency_final.append(0)
+                    patterns_final.append(0)
+                    wave_arrays.append(np.zeros(int(audio.fs * audio.default_duration)))
+            else:
+                attempts = 0
+                while True:
+                    attempts += 1
+                    if i == 1:
+                        trial_list = list(zip(frequency, patterns))
+                    else:
+                        trial_list = list(zip(frequency, patterns))
+                        random.shuffle(trial_list)
+
+                    # Build hashable key from (frequency-tuple, pattern-tuple) pairs
+                    trial_tuple_as_tuple = tuple(
+                        (tuple(freq) if isinstance(freq, list) else freq, pat)
+                        for freq, pat in trial_list
+                    )
+
+                    if trial_tuple_as_tuple not in previous_trials or attempts >= _MAX_SHUFFLE_ATTEMPTS:
+                        previous_trials.add(trial_tuple_as_tuple)
+                        for j in range(len(rois)):
+                            repetition_numbers.append(i + 1)
+                            freq, pat = trial_list[j]
+                            frequency_final.append(freq)
+                            patterns_final.append(pat)
+
+                            # Generate sound: concatenate short tones for each element
+                            if freq == "vocalisation":
+                                if path_to_voc:
+                                    sound = audio.load_wav(path_to_voc)
+                                else:
+                                    sound = np.zeros(int(audio.fs * audio.default_duration))
+                                wave_arrays.append(sound)
+                            elif isinstance(freq, list):
+                                concatenated = []
+                                for f in freq:
+                                    concatenated.append(audio.generate_sound_data(f, duration_s=0.04))
+                                wave_arrays.append(np.concatenate(concatenated))
+                            else:
+                                wave_arrays.append(np.zeros(int(audio.fs * audio.default_duration)))
+                        break
+
+        df = pd.DataFrame({
+            "trial_ID": repetition_numbers,
+            "ROIs": rois_repeated,
+            "pattern": patterns_final,
+            "frequency": frequency_final,
+            "wave_arrays": wave_arrays,
+        })
+        df = _add_tracking_columns(df)
+        return df, wave_arrays
+
+
+    # ============================================================
+    # HELPER FUNCTIONS - stimulus info getters
+    # ============================================================
+
+    @staticmethod
+    def _get_interval(interval_name: str) -> Tuple[float, str]:
+        """Return (numerical_ratio, ratio_string) for a named musical interval."""
+
+        intervals_names = [
+            "unison", "min_2", "maj_2", "min_3", "maj_3", "perf_4", "tritone",
+            "perf_5", "min_6", "maj_6", "min_7", "maj_7", "octave",
+        ]
+        intervals_values = [1/1, 16/15, 9/8, 6/5, 5/4, 4/3, 64/45, 3/2, 8/5, 5/3, 16/9, 15/8, 2]
+        intervals_values_strings = [
+            "1/1", "16/15", "9/8", "6/5", "5/4", "4/3", "45/32", "3/2",
+            "8/5", "5/3", "16/9", "15/8", "2/1",
+        ]
+
+        intervals = dict(zip(intervals_names, intervals_values))
+        intervals_strings = dict(zip(intervals_names, intervals_values_strings))
+
+        return intervals[interval_name], intervals_strings[interval_name]
+
+    @staticmethod
+    def _ask_info_intervals(rois_number: int):
+        """Interactive prompt for interval selection."""
+
+        intervals_names = [
+            "unison", "min_2", "maj_2", "min_3", "maj_3", "perf_4", "tritone",
+            "perf_5", "min_6", "maj_6", "min_7", "maj_7", "octave",
+        ]
+
+        consonant_intervals = [intervals_names[i] for i in (0, 3, 4, 5, 7, 8, 9, 12)]
+        dissonant_intervals = [intervals_names[i] for i in (1, 2, 6, 10, 11)]
+
+        print(f"You will now be prompted to select the stimuli for the {rois_number} ROIs")
+        new_rois_number = rois_number
+
+        frequencies = []
+        interval_numerical_list = []
+        interval_string_names = []
+
+        # ask if vocalisation
+        vocalisation = input("Do you want to include a vocalisation recording?(y/n)\n").strip().lower()
+        if vocalisation == "y":
+            frequencies.append("vocalisation")
+            interval_numerical_list.append([9])
+            interval_string_names.append("vocalisation")
+            new_rois_number -= 1
+
+        # ask if silence
+        print(f"You have {new_rois_number} ROIs available")
+        silence = input("do you want a Silent ROI?(y/n)\n").strip().lower()
+        if silence == "y":
+            frequencies.append([0, 0])
+            interval_numerical_list.append([0])
+            interval_string_names.append("no_interval")
+            new_rois_number -= 1
+
+        print(f"You have {new_rois_number} ROIs available")
+        number_consonants = int(input("insert the number of consonant rois: \n").strip())
+        new_rois_number = new_rois_number - number_consonants
+        number_dissonants = new_rois_number
+
+        print(f"your number of dissonant rois is: {number_dissonants}")
+
+        tonal_centre = int(input("insert the frequency that will be the tonal centre:\n"))
+
+        for i in range(number_consonants):
+            consonant_choice = input(f"insert the consonant interval of choice #{i+1} {consonant_intervals}:\n")
+            consonant_choice = consonant_choice.lower()
+            interval, interval_as_string = ExperimentFactory._get_interval(consonant_choice)
+            frequencies.append([tonal_centre, int(tonal_centre * interval)])
+            interval_numerical_list.append(interval_as_string)
+            interval_string_names.append(consonant_choice)
+
+        for i in range(number_dissonants):
+            dissonant_choice = input(f"insert the dissonant interval of choice #{i+1} {dissonant_intervals}:\n")
+            dissonant_choice = dissonant_choice.lower()
+            interval, interval_as_string = ExperimentFactory._get_interval(dissonant_choice)
+            frequencies.append([tonal_centre, int(tonal_centre * interval)])
+            interval_numerical_list.append(interval_as_string)
+            interval_string_names.append(dissonant_choice)
+
+        return frequencies, interval_numerical_list, interval_string_names
+
+
+    @staticmethod
+    def _get_info_intervals_hard_coded(rois, tonal_centre, intervals_list):
+        """Hard-coded interval info (no user prompts)."""
+        rois_number = len(rois) if isinstance(rois, list) else rois
+
+        # usable_rois exclude the unison and silent arm
+        usable_rois = rois_number - 2
+
+        tonal_centre_interval, tonal_centre_string = ExperimentFactory._get_interval("unison")
+        frequencies = [[tonal_centre, int(tonal_centre * tonal_centre_interval)]]
+        interval_numerical_list = [tonal_centre_string]
+        interval_string_names = ["unison"]
+
+        if len(intervals_list) == usable_rois:
+            for i in range(usable_rois):
+                if intervals_list[i] != "vocalisation":
+                    interval, interval_as_string = ExperimentFactory._get_interval(intervals_list[i])
+                    frequencies.append([tonal_centre, int(tonal_centre * interval)])
+                    interval_numerical_list.append(interval_as_string)
+                    interval_string_names.append(intervals_list[i])
+                else:
+                    frequencies.append("vocalisation")
+                    interval_numerical_list.append([9])
+                    interval_string_names.append("vocalisation")
+
+            # append the silent frequency
+            frequencies.append([0, 0])
+            interval_numerical_list.append(["0"])
+            interval_string_names.append("no_interval")
+        else:
+            raise ValueError(
+                f"{len(intervals_list)} intervals given but {usable_rois} are needed "
+                f"for {rois_number} arms (one arm is the unison reference and one "
+                f"is the silent control).")
+
+        return frequencies, interval_numerical_list, interval_string_names
+
+
+    @staticmethod
+    def _get_info_tem_hard_coded(
+        rois_number,
+        controls,
+        smooth_freqs,
+        constant_rough_freqs,
+        complex_rough_freqs,
+        constant_rough_modulation=50,
+        complex_rough_mod=None,
+        depth: float = 0.5,
+        audio: Optional[Audio] = None,
+        path_to_voc: Optional[str] = None,
+    ):
+        """Build stimulus lists for temporal-envelope-modulation experiments."""
+        if complex_rough_mod is None:
+            complex_rough_mod = [30, 50, 70]
+
+        freqs = controls + smooth_freqs + constant_rough_freqs + complex_rough_freqs
+        frequencies = []
+        temporal_modulation = []
+        sound_type = []
+        sound_arrays = []
+
+        if len(freqs) != rois_number:
+            raise ValueError(
+                f"{len(freqs)} stimuli defined but the maze has {rois_number} arms. "
+                f"Adjust the control, smooth, constant-AM and complex-AM lists so "
+                f"they add up to the number of arms.")
+
+        for item in controls:
+            if item == "silent":
+                frequencies.append("silent_arm")
+                temporal_modulation.append("no_stimulus")
+                sound_type.append("control")
+                sound_arrays.append(np.zeros(int(audio.fs * audio.default_duration)))
+            else:
+                frequencies.append("vocalisation")
+                temporal_modulation.append("vocalisation")
+                sound_type.append("control")
+                sound_arrays.append(audio.load_wav(path_to_voc))
+
+        for f in smooth_freqs:
+            frequencies.append(f)
+            temporal_modulation.append("none")
+            sound_type.append("smooth")
+            sound_arrays.append(audio.generate_sound_data(f))
+
+        for f in constant_rough_freqs:
+            frequencies.append(f)
+            temporal_modulation.append(constant_rough_modulation)
+            sound_type.append("rough")
+            sound_arrays.append(audio.generate_simple_tem_sound_data(
+                f, modulated_frequency=constant_rough_modulation, depth=depth))
+
+        for f in complex_rough_freqs:
+            frequencies.append(f)
+            temporal_modulation.append(complex_rough_mod)
+            sound_type.append("rough_complex")
+            sound_arrays.append(audio.generate_complex_tem_sound_data(
+                f, modulated_frequencies_list=complex_rough_mod, depth=depth))
+
+        return frequencies, temporal_modulation, sound_type, sound_arrays
+
+
+    @staticmethod
+    def _get_info_complex_intervals_hard_coded(
+        rois_number,
+        controls,
+        tonal_centre,
+        smooth_freq,
+        rough_freq,
+        consonant_intervals,
+        dissonant_intervals,
+        audio: Optional[Audio] = None,
+        path_to_voc: Optional[str] = None,
+    ):
+        """Build stimulus lists for complex-intervals experiments."""
+
+        all_intervals = consonant_intervals + dissonant_intervals
+
+        frequencies = []
+        interval_numerical_list = []
+        interval_string_names = []
+        sound_type = []
+        sounds_arrays = []
+
+        for ctrl in controls:
+            interval_numerical_list.append(0)
+            interval_string_names.append(ctrl)
+            sound_type.append(ctrl)
+
+            if ctrl == "silent":
+                frequencies.append(0)
+                z = np.zeros(int(audio.fs * audio.default_duration))
+                sounds_arrays.append([z, z])
+            else:
+                frequencies.append(ctrl)
+                voc = audio.load_wav(path_to_voc)
+                silence = np.zeros_like(voc)
+                sounds_arrays.append([voc, silence])
+
+        if smooth_freq:
+            tonal_centre_interval, tonal_centre_string = ExperimentFactory._get_interval("unison")
+            frequencies.append([tonal_centre, int(tonal_centre * tonal_centre_interval)])
+            interval_numerical_list.append(tonal_centre_string)
+            interval_string_names.append("unison")
+            s = audio.generate_sound_data(tonal_centre)
+            sounds_arrays.append([s, s])
+            sound_type.append("smooth")
+
+        if rough_freq:
+            tonal_centre_interval, tonal_centre_string = ExperimentFactory._get_interval("unison")
+            frequencies.append([tonal_centre, int(tonal_centre * tonal_centre_interval)])
+            interval_numerical_list.append(tonal_centre_string)
+            interval_string_names.append("unison")
+            sound_type.append("rough")
+            modulated_wave = audio.generate_simple_tem_sound_data(tonal_centre)
+            sounds_arrays.append([modulated_wave, modulated_wave])
+
+        for interval_name in all_intervals:
+            interval, interval_string = ExperimentFactory._get_interval(interval_name)
+            freq_1 = tonal_centre
+            freq_2 = tonal_centre * interval
+
+            frequencies.append([freq_1, freq_2])
+            interval_numerical_list.append(interval_string)
+            interval_string_names.append(interval_name)
+
+            sound_1 = audio.generate_sound_data(tonal_centre)
+            sound_2 = audio.generate_sound_data(freq_2)
+            sounds_arrays.append([sound_1, sound_2])
+
+            if interval_name in consonant_intervals:
+                sound_type.append("consonant")
+            else:
+                sound_type.append("dissonant")
+
+        return frequencies, interval_numerical_list, interval_string_names, sound_type, sounds_arrays

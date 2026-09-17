@@ -1,4 +1,0 @@
-(target-home)=
-
-![Banner](_static/images/happy_mouse.png){align=center}
-# The aMAZEing maze

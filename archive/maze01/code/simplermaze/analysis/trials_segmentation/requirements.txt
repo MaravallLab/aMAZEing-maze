@@ -1,0 +1,6 @@
+numpy<2
+pandas
+opencv-python
+imageio-ffmpeg
+plotly
+matplotlib

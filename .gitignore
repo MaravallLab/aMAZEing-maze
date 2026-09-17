@@ -39,6 +39,7 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+!packaging/*.spec
 
 # Installer logs
 pip-log.txt
@@ -75,8 +76,7 @@ instance/
 # Scrapy stuff:
 .scrapy
 
-# Sphinx documentation
-docs/_build/
+
 
 # PyBuilder
 target/
@@ -134,3 +134,43 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# ── Project-specific ──────────────────────────────────────────────
+
+# Documentation screenshots ARE tracked (regenerate with tools/make_screenshots.py)
+!docs/images/*.png
+
+# Large media files (should not be tracked in git)
+*.mp4
+*.avi
+*.wav
+*.mp3
+
+# Documentation site build output
+site/
+
+# Data outputs (experiment recordings)
+# Keep config CSVs and test fixtures
+*.csv
+!src/amazeing/auditory/data/frequency_response_speaker.csv
+!tests/fixtures/*.csv
+# Tactile paradigm configuration (required to run simplerCode.py)
+!src/amazeing/simplermaze/grating_maps.csv
+!src/amazeing/simplermaze/reward_sequences.csv
+
+# OS files
+Thumbs.db
+*.icloud
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code worktrees
+.claude/worktrees/
+/src/amazeing/auditory/sessions
+/src/amazeing/auditory/_test_audio
+
+# Stray development leftovers inside the archive (old venv, worktrees)
+archive/maze01/.venv/
+archive/maze01/.claude/
