@@ -1,0 +1,44 @@
+# Who is who.
+#
+# The same person appears under several names and addresses across fifteen
+# years of this repository: a university address, a GitHub noreply address,
+# a bare username. This file says which belong together, so that git log,
+# git shortlog and anything generating a citation see one person per person.
+#
+# Format:  Proper Name <canonical email>  Other Name <other email>
+#
+# Note that GitHub's own contributor graph does not read this file. It counts
+# by commit email, so to merge two entries there, the person adds the other
+# address to their GitHub account under Settings > Emails.
+
+Alejandra Carriero <ac2072@sussex.ac.uk> <114479005+AlejCarriero@users.noreply.github.com>
+Alejandra Carriero <ac2072@sussex.ac.uk> AlejCarriero <114479005+AlejCarriero@users.noreply.github.com>
+Alejandra Carriero <ac2072@sussex.ac.uk> AlejCarriero <ac2072@sussex.ac.uk>
+Alejandra Carriero <ac2072@sussex.ac.uk> alej <ac2072@sussex.ac.uk>
+
+Andre Maia Chagas <andremaia.chagas@gmail.com> amchagas <andremaia.chagas@gmail.com>
+
+Shahd Al Balushi <125464549+shahdalbalushi@users.noreply.github.com> shahdalbalushi <125464549+shahdalbalushi@users.noreply.github.com>
+Shahd Al Balushi <125464549+shahdalbalushi@users.noreply.github.com> shahdalbalushi <shahdbalushi@gmail.com>
+
+Oluwaseyi Jesusanmi <52794254+Seyij@users.noreply.github.com> Seyij <52794254+Seyij@users.noreply.github.com>
+
+Isabel Maranhao <68531555+BelMaranhao@users.noreply.github.com> BelMaranhao <68531555+BelMaranhao@users.noreply.github.com>
+
+Yuri Elias Rodrigues <ctrl.alt.math@gmail.com> yurier <ctrl.alt.math@gmail.com>
+
+Moira Eley <moiraeley@msn.com> MoiraEley <moiraeley@msn.com>
+
+Maravall Lab <mmaravall.lab@gmail.com> MaravallLab <mmaravall.lab@gmail.com>
+
+# A note on one oddity:
+#
+#   Five commits carry the name shahdalbalushi on Alejandra's GitHub address,
+#   including the keypoint estimation scripts. Alejandra has confirmed they
+#   are hers, made while the author name was set wrongly, so the mapping above
+#   folds the whole address into her name regardless of the name on a commit.
+#
+# Still unmapped:
+#
+#   emilychristabel, isyparkes
+#     Real names not known to this file. Add them here when they are.
