@@ -111,6 +111,7 @@ nav:
       - Cropping and aligning videos: analysis/crop-align.md
   - Hardware:
       - Tutorial - build and set up the rig: hardware/build.md
+      - The eight-arm maze: hardware/maze-model.md
       - Dimensions: hardware/dimensions.md
       - Materials: hardware/materials.md
       - Firmware: hardware/firmware.md

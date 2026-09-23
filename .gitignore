@@ -174,3 +174,7 @@ Thumbs.db
 # Stray development leftovers inside the archive (old venv, worktrees)
 archive/maze01/.venv/
 archive/maze01/.claude/
+
+# FreeCAD writes a .FCBak beside every document it saves
+*.FCBak
+*.FCStd1
