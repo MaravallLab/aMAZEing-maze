@@ -43,8 +43,8 @@ This is why the binary threshold and the detection sensitivity work the way they
 |---|---|---|
 | Floor plate | 700 x 700 x 10 mm, black, infrared transmitting | Drilled with a regular grid of M3 holes so wall posts can go anywhere |
 | Maze top | 3D printed in white, one per configuration | Reflects the infrared back down to the camera. This is the bright field the animal is seen against, so it is not optional. Print in white filament: the brightness of the picture depends on it |
-| Wall panels | 50 x 50 x 3 mm acrylic, black | About 50 with spares |
-| Posts | MakerBeam XL, 15 x 15 mm, 50 mm long, black anodised | Panels slide into the T-slots |
+| Wall panels | 50 x 50 x 3 mm or 100 x 50 x 3 mm acrylic, black | About 50 with spares. The taller ones stop mice jumping out when the maze is uncovered: the eight-arm auditory maze uses those, the four-arm tactile maze the shorter ones |
+| Posts | MakerBeam XL, 15 x 15 mm, 50 or 100 mm long, black anodised | Panels slide into the T-slots. Match the post length to the panel height |
 | Bolts | M3 x 16 mm with nuts, one per post | Nuts go under the floor plate |
 | Legs | 50.8 x 50.8 x 1.6 mm box section, 880 mm | Four, with plastic joints and feet |
 | Horizontal bars | 660 mm | Four, around the outside |
