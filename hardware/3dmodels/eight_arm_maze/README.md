@@ -14,11 +14,11 @@ entrance tunnel at the midpoint of one long side.
 | `build_maze_model.py` | Regenerates the bare walls and posts from the layout |
 
 `eight_arm_maze_modified.FCStd` is the accurate one. It holds the maze itself
-and the rest of the rig around it: the table frame, the printed ceiling, the
+and the rest of the rig around it: the table frame, the printed covers, the
 transfer tunnel, the speaker with its grille, end caps and SpeakON connector,
-the foam structure and board that carry it, and the home cage with its wire lid
-and water bottle. The whole assembly measures 700 x 960 x 1151 mm, from the
-feet of the legs to the top of the speaker.
+the foam structure and board that carry it, the home cage with its wire lid and
+water bottle, and the camera and infrared illuminator under the baseplate.
+Parts carry their own materials, so the acrylic reads as acrylic.
 
 The walls and posts inside it were not drawn by hand. They are generated from
 `maze_layout.json`, which records which squares of the 50 mm post grid are

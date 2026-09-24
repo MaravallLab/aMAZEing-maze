@@ -27,20 +27,34 @@ on and the edges that carry a panel.
 ## The solid model
 
 `hardware/3dmodels/eight_arm_maze/eight_arm_maze_modified.FCStd` is the model of
-the rig. Alongside the maze it holds the table frame, the printed ceiling, the
+the rig. Alongside the maze it holds the table frame, the printed covers, the
 transfer tunnel, the speaker with its grille, end caps and SpeakON connector,
-the foam structure and board that carry it, and the home cage with its wire lid
-and water bottle. The whole assembly measures 700 x 960 x 1151 mm, from the feet
-of the legs to the top of the speaker. Everything except the walls and posts was
-added by hand, because a grid of squares cannot describe it.
+the foam structure and board that carry it, the home cage with its wire lid and
+water bottle, and the camera and infrared illuminator under the plate. The whole
+assembly measures 700 x 960 x 1151 mm, from the feet of the legs to the top of
+the speaker. Everything except the walls and posts was added by hand, because a
+grid of squares cannot describe it.
 
 ![The rig as a solid model](../images/eight_arm_rig_3d.png)
 
-Grey is the table frame, blue the floor plate, maze and cage, orange the speaker
-and the structure carrying it. The animal walks from the cage through the tunnel
-into the maze, all of it in darkness, with the camera and the infrared
-illuminator below the plate. The views are drawn from a mesh exported from the
-model, so they are the model rather than an impression of it.
+The baseplate is raised on its frame so the camera and the infrared illuminator,
+under the plate, can see the maze from below. The transport cage hangs off the
+edge of the plate at the mouth of the tunnel, so it can be docked and taken away
+without disturbing the maze. Sessions run with all of this in darkness.
+
+With the covers off, the construction is visible: acrylic panels seated in the
+slots of the posts, which are bolted through the drilled plate. Any panel
+position can carry a plain wall or a stimulus device, so the arrangement of the
+arms is a matter of which positions are filled.
+
+![The maze with the covers off](../images/eight_arm_maze_open.png)
+
+From above, with the covers on as the experiments ran. The covers follow the
+outline of the arms, the loudspeaker is centred over the maze so that no arm is
+nearer to it than another, and the tunnel runs from the central corridor out to
+the cage.
+
+![The covered maze from above](../images/eight_arm_maze_top.png)
 
 ## Regenerating the walls and posts
 
