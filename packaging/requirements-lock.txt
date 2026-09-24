@@ -9,7 +9,7 @@ coverage==7.13.5
 cryptography==50.0.1
 cycler==0.12.1
 esptool==5.3.1
-fonttools==4.60.1
+fonttools==4.60.2
 imageio-ffmpeg==0.6.0
 iniconfig==2.3.0
 intelhex==2.3.0
@@ -30,12 +30,12 @@ packaging==25.0
 pandas==2.3.1
 patsy==1.0.2
 pefile==2024.8.26
-pillow==12.0.0
+pillow==12.3.0
 platformdirs==4.11.4
 plotly==6.2.0
 pluggy==1.6.0
 pycparser==3.0
-Pygments==2.19.2
+Pygments==2.20.0
 pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.7
 PyMuPDF==1.27.2.2
@@ -45,7 +45,7 @@ pyserial==3.5
 PySide6==6.11.2
 PySide6_Addons==6.11.2
 PySide6_Essentials==6.11.2
-pytest==9.0.2
+pytest==9.0.3
 pytest-cov==7.1.0
 python-dateutil==2.9.0.post0
 pytz==2025.2
