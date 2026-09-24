@@ -30,7 +30,12 @@ Set-Location $repo
 if (-not $SkipInstall) {
     Write-Host "Installing pinned dependencies..." -ForegroundColor Cyan
     python -m pip install --upgrade pip
-    python -m pip install -e ".[build]" -c packaging\requirements-lock.txt
+    # dev as well as build: the script runs the test suite below, and pytest
+    # lives in the dev extra. The lock file pins its version but a constraints
+    # file never installs anything, so in a clean environment (which is what
+    # the notes above recommend) the test step would fail with "No module
+    # named pytest".
+    python -m pip install -e ".[build,dev]" -c packaging\requirements-lock.txt
 }
 
 Write-Host "Running the test suite..." -ForegroundColor Cyan
@@ -71,7 +76,35 @@ Copy-Item (Join-Path $repo "packaging\dist_launchers\*.cmd") (Join-Path $repo "d
 # Compress-Archive is slow and reports its failures without failing.
 $zip = Join-Path $repo "dist\amazeing-app.zip"
 Write-Host "Zipping for release (this takes a minute)..." -ForegroundColor Cyan
-if (Test-Path $zip) { Remove-Item $zip -Force }
+
+# OneDrive and antivirus both take a handle on a file this size, and the build
+# has just written half a gigabyte next to it, so the old zip is often still
+# locked at this point. Wait a few seconds rather than throw away the build,
+# and if it is still held, move it aside instead of failing.
+if (Test-Path $zip) {
+    $removed = $false
+    foreach ($attempt in 1..5) {
+        try {
+            Remove-Item $zip -Force -ErrorAction Stop
+            $removed = $true
+            break
+        } catch {
+            Write-Host "  the old zip is in use, waiting ($attempt of 5)..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 3
+        }
+    }
+    if (-not $removed) {
+        $aside = Join-Path $repo ("dist\amazeing-app.previous-build-{0}.zip" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
+        try {
+            Move-Item $zip $aside -Force -ErrorAction Stop
+            Write-Host "  still in use; moved it to $(Split-Path -Leaf $aside)" -ForegroundColor Yellow
+        } catch {
+            Write-Host "Could not replace $zip : $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "Close anything using it, then run again with -SkipInstall." -ForegroundColor Red
+            exit 1
+        }
+    }
+}
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 try {
     [System.IO.Compression.ZipFile]::CreateFromDirectory(
