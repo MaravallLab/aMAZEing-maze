@@ -67,10 +67,9 @@ Full measurements, including the dimensions taken from the Rosenberg maze this d
 
 All in `hardware/3dmodels/` as FreeCAD sources and STLs: the camera housing, the electronics enclosure, the movable wall mechanism, the transfer tunnel and the reward chute.
 
-**The maze tops are printed too**, and there is one per maze configuration: a four-arm top for the tactile decision tree and an eight-arm top for the auditory maze. They go in `hardware/3dmodels/maze_tops/`.
+**The maze tops are printed too**, and there is one per maze configuration: a four-arm top for the tactile decision tree and an eight-arm top for the auditory maze. They go in `hardware/3dmodels/maze_parts/maze_cover`.
 
-!!! warning "Not in the repository yet"
-    The maze top models have not been uploaded. Until they are, this page tells you that you need one without telling you how to make it, so anyone rebuilding the rig from scratch is stuck at this step. They are the reflective surface the whole detection depends on, so they matter as much as any part here.
+
 
 ## Assembly
 
