@@ -11,8 +11,8 @@ carry no numbers on purpose. The results themselves are in Chapter 6.
        predict each arm's share of the time, ask how likely what the mice did
        is under that prediction (the likelihood), weigh that by how plausible
        the value seemed beforehand (the prior), and repeat for every value
-    b  what the likelihood means for one weight: three values of the semantic
-       weight and the time each predicts for the two grammars, against the mice
+    b  what the likelihood means for one weight: three values of a weight
+       and the time each predicts for two arms, against the mice
     c  Bayes' rule as three curves: the prior (normal, mean 0, standard
        deviation 1, as in the fit) times the likelihood gives the posterior,
        with its 95% highest density interval
@@ -33,10 +33,12 @@ import numpy as np
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Patch
 from scipy.stats import norm
 
-EE, SC = "#1565C0", "#B71C1C"   # the arm colours of Chapter 6
+# two arms in greys, so that the blue and red of the grammars keep their
+# meaning for Chapter 6, where the figure's terms are introduced
+ARM_A, ARM_B = "#4D4D4D", "#B3B3B3"
 INK, MUTED = "#222222", "#8C8C8C"
-# the fitting itself in purple, apart from the blue and red of the two grammars
-# (checked for colour blind separation from both)
+# the fitting itself in purple (checked for colour blind separation from the
+# blue and red of the grammars in the later chapters)
 PURPLE, PURPLE_LIGHT, PURPLE_FILL, PURPLE_SHADE = "#7A1E9C", "#B48CC8", "#F1E7F6", "#DFC8EA"
 STYLE = {
     "font.family": "serif", "font.serif": ["cmr10"], "mathtext.fontset": "cm",
@@ -58,8 +60,8 @@ LIKE_MEAN, LIKE_SD = 2.0, 0.7
 POST_SD = (1 + LIKE_SD ** -2) ** -0.5
 POST_MEAN = LIKE_MEAN * LIKE_SD ** -2 * POST_SD ** 2
 CANDIDATES = (("None", 0.0), ("Moderate", LIKE_MEAN), ("Large", 4.5))
-DELTA_S = 0.2027  # difference in semantic score between the grammars, so that
-MICE = 0.60       # the moderate weight predicts the mice's 60% on the enriched grammar
+DELTA_S = 0.2027  # difference in score between the two arms, so that the
+MICE = 0.60       # moderate weight predicts the mice's 60% on arm A
 
 
 def letter(ax, text, x=-0.02, y=1.02):
@@ -104,19 +106,19 @@ def panel_candidates(ax):
     groups = [(name, 1 / (1 + np.exp(-w * DELTA_S))) for name, w in CANDIDATES] + [("Mice", MICE)]
     for i, (name, ee) in enumerate(groups):
         x = i * 1.15
-        ax.bar([x - 0.2, x + 0.2], [ee, 1 - ee], 0.36, color=[EE, SC], zorder=2)
+        ax.bar([x - 0.2, x + 0.2], [ee, 1 - ee], 0.36, color=[ARM_A, ARM_B], zorder=2)
         ax.text(x, -0.07, name, ha="center", va="top", fontsize=7.5)
         if name != "Mice":
             fit = "Good fit" if name == "Moderate" else "Poor fit"
             ax.text(x, 0.86, fit, ha="center", va="bottom", fontsize=7)
     ax.axvline(3 * 1.15 - 0.575, color=MUTED, lw=0.6, ls=(0, (2, 2)))
-    ax.text(1.15, -0.2, "Semantic weight tried", ha="center", va="top", fontsize=8)
+    ax.text(1.15, -0.2, "Value of the weight tried", ha="center", va="top", fontsize=8)
     ax.set_xlim(-0.5, 3 * 1.15 + 0.5)
     ax.set_ylim(0, 1.0)
     ax.set_xticks([])
     ax.set_yticks([])
     ax.spines["bottom"].set_visible(False)
-    ax.set_ylabel("Share of the time on\nthe two grammars")
+    ax.set_ylabel("Share of the time on\nthe two arms")
 
 
 def curve_axis(ax, title):
@@ -124,7 +126,7 @@ def curve_axis(ax, title):
     ax.set_xticks([0])
     ax.set_xticklabels(["0"])
     ax.set_yticks([])
-    ax.set_xlabel("Semantic weight")
+    ax.set_xlabel("Value of the weight")
     ax.set_title(title, linespacing=1.2)
     ax.axvline(0, color=MUTED, lw=0.5, zorder=0)
 
@@ -182,8 +184,8 @@ def main():
         letter(ax_b, "b", x=-0.14, y=1.04)
         ax_key = fig.add_subplot(mid[0, 1])
         ax_key.axis("off")
-        ax_key.legend(handles=[Patch(color=EE, label="Enriched cage grammar"),
-                               Patch(color=SC, label="Standard cage grammar")],
+        ax_key.legend(handles=[Patch(color=ARM_A, label="Arm A"),
+                               Patch(color=ARM_B, label="Arm B")],
                       loc="center left", frameon=False, handlelength=1.2)
 
         bot = gs[4].subgridspec(1, 5, width_ratios=[1, 0.16, 1, 0.16, 1], wspace=0.05)
