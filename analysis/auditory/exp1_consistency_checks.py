@@ -38,9 +38,11 @@ Two questions raised on Chapter 4 of the thesis.
         first sound block of a session opened on a fixed layout.
 
 Usage:
-    python exp1_consistency_checks.py [DATA_DIR] [--perms 10000]
+    python exp1_consistency_checks.py [DATA_DIR] [--perms 10000] [--thesis-figures DIR]
 
-Output: printed, and DATA_DIR/BATCH_ANALYSIS/consistency/stats.txt.
+Output: printed, and in DATA_DIR/BATCH_ANALYSIS/consistency/ stats.txt,
+consonance_by_mouse.csv, place_sound_silent.csv and fig_consonance_by_mouse;
+with --thesis-figures, fig_exp1_consonance_mice in the thesis style.
 """
 
 import argparse
@@ -103,7 +105,53 @@ def consonance(data_dir, perms, say):
     say(f"   intraclass correlation ICC(1) = {icc:+.2f}")
     say(f"   same sign on all three sets: {same} of {n} mice ({pos} consonant, {neg} dissonant), "
         f"against {null_same.mean():.1f} expected, p = {p_same:.2f}")
-    return w
+    return w, null_var, observed_var, p_var
+
+
+def fig_consonance(w, null_var, observed_var, p_var, path):
+    """(a) Each mouse's consonant against dissonant index on the three interval
+    sets, joined by a line; mice with the same sign on all three are coloured.
+    (b) The variance of the mouse means against its distribution when the
+    indices are shuffled between mice within each set."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from exp1_stimulus_pi import COLOURS
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(6.3, 2.6), gridspec_kw={"width_ratios": [1.5, 1]})
+    x = np.arange(len(SETS))
+    full = w.dropna()
+    for _, row in full.iterrows():
+        v = row.to_numpy()
+        colour = (COLOURS["consonant"] if (v > 0).all() else
+                  COLOURS["dissonant"] if (v < 0).all() else "#BDBDBD")
+        grey = colour == "#BDBDBD"
+        ax.plot(x, v, "-o", color=colour, lw=0.6 if grey else 0.9, ms=2.5,
+                alpha=0.8 if grey else 1, zorder=1 if grey else 2)
+    partial = w[w.isna().any(axis=1)]
+    for _, row in partial.iterrows():
+        ax.plot(x, row.to_numpy(), "o", color="#BDBDBD", ms=2.5, mfc="white", zorder=1)
+    ax.plot(x, w.median().to_numpy(), "_", color="black", ms=16, mew=1.6, zorder=3)
+    ax.axhline(0, color="grey", lw=0.6, ls="--")
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"Interval set {s[-1]}" for s in SETS])
+    ax.set_xlim(-0.4, len(SETS) - 0.6)
+    ax.set_ylabel("Consonant against dissonant index")
+    ax.set_title("(a) each mouse on the three interval sets", loc="left")
+    bx.hist(null_var, bins=40, color="#BDBDBD")
+    bx.axvline(observed_var, color="black", lw=1)
+    bx.text(observed_var, bx.get_ylim()[1] * 0.95, f"  observed\n  p = {p_var:.2f}",
+            va="top", ha="left", fontsize=6)
+    bx.xaxis.set_major_locator(plt.MaxNLocator(4))
+    bx.set_xlabel("Variance of the mouse means")
+    bx.set_ylabel("Shuffles")
+    bx.set_title("(b) against indices shuffled between mice", loc="left")
+    for a in (ax, bx):
+        a.spines["top"].set_visible(False)
+        a.spines["right"].set_visible(False)
+    fig.tight_layout()
+    for ext in ("png", "pdf"):
+        fig.savefig(f"{path}.{ext}", dpi=200, bbox_inches="tight")
+    plt.close(fig)
 
 
 def arm_times(cfg):
@@ -170,6 +218,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("data_dir", nargs="?", default=cfg.BASE_PATH)
     parser.add_argument("--perms", type=int, default=10000)
+    parser.add_argument("--thesis-figures", metavar="DIR")
     args = parser.parse_args()
     cfg.BASE_PATH = args.data_dir
     cfg.INDIVIDUAL_VISIT_CLIP_MS = 0
@@ -181,8 +230,16 @@ def main():
         lines.append(text)
         print(text)
 
-    w = consonance(args.data_dir, args.perms, say)
+    w, null_var, observed_var, p_var = consonance(args.data_dir, args.perms, say)
     w.to_csv(os.path.join(out, "consonance_by_mouse.csv"))
+    fig_consonance(w, null_var, observed_var, p_var, os.path.join(out, "fig_consonance_by_mouse"))
+    if args.thesis_figures:
+        import matplotlib.pyplot as plt
+        with plt.rc_context({"font.family": "serif", "font.size": 7, "axes.titlesize": 7,
+                             "axes.labelsize": 7, "xtick.labelsize": 6, "ytick.labelsize": 6,
+                             "pdf.fonttype": 42}):
+            fig_consonance(w, null_var, observed_var, p_var,
+                           os.path.join(args.thesis_figures, "fig_exp1_consonance_mice"))
     place(cfg, say).to_csv(os.path.join(out, "place_sound_silent.csv"), index=False)
     with open(os.path.join(out, "stats.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
