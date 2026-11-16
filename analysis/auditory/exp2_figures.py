@@ -245,27 +245,41 @@ def fig_stimuli(root, path):
     khz = [gcfg.TONES[s] / 1000 for s in sym]
     colour = {"A": "#00695C", "B": "#6A1B9A"}
 
-    fig = plt.figure(figsize=(6.3, 8.4))
-    gs = GridSpec(4, 6, figure=fig, height_ratios=[1.3, 2.9, 1, 1], hspace=0.5, wspace=0.9)
-    from matplotlib.colors import LinearSegmentedColormap
+    fig = plt.figure(figsize=(6.3, 9.2))
+    # the grammars (matrices and chains) and the melodies are two blocks, each
+    # with its own spacing between rows
+    outer = GridSpec(2, 1, figure=fig, height_ratios=[5.4, 2.4], hspace=0.08)
+    top = outer[0].subgridspec(2, 6, height_ratios=[2.3, 2.9], hspace=0.38, wspace=0.9)
+    bottom = outer[1].subgridspec(2, 6, hspace=0.6, wspace=0.9)
+
+    class _Cells:
+        def __getitem__(self, key):
+            r, c = key
+            return top[r, c] if r < 2 else bottom[r - 2, c]
+    gs = _Cells()
+    titles = []          # (axes, column group, title), placed once everything is drawn
+    # one distinct shade for each of the four probabilities, the same shades as
+    # the arrows of the chains below, so that the matrix and the chain read alike
+    shade = {0.60: 1.0, 0.12: 0.62, 0.07: 0.38, 0.02: 0.12}
     for k, g in enumerate(("A", "B")):
         ax = fig.add_subplot(gs[0, 3 * k:3 * k + 3])
         M = gcfg.GRAMMARS[g]
-        # each matrix in its grammar's colour, as the melodies below
-        cmap = LinearSegmentedColormap.from_list(f"grammar_{g}", ["#FFFFFF", colour[g]])
-        ax.imshow(M, cmap=cmap, vmin=0, vmax=0.65)
+        img = np.array([[tint(colour[g], shade[min(shade, key=lambda s: abs(s - p))])
+                         for p in row] for row in M])
+        ax.imshow(img)
         for i in range(6):
             for j in range(6):
-                ax.text(j, i, f"{M[i, j]:.2f}", ha="center", va="center", fontsize=5.5,
-                        color="white" if M[i, j] > 0.4 else "black")
+                ax.text(j, i, f"{M[i, j]:.2f}", ha="center", va="center", fontsize=6.5,
+                        color="white" if M[i, j] > 0.4 else "black",
+                        fontweight="bold" if M[i, j] > 0.4 else None)
         ax.set_xticks(range(6)); ax.set_xticklabels(sym)
         ax.set_yticks(range(6)); ax.set_yticklabels(sym)
         ax.set_xlabel("next tone"); ax.set_ylabel("current tone")
         name = "ascending cycle" if g == "A" else "alternation three steps apart"
-        ax.set_title(f"({'ab'[k]}) grammar {g}, {name}", loc="left")
+        titles.append((ax, k, f"({'ab'[k]}) grammar {g}, {name}"))
         ax = fig.add_subplot(gs[1, 3 * k:3 * k + 3])
         draw_chain(ax, M, sym, khz, colour[g])
-        ax.set_title(f"({'cd'[k]}) grammar {g} as a Markov chain", loc="left")
+        titles.append((ax, k, f"({'cd'[k]}) grammar {g} as a Markov chain"))
     letters = iter("efghij")
     for row, g in enumerate(("A", "B"), start=2):
         for col, tier in enumerate(("dominant", "secondary", "rare")):
@@ -279,9 +293,23 @@ def fig_stimuli(root, path):
             ax.set_yticklabels([f"{s} {f:.1f}" for s, f in zip(sym, khz)] if col == 0 else [])
             if row == 3:
                 ax.set_xlabel("Time (s)")
-            ax.set_title(f"({next(letters)}) {g}, {tier}", loc="left")
+            # the first melody of a row lines up with the left column above
+            titles.append((ax, 0 if col == 0 else f"m{row}{col}", f"({next(letters)}) {g}, {tier}"))
             ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
     fig.text(0.02, 0.24, "Tone (kHz)", rotation=90, va="center", fontsize=7)
+    # Panel letters in a column share one left edge, the leftmost drawn edge
+    # (tick labels and axis labels included) of the panels in that column, so
+    # that (a), (c) and (e) line up, and (b) and (d).
+    fig.canvas.draw()
+    inv = fig.transFigure.inverted()
+    left = {}
+    for ax, group, _ in titles:
+        x0 = ax.get_tightbbox(fig.canvas.get_renderer()).transformed(inv).x0
+        left[group] = min(left.get(group, x0), x0)
+    for ax, group, text in titles:
+        top = ax.get_position().y1
+        fig.text(left[group], top + 0.008, text, ha="left", va="bottom",
+                 fontsize=plt.rcParams["axes.titlesize"])
     for ext in ("png", "pdf"):
         fig.savefig(f"{path}.{ext}", dpi=200, bbox_inches="tight")
     plt.close(fig)
