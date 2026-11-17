@@ -1,4 +1,9 @@
-"""Analysis tab: run the figure and CSV generators on recorded sessions."""
+"""Analysis tab: run the figure and CSV generators on recorded sessions.
+
+Two pages. Session figures runs the package's own generators (per session,
+per day, all days). Research figures runs the thesis analyses in
+analysis/auditory (see ``research_panel.py``).
+"""
 
 from __future__ import annotations
 
@@ -8,11 +13,13 @@ import os
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QListWidget, QMessageBox,
-                               QPushButton, QSplitter, QVBoxLayout, QWidget)
+                               QPushButton, QSplitter, QTabWidget, QVBoxLayout,
+                               QWidget)
 
 from amazeing.app.widgets import PathPicker
 from amazeing.app.launcher import command_for
 from amazeing.app.process_panel import ProcessPanel
+from amazeing.app.research_panel import ResearchFigures
 
 
 class AnalysisTab(QWidget):
@@ -62,11 +69,20 @@ class AnalysisTab(QWidget):
         split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 2)
 
-        lay = QVBoxLayout(self)
+        session_page = QWidget()
+        lay = QVBoxLayout(session_page)
         lay.addWidget(intro)
         lay.addWidget(self.folder)
         lay.addLayout(row)
         lay.addWidget(split, 1)
+
+        self.research = ResearchFigures()
+        self.pages = QTabWidget()
+        self.pages.addTab(session_page, "Session figures")
+        self.pages.addTab(self.research, "Research figures")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(self.pages)
         self.folder.edit.editingFinished.connect(self.refresh_figures)
 
     def _folder(self) -> str:

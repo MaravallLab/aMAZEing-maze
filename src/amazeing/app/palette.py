@@ -80,3 +80,13 @@ def figure_style() -> Dict[str, object]:
         "axes.titlecolor": fg,
         "font.size": 8,
     }
+
+
+# Status marks of the research pipelines in the Analysis tab: green for a
+# script whose output is on disk, grey for one not run yet, red for one that
+# cannot run here (a folder or a requirement is missing).
+STATUS_COLORS: Dict[str, str] = {
+    "done": "#2E7D32",
+    "missing": "#9E9E9E",
+    "unavailable": "#C62828",
+}

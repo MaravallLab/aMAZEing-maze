@@ -34,8 +34,9 @@ if (-not $SkipInstall) {
     # lives in the dev extra. The lock file pins its version but a constraints
     # file never installs anything, so in a clean environment (which is what
     # the notes above recommend) the test step would fail with "No module
-    # named pytest".
-    python -m pip install -e ".[build,dev]" -c packaging\requirements-lock.txt
+    # named pytest". The analysis extra brings statsmodels, seaborn and
+    # plotly, which the app bundles for the research scripts.
+    python -m pip install -e ".[build,dev,analysis]" -c packaging\requirements-lock.txt
 }
 
 Write-Host "Running the test suite..." -ForegroundColor Cyan
