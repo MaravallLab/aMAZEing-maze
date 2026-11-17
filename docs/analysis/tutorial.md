@@ -97,7 +97,7 @@ The steps above are the routine ones. For the analyses behind the thesis, see [R
 These expect a data root rather than a single session, and several need the `[analysis]` extra installed:
 
 ```bash
-pip install -e ".[analysis]"
+uv sync --extra all              # or: pip install -e ".[all]"
 ```
 
 ## A checklist before believing a result

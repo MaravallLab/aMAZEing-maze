@@ -6,7 +6,7 @@ The earlier scripts in the same folder (`01_preference_analysis.py`, `run_batch_
 
 ## What you need
 
-- The analysis extra: `pip install -e ".[analysis]"` from the repository root.
+- The analysis extra, from the repository root: `uv sync --extra all`, or `pip install -e ".[all]"` ([Installation](../getting-started/installation.md#from-source)).
 - For the mixed models, R 4 with `lme4`, `lmerTest` and `emmeans`. The scripts look for `Rscript` on the PATH, then in the newest R under `C:/Program Files/R`.
 - For the Bayesian fits of Experiment 2, PyMC and ArviZ, as the [value model quick guide](model-validation.md) describes.
 - For photometry, the `tdt` package, to read Tucker-Davis tanks. The `analysis` extra installs it, and the downloadable application includes it.

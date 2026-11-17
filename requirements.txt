@@ -1,1 +1,1 @@
--e .[analysis]
+-e .[all]

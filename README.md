@@ -35,16 +35,24 @@ Everything is on **[maravalllab.github.io/aMAZEing-maze](https://maravalllab.git
 
 ## Install from source
 
-For the analysis scripts, for changing the code, or on macOS and Linux:
+For the analysis scripts, for changing the code, or on macOS and Linux. The simplest way is [uv](https://docs.astral.sh/uv/), which fetches the right Python (3.13) and the exact library versions the code is tested with:
 
 ```bash
 git clone https://github.com/MaravallLab/aMAZEing-maze.git
 cd aMAZEing-maze
-pip install -e ".[gui,analysis]"
-amaze-app
+uv sync --extra all       # the application and the analysis pipelines
+uv run amaze-app
 ```
 
-The [installation page](https://maravalllab.github.io/aMAZEing-maze/getting-started/installation/) lists the command-line tools and the hardware.
+Prefix any command with `uv run` (`uv run amaze-auditory ...`, `uv run python analysis/auditory/exp1_stimulus_pi.py ...`), or activate the environment once with `.venv\Scripts\activate` (Windows) or `source .venv/bin/activate` (macOS and Linux). Add `--extra bayes` for the Bayesian fits of the value model.
+
+With pip instead, inside a Python 3.10 or later environment of your own (3.13 is the version tested):
+
+```bash
+pip install -e ".[all]"
+```
+
+The [installation page](https://maravalllab.github.io/aMAZEing-maze/getting-started/installation/) lists the command-line tools and the hardware, and [Troubleshooting](https://maravalllab.github.io/aMAZEing-maze/reference/troubleshooting/) covers the usual installation problems.
 
 ## Repository layout
 
@@ -63,7 +71,7 @@ The [installation page](https://maravalllab.github.io/aMAZEing-maze/getting-star
 Issues and pull requests are welcome. The [architecture page](https://maravalllab.github.io/aMAZEing-maze/development/architecture/) explains how the pieces fit together.
 
 ```bash
-pip install -e ".[dev,docs]"
+uv sync --extra all --extra dev --extra docs   # or: pip install -e ".[all,dev,docs]"
 python -m pytest                  # the tests
 mkdocs serve                      # preview the site at http://127.0.0.1:8000
 python tools/make_screenshots.py  # regenerate the application screenshots

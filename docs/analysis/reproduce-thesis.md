@@ -9,14 +9,16 @@ This page maps every analysed figure and result of the thesis to the script that
 
 ## Before you start
 
-1. Install the analysis dependencies from the repository root:
+1. Install the analysis dependencies from the repository root, with uv or with pip ([Installation](../getting-started/installation.md#from-source)):
 
     ```bash
-    pip install -e ".[analysis]"
+    uv sync --extra all --extra bayes      # or: pip install -e ".[all,bayes]"
     ```
 
+    With uv, run each command below as `uv run python ...`, or activate `.venv` first.
+
 2. Install R 4 with the packages `lme4`, `lmerTest` and `emmeans`. The scripts that fit mixed models find `Rscript` on the PATH, or in the newest R under `C:/Program Files/R`.
-3. For the Bayesian fits of Experiment 2, install PyMC and ArviZ as the [value model quick guide](model-validation.md#5-how-to-run-it) describes.
+3. The Bayesian fits of Experiment 2 need PyMC and ArviZ, which the `bayes` extra installs; the [value model quick guide](model-validation.md#5-how-to-run-it) has the details.
 4. Photometry needs the `tdt` package, which the `analysis` extra installs and the downloadable application includes.
 5. Run every command from `analysis/auditory/`:
 

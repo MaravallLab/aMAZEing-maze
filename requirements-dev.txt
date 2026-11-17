@@ -1,1 +1,1 @@
--e .[analysis,dev]
+-e .[all,dev]

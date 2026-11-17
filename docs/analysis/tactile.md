@@ -19,7 +19,7 @@ They live in `analysis/simplermaze/first_paper_exploratory_analysis/` and analys
 
 ## What you need
 
-- The analysis extra: `pip install -e ".[analysis]"` from the repository root.
+- The analysis extra, from the repository root: `uv sync --extra all`, or `pip install -e ".[all]"` ([Installation](../getting-started/installation.md#from-source)).
 - For the Gamma mixed models of `02_metrics_and_models.py` (optional): R with the `lme4` package (`install.packages("lme4")` in R) and `pip install rpy2`. Without them the script runs its other tests.
 - One mouse's sessions in this layout:
 

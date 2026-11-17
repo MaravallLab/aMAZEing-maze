@@ -127,9 +127,11 @@ The graphical application and the command line run the same code. The applicatio
 On Windows, [download the application](getting-started/download.md). From source:
 
 ```bash
-pip install -e ".[gui]"
-amaze-app
+uv sync --extra all
+uv run amaze-app
 ```
+
+([Installation](getting-started/installation.md#from-source) has the pip equivalent.)
 
 ![The session tab of the application](images/app-session.png)
 

@@ -5,7 +5,18 @@ Problems and their fixes, gathered from every page and grouped by when they show
 ## Installing and starting
 
 ??? question "The download link says Not Found"
-    No release of the application has been published yet. Install [from source](../getting-started/installation.md#from-source), or ask the lab for a copy of the zip.
+    The link always points to the latest release. If it fails, open the [releases page](https://github.com/MaravallLab/aMAZEing-maze/releases) and download `amazeing-app.zip` from the newest release, or install [from source](../getting-started/installation.md#from-source).
+
+??? question "I installed the requirements with uv, but the code does not run"
+    The usual causes, in order of likelihood:
+
+    1. **The commands ran outside the environment.** A `.venv` that is not activated is not used. Put `uv run` in front of the command (`uv run amaze-app`), or activate it first (`.venv\Scripts\activate` on Windows, `source .venv/bin/activate` on macOS and Linux). `uv run python -c "import amazeing; print(amazeing.__file__)"` shows whether the package is found, and from where.
+    2. **Only part of the code was installed.** `uv pip install` of single libraries leaves out the maze package itself, and an install without the `gui` extra has no application window. From the repository folder, run `uv sync --extra all`, which installs the package, the window and the analysis libraries together.
+    3. **The environment was made with a different Python.** The code is tested with Python 3.13, which the `.python-version` file asks for. If the `.venv` was created by hand with another version, delete the `.venv` folder and run `uv sync --extra all` again, so uv builds it with 3.13.
+    4. **uv could not reach the package index** (`invalid peer certificate`, common on university networks). Add `--system-certs` to the command, so uv trusts the certificates Windows trusts: `uv sync --extra all --system-certs`.
+    5. **A thesis script fails on a missing library.** The mixed models need R 4 with `lme4`, `lmerTest` and `emmeans`, installed separately, and the Bayesian fits need `--extra bayes`. [Reproduce the thesis](../analysis/reproduce-thesis.md)
+
+    Avoid keeping the `.venv` inside a folder synchronised by OneDrive or Box, which can lock its files mid install.
 
 ??? question "Windows says it protected your PC"
     The application is not signed with a paid certificate. Click **More info**, then **Run anyway**. Windows asks only the first time. [Download page](../getting-started/download.md#if-windows-says-it-protected-your-pc)
@@ -14,7 +25,7 @@ Problems and their fixes, gathered from every page and grouped by when they show
     It must be extracted from the zip first, with the `_internal` folder kept beside `amazeing-app.exe`. The first start can take up to a minute. [If it fails](../getting-started/download.md#if-it-fails)
 
 ??? question "`amaze-app` is not recognised as a command"
-    The package is not installed in the Python you are using, or that Python's `Scripts` folder is not on the PATH. Activate the environment you installed into, or run `python -m amazeing.app`. [Installation](../getting-started/installation.md#from-source)
+    The package is not installed in the Python you are using, or that Python's `Scripts` folder is not on the PATH. With uv, run `uv run amaze-app` from the repository folder. Otherwise activate the environment you installed into, or run `python -m amazeing.app`. [Installation](../getting-started/installation.md#from-source)
 
 ??? question "How do I know the installation works, without a camera or sound card?"
     `amaze-auditory --write-config check.yaml` writes a configuration file and stops, touching no hardware. If the file appears, the installation is sound. With the standalone application: `amazeing-app.exe --entry auditory --write-config check.yaml`.

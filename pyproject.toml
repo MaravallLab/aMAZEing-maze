@@ -64,6 +64,17 @@ dev = [
     "pytest-cov>=3.0",
     "PySide6>=6.6",
 ]
+# Everything a lab member needs: the application and the analysis pipelines.
+# With uv:  uv sync --extra all     With pip:  pip install -e ".[all]"
+all = [
+    "amazeing-maze[gui,analysis]",
+]
+# The Bayesian fits of the value model (analysis/auditory/model_validation),
+# at the versions they were run with. Kept apart because PyMC is large.
+bayes = [
+    "pymc>=5.15,<5.20",
+    "arviz>=0.18,<0.20",
+]
 
 [project.urls]
 Homepage = "https://github.com/MaravallLab/aMAZEing-maze"
