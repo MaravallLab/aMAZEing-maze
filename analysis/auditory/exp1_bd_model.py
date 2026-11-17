@@ -52,7 +52,11 @@ Usage:
 
 Reads stimulus_pi/stimulus_pi.csv, complexity/complexity.csv,
 complexity/vocalisation_complexity.csv and lmm/arm_blocks.csv from
-DATA_DIR/BATCH_ANALYSIS, and writes to DATA_DIR/BATCH_ANALYSIS/bd_model/.
+DATA_DIR/BATCH_ANALYSIS, and writes to DATA_DIR/BATCH_ANALYSIS/bd_model/:
+the fits and their comparison, fig_exp1_bd_model (the fit), and
+fig_exp1_bd_state with state_by_day.csv (how the fitted model reads the
+experiment: the path of the state, and for each day the fluency and learning
+parts of the value of its synthetic sounds and its vocalisation).
 """
 
 import argparse
@@ -223,9 +227,9 @@ def aic(rss, n, k):
 
 
 # -- figure -----------------------------------------------------------------------
-def fig_fit(obs, preds, path_traj, f, comparison, path):
+def fig_fit(obs, preds, comparison, path):
     fig = plt.figure(figsize=(6.3, 5.4))
-    gs = fig.add_gridspec(2, 3, height_ratios=[1.3, 1], hspace=0.6, wspace=0.45)
+    gs = fig.add_gridspec(2, 2, height_ratios=[1.3, 1], hspace=0.6, wspace=0.12)
     order = obs.assign(o=obs["set"].map(OBSERVED.index)).sort_values(["o", "voc", "stimulus"])
     x = np.arange(len(order))
     ax = fig.add_subplot(gs[0, :])
@@ -267,20 +271,143 @@ def fig_fit(obs, preds, path_traj, f, comparison, path):
     ax.invert_yaxis()
     ax.set_xlabel("AIC above the best")
     ax.set_title("(c) fit", loc="left")
+    for a in fig.axes:
+        a.spines["top"].set_visible(False)
+        a.spines["right"].set_visible(False)
+    for ext in ("png", "pdf"):
+        fig.savefig(f"{path}.{ext}", dpi=200, bbox_inches="tight")
+    plt.close(fig)
 
-    ax = fig.add_subplot(gs[1, 2])
+
+# -- how the fitted model reads the experiment ------------------------------------
+DAY_SHORT = {"TEM": "TEM", "Intervals 1": "Int 1", "Intervals 2": "Int 2",
+             "Intervals 3": "Int 3", "Sequences": "Seq", "Vocalisations": "Voc"}
+SYNTH, VOCAL = "#455A64", "#2E7D32"
+
+
+def components(p, steps):
+    """The two parts of the value of every stimulus on every day, as simulate
+    computes them: fluency (w_r r, the cost of being unfamiliar to the current
+    state) and learning (w_V dV, the gain from moving the state towards the
+    expected world), each averaged over the stimulus's exposures that day."""
+    ts, tt = p["muT_s"], p["muT_t"]
+    ms, mt = ts, tt
+    alpha, w_r, w_V = p["alpha"], p["w_r"], p["w_V"]
+    acc = {}
+    for day, order in steps:
+        for _ in range(BLOCKS):
+            for stim, ss, st in order:
+                ns, nt = ms + alpha * (ss - ms), mt + alpha * (st - mt)
+                r = -((ss - ms) ** 2 + (st - mt) ** 2)
+                dV = -(((ns - ts) ** 2 + (nt - tt) ** 2) - ((ms - ts) ** 2 + (mt - tt) ** 2))
+                acc.setdefault((day, stim), []).append((w_r * r, w_V * dV))
+                ms, mt = ns, nt
+    return {k: np.mean(v, axis=0) for k, v in acc.items()}
+
+
+def state_by_day(p, path_traj, steps, f, obs, preds):
+    """For every day: where the state was while the day ran (the mean of its
+    position at the start of each block), how far it lay from that day's
+    synthetic sounds and from its vocalisation, the two parts of their value
+    in the model of Brielmann and Dayan, and their mean index, observed and
+    fitted."""
+    parts = components(p, steps)
+    rows = []
+    for i, (day, _) in enumerate(steps):
+        state = path_traj[BLOCKS * i: BLOCKS * i + BLOCKS].mean(axis=0)
+        here = f[f["set"] == day]
+        dist = np.hypot(here["spectral_z"] - state[0], here["temporal_bits_z"] - state[1])
+        row = {"day": i + 1, "set": day, "state_spectral_z": state[0], "state_temporal_z": state[1]}
+        for kind, mask in (("synthetic", here["voc"] == 0), ("vocalisation", here["voc"] == 1)):
+            d = dist[mask.to_numpy()]
+            row[f"dist_{kind}"] = d.mean() if len(d) else np.nan
+            vals = np.array([parts[(day, s)] for s in here.loc[mask, "stimulus"] if (day, s) in parts])
+            row[f"fluency_{kind}"] = vals[:, 0].mean() if len(vals) else np.nan
+            row[f"learning_{kind}"] = vals[:, 1].mean() if len(vals) else np.nan
+            o = obs[(obs["set"] == day) & (obs["voc"] == float(kind == "vocalisation"))]
+            row[f"pi_{kind}_observed"] = o["pi"].mean() if len(o) else np.nan
+            row[f"pi_{kind}_fitted"] = preds["B and D"].loc[o.index].mean() if len(o) else np.nan
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def fig_state(path_traj, steps, f, days, path):
+    """The fitted model of Brielmann and Dayan, read as a story: where the mouse's
+    expectation starts and how it moves (a), the cost of each day's sounds being
+    unfamiliar to it (b), the gain from sounds that move it back towards the world
+    it expects (c), and their sum, the preference, against the mice (d). Panels b
+    to d share one scale, so that b and c add up to d."""
+    fig = plt.figure(figsize=(6.3, 5.0))
+    gs = fig.add_gridspec(2, 2, hspace=0.55, wspace=0.32)
+
+    # (a) the map
+    ax = fig.add_subplot(gs[0, 0])
+    start = path_traj[0]
     for r in f.itertuples():
-        colour = "#2E7D32" if r.voc else COLOURS.get(r.family, "#424242")
-        ax.scatter(r.temporal_bits_z, r.spectral_z, s=8, color=colour, lw=0, alpha=0.8)
-    ax.plot(path_traj[:, 1], path_traj[:, 0], color="black", lw=0.8)
-    ax.scatter(path_traj[0, 1], path_traj[0, 0], marker="*", s=40, color="#E65100", zorder=4,
-               label="the expected world, where the state starts")
-    ax.scatter(path_traj[-1, 1], path_traj[-1, 0], marker="o", s=14, color="black", zorder=4,
-               label="the state at the end")
+        colour = VOCAL if r.voc else COLOURS.get(r.family, "#424242")
+        ax.scatter(r.temporal_bits_z, r.spectral_z, s=9, color=colour, lw=0, alpha=0.75, zorder=2)
+    ax.plot(path_traj[:, 1], path_traj[:, 0], color="black", lw=0.8, zorder=3)
+    ends = [path_traj[BLOCKS * (i + 1)] for i in range(len(steps))]
+    for i, e in enumerate(ends):
+        ax.scatter(e[1], e[0], s=34, color="white", edgecolor="black", lw=0.7, zorder=4)
+        ax.text(e[1], e[0], str(i + 1), ha="center", va="center", fontsize=5, zorder=5)
+    ax.scatter(start[1], start[0], marker="*", s=70, color="#E65100", zorder=5)
+    ax.annotate("expected world (fitted),\nwhere the expectation starts",
+                (start[1], start[0]), xytext=(start[1] + 0.3, start[0]),
+                fontsize=5.5, color="#E65100", va="center")
+    voc = f[f["voc"] == 1]
+    ax.text(voc["temporal_bits_z"].max() + 0.2, voc["spectral_z"].mean(), "vocalisations",
+            fontsize=5.5, color=VOCAL, ha="left", va="center")
+    syn = f[f["voc"] == 0]
+    ax.text(syn["temporal_bits_z"].min(), syn["spectral_z"].min() - 0.45,
+            "synthetic sounds", fontsize=5.5, color=SYNTH, ha="left", va="center")
+    ax.set_xlim(min(f["temporal_bits_z"].min(), start[1]) - 0.3,
+                max(f["temporal_bits_z"].max(), start[1]) + 1.5)
+    ax.set_ylim(min(f["spectral_z"].min(), start[0]) - 0.75,
+                max(f["spectral_z"].max(), start[0]) + 0.4)
+    ax.set_aspect("equal", adjustable="box")
     ax.set_xlabel("Temporal complexity (z)")
     ax.set_ylabel("Spectral complexity (z)")
-    ax.legend(fontsize=5, frameon=False, loc="upper left")
-    ax.set_title("(d) the state, Brielmann and Dayan", loc="left")
+    ax.set_title("(a) where the expectation goes", loc="left")
+
+    # (b) to (d) on one scale, so that b and c add up to d
+    x = days["day"].to_numpy()
+    ticks = [f"{d}\n{DAY_SHORT[s]}" for d, s in zip(x, days["set"])]
+    lim = (min(days[[c for c in days if c.startswith(("fluency", "learning", "pi_"))]].min().min(), -0.3) - 0.03,
+           max(days[[c for c in days if c.startswith(("fluency", "learning", "pi_"))]].max().max(), 0.1) + 0.05)
+    kinds = (("synthetic", SYNTH, "synthetic sounds"), ("vocalisation", VOCAL, "vocalisation"))
+
+    def day_axis(ax, title, ylabel):
+        ax.axhline(0, color="black", lw=0.5, ls=(0, (4, 2)))
+        ax.set_xticks(x)
+        ax.set_xticklabels(ticks, fontsize=5.5)
+        ax.set_xlim(x[0] - 0.5, x[-1] + 0.5)
+        ax.set_ylim(*lim)
+        ax.set_ylabel(ylabel)
+        ax.set_title(title, loc="left")
+
+    for pos, part, title, ylabel in (
+            (gs[0, 1], "fluency", "(b) the cost of being unfamiliar", "Fluency part of value"),
+            (gs[1, 0], "learning", "(c) the gain from learning", "Learning part of value")):
+        ax = fig.add_subplot(pos)
+        for kind, colour, name in kinds:
+            seen = days.dropna(subset=[f"{part}_{kind}"])
+            ax.plot(seen["day"], seen[f"{part}_{kind}"], color=colour, marker="o", ms=3, lw=1,
+                    label=name)
+        day_axis(ax, title, ylabel)
+        if part == "fluency":
+            ax.legend(fontsize=5.5, frameon=False, loc="lower right")
+
+    ax = fig.add_subplot(gs[1, 1])
+    for kind, colour, _ in kinds:
+        seen = days.dropna(subset=[f"pi_{kind}_observed"])
+        ax.plot(seen["day"], seen[f"pi_{kind}_fitted"], color=colour, lw=1)
+        ax.scatter(seen["day"], seen[f"pi_{kind}_observed"], s=12, color=colour, zorder=3)
+    ax.plot([], [], color="black", lw=1, label="model")
+    ax.scatter([], [], s=12, color="black", label="mice")
+    ax.legend(fontsize=5.5, frameon=False, loc="lower right")
+    day_axis(ax, "(d) the preference that follows", "Index against the silent arm")
+
     for a in fig.axes:
         a.spines["top"].set_visible(False)
         a.spines["right"].set_visible(False)
@@ -346,6 +473,8 @@ def main():
         f"{d} {resid.loc[resid['set'] == d, 'res'].mean():+.3f}" for d in OBSERVED))
 
     _, path_traj = simulate(bd, steps, record=True)
+    days = state_by_day(bd, path_traj, steps, f, obs, preds)
+    days.to_csv(os.path.join(out, "state_by_day.csv"), index=False)
     obs.assign(**{f"pred_{k}": v for k, v in preds.items()}).to_csv(
         os.path.join(out, "predictions.csv"), index=False)
     comparison.to_csv(os.path.join(out, "comparison.csv"))
@@ -358,7 +487,8 @@ def main():
                          "pdf.fonttype": 42}):
         targets = [out] + ([args.thesis_figures] if args.thesis_figures else [])
         for t in targets:
-            fig_fit(obs, preds, path_traj, f, comparison, os.path.join(t, "fig_exp1_bd_model"))
+            fig_fit(obs, preds, comparison, os.path.join(t, "fig_exp1_bd_model"))
+            fig_state(path_traj, steps, f, days, os.path.join(t, "fig_exp1_bd_state"))
     print(f"\nAll outputs saved to:\n  {out}")
 
 
