@@ -93,6 +93,9 @@ hidden = (
         "scipy.interpolate",
         "scipy.stats",
     ]
+    # savefig loads the backend of a .pdf, .svg or .eps file only when asked
+    + ["matplotlib.backends.backend_pdf", "matplotlib.backends.backend_svg",
+       "matplotlib.backends.backend_ps", "matplotlib.backends.backend_pgf"]
     + _script_imports(SCRIPT_FILES)
     + [m for pkg in WHOLE for m in collect_submodules(pkg, filter=_not_tests)]
 )
