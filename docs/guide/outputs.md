@@ -1,19 +1,19 @@
 # What a session saves
 
-A session writes everything it produces into one folder, including a manifest that records the configuration used and the units of every column.
+A session writes everything it produces into one folder, including a manifest that records the configuration used and the units of every column. The [data dictionary](../reference/data-dictionary.md) describes every file and column.
 
 Sessions are saved under:
 
 ```
-base_output_path / experiment_mode / [--day label] / time_<timestamp>_<mouseID> /
+base_output_path / experiment_mode / [--day label] / time_<timestamp><mouseID> /
 ```
 
 Examples:
 
 ```
-maze_recordings/grammar/habituation/time_2026-05-23_10_00_00_mouse1/
-maze_recordings/grammar/day_1/time_2026-05-23_14_30_00_mouse1/
-maze_recordings/grammar/day_2/time_2026-05-24_10_00_00_mouse1/
+maze_recordings/grammar/habituation/time_2026-05-23_10_00_00mouse1/
+maze_recordings/grammar/day_1/time_2026-05-23_14_30_00mouse1/
+maze_recordings/grammar/day_2/time_2026-05-24_10_00_00mouse1/
 ```
 
 Figures are generated **automatically at the end of every session** and saved inside the session folder alongside the CSVs. To regenerate them for sessions already collected:

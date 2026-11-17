@@ -120,6 +120,8 @@ nav:
       - Materials: hardware/materials.md
       - Firmware: hardware/firmware.md
   - Reference:
+      - Troubleshooting: reference/troubleshooting.md
+      - Data dictionary: reference/data-dictionary.md
       - Glossary: reference/glossary.md
   - Development:
       - Architecture: development/architecture.md

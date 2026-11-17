@@ -81,6 +81,8 @@ That is all. Next, [run your first session](first-session.md).
 
     Wait a few seconds. If `check.yaml` appears in the folder, the bundled Python and libraries work, and the problem is with the window. Note the exact message you saw and [open an issue](https://github.com/MaravallLab/aMAZEing-maze/issues).
 
+More problems and their fixes are gathered on the [troubleshooting page](../reference/troubleshooting.md).
+
 ## Updating
 
 Download the new zip and extract it to a new folder, or delete the old folder first. Sessions are saved outside the application folder (by default in `Desktop\auditory_maze_experiments\maze_recordings`), and configuration files wherever you chose to save them, so neither is affected.

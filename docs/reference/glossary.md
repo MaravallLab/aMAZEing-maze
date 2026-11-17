@@ -45,7 +45,7 @@ PI = (mean visit with a - mean visit with b) / (mean visit with a + mean visit w
 
 ## Session
 
-One mouse in the maze once, from start to finish, saved in one folder named `time_<date>_<time>mouse<ID>`. See [what a session saves](../guide/outputs.md).
+One mouse in the maze once, from start to finish, saved in one folder named `time_<date>_<time>mouse<ID>`. The [data dictionary](data-dictionary.md) describes every file in it.
 
 ## Shuffled blocks
 
