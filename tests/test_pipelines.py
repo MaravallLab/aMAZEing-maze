@@ -236,7 +236,8 @@ class TestLayout:
 
     def test_install_hints_name_a_source_install_when_frozen(self):
         assert "source install" in pl.install_hint("pymc", frozen=True)
-        assert "source install" in pl.install_hint("tdt", frozen=True)
+        # tdt is bundled in the packaged app, so it is never sent to a source install
+        assert "source install" not in pl.install_hint("tdt", frozen=True)
         assert pl.install_hint("pymc", frozen=False).startswith("pip install")
         assert "lme4" in pl.install_hint("R")
 

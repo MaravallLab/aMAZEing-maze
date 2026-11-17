@@ -372,9 +372,7 @@ def install_hint(need: str, frozen: Optional[bool] = None) -> str:
                     "install, after " + PYMC_PIP)
         return PYMC_PIP
     if need == "tdt":
-        if frozen:
-            return ("the packaged app does not include tdt: run the app from a source "
-                    "install, after pip install tdt")
+        # Bundled in the packaged app, and part of the analysis extra.
         return "pip install tdt"
     return 'pip install -e ".[analysis]"'
 

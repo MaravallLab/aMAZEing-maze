@@ -17,7 +17,7 @@ This page maps every analysed figure and result of the thesis to the script that
 
 2. Install R 4 with the packages `lme4`, `lmerTest` and `emmeans`. The scripts that fit mixed models find `Rscript` on the PATH, or in the newest R under `C:/Program Files/R`.
 3. For the Bayesian fits of Experiment 2, install PyMC and ArviZ as the [value model quick guide](model-validation.md#5-how-to-run-it) describes.
-4. For photometry, install the `tdt` package (`pip install tdt`).
+4. Photometry needs the `tdt` package, which the `analysis` extra installs and the downloadable application includes.
 5. Run every command from `analysis/auditory/`:
 
     ```bash

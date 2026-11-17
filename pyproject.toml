@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "amazeing-maze"
-version = "2.0.0a1"
+version = "2.0.0a2"
 description = "aMAZEing maze: open-source platform for auditory and tactile rodent maze experiments (control, logging, analysis)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -44,6 +44,7 @@ analysis = [
     "plotly>=5.0",
     "seaborn>=0.11",
     "statsmodels>=0.13",
+    "tdt>=0.6",          # reads the photometry tanks (fibpho_alignment, fibpho_checks)
 ]
 # Graphical interface (amaze-app).
 gui = [

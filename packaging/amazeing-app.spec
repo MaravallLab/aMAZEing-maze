@@ -14,9 +14,10 @@ The thesis research scripts in analysis/auditory are bundled as data, not
 compiled in: the Analysis tab runs them by path (``amazeing-app.exe --script
 <path> ...``), so the thesis can cite the same files. PyInstaller cannot see
 what they import, so their imports are read here and added as hidden imports,
-with statsmodels, seaborn and plotly whole. PyMC (the Bayesian fits of the
-value model) and tdt (reading photometry tanks) are left out; the app says
-those scripts need a source install.
+with statsmodels, seaborn and plotly whole. tdt, which reads the photometry
+tanks, is bundled, so the photometry scripts run from the packaged app. PyMC
+(the Bayesian fits of the value model) is left out; the app says those scripts
+need a source install.
 """
 
 import ast
@@ -35,7 +36,7 @@ from amazeing.app.pipelines import bundle_files  # noqa: E402
 
 # Imported by some research scripts but deliberately not bundled (pymer4 only
 # by the earlier batch pipeline, which the app does not offer).
-NOT_BUNDLED = {"pymc", "arviz", "pytensor", "tdt", "kaleido", "IPython", "pymer4"}
+NOT_BUNDLED = {"pymc", "arviz", "pytensor", "kaleido", "IPython", "pymer4"}
 # Bundled whole: their submodules are imported lazily.
 WHOLE = ("statsmodels", "patsy", "seaborn", "plotly")
 
