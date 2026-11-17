@@ -37,7 +37,9 @@ The automatic and cross-session figures above are specific to the auditory parad
 |---|---|
 | To check a session ran correctly | [What a session saves](../guide/outputs.md) |
 | A first look at a set of sessions | [Tutorial: analyse a set of sessions](tutorial.md) |
-| Preference index, statistics, modelling for the auditory maze | [Auditory pipeline](auditory.md) |
+| A thesis figure or number, and the command that makes it | [Reproduce the thesis](reproduce-thesis.md) |
+| Preference index, statistics, modelling for the auditory maze | [Auditory pipeline: the thesis scripts](auditory.md) |
+| A result from before the thesis analyses | [Earlier batch pipeline (legacy)](auditory-legacy.md) |
 | Choice accuracy and trajectories for the tactile maze | [Tactile pipeline](tactile.md) |
 | Keypoints and trajectories from video | [Pose estimation pipeline](pose.md) |
 

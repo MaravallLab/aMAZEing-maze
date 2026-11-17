@@ -75,7 +75,7 @@ This writes `summary_<day>.csv` into each day folder and `summary_all_sessions.c
 
 ## Step 5: the research pipelines
 
-The steps above are the routine ones. For the analyses behind the published work, see the [auditory pipeline](auditory.md), which covers the preference index with proper within-trial comparison, mixed-effects models, and the computational model, or the [tactile pipeline](tactile.md) for choice accuracy and trajectory metrics.
+The steps above are the routine ones. For the analyses behind the thesis, see [Reproduce the thesis](reproduce-thesis.md) and the [auditory pipeline](auditory.md), which cover the preference index, the mixed models and the value model, or the [tactile pipeline](tactile.md) for choice accuracy and trajectory metrics.
 
 These expect a data root rather than a single session, and several need the `[analysis]` extra installed:
 
