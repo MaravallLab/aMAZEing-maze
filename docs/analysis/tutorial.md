@@ -1,6 +1,19 @@
 # Tutorial: analyse a set of sessions
 
-This takes a folder of recorded sessions and produces the figures and tables you would look at first. It assumes you have run sessions and know where they were saved.
+This takes a folder of recorded sessions and produces the figures and tables you would look at first.
+
+!!! info "At a glance"
+    **Time:** about fifteen minutes.
+    **You need:** the application, or the package installed from source; your own sessions, or the demo data below.
+    **You get:** figures for one session, for one day and across days, and a table with one row per mouse per day.
+
+## Get some sessions
+
+If you have no recordings yet, download the demo data: real sessions from the grammar experiment (Experiment 2 of the thesis), four mice on the habituation day and both test days, about 200 KB. Two of the mice heard grammar A in their enriched cage and two heard grammar B.
+
+[:material-download: Download demo-sessions.zip](../assets/demo-sessions.zip){ .md-button }
+
+Extract it anywhere. It unzips to `demo-sessions/grammar/`, laid out exactly as the software saves sessions. The tables are as recorded; videos and figures are left out, and you make the figures below. The same zip is in the repository at `docs/assets/demo-sessions.zip`, built by `tools/make_demo_data.py`.
 
 ## What you should have
 
@@ -8,14 +21,14 @@ Sessions are saved in a nested structure, and the analysis relies on it:
 
 ```
 maze_recordings/
-└── grammar/                       <- experiment mode
-    ├── habituation/               <- day label
-    │   ├── time_2026-05-23_10_00_00mouse6224/
-    │   └── time_2026-05-23_10_40_00mouse6225/
-    ├── day_1/
-    │   ├── time_2026-05-24_09_00_00mouse6224/
-    │   └── ...
-    └── day_2/
+  grammar/                         the experiment mode
+    habituation/                   a day label
+      time_2026-05-23_10_00_00mouse6224/
+      time_2026-05-23_10_40_00mouse6225/
+    day_1/
+      time_2026-05-24_09_00_00mouse6224/
+      ...
+    day_2/
 ```
 
 The **day label** comes from `--day` on the command line, or the Day label field in the application. If you did not set one, sessions sit directly under the mode folder and the cross-session tools cannot group them by day. That is worth fixing before you collect more.
@@ -29,6 +42,10 @@ In the application, open the **Analysis** tab, choose one session folder with **
 ```bash
 amaze-analyse-session "C:\...\grammar\day_1\time_2026-05-24_09_00_00mouse6224"
 ```
+
+With the demo data, pick for example `demo-sessions\grammar\day_1\time_2026-05-23_11_13_03mouse13535`.
+
+With the demo data, pick for example `demo-sessions\grammar\day_1\time_2026-05-23_11_13_03mouse13535`.
 
 The figures land in the session folder and are listed in the tab for preview.
 
@@ -75,7 +92,7 @@ This writes `summary_<day>.csv` into each day folder and `summary_all_sessions.c
 
 ## Step 5: the research pipelines
 
-The steps above are the routine ones. For the analyses behind the published work, see the [auditory pipeline](auditory.md), which covers the preference index with proper within-trial comparison, mixed-effects models, and the computational model, or the [tactile pipeline](tactile.md) for choice accuracy and trajectory metrics.
+The steps above are the routine ones. For the analyses behind the thesis, see [Reproduce the thesis](reproduce-thesis.md) and the [auditory pipeline](auditory.md), which cover the preference index, the mixed models and the value model, or the [tactile pipeline](tactile.md) for choice accuracy and trajectory metrics.
 
 These expect a data root rather than a single session, and several need the `[analysis]` extra installed:
 

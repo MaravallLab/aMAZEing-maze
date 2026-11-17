@@ -1,6 +1,11 @@
 # Tutorial: run your first session
 
-This walks through one short auditory session from a cold start: setting up, drawing the arms, choosing sounds, recording, and finding the data afterwards. It takes about twenty minutes, and you can do all of it with no animal in the maze.
+This walks through one short auditory session from a cold start: setting up, drawing the arms, choosing sounds, recording, and finding the data afterwards. You can do all of it with no animal in the maze.
+
+!!! info "At a glance"
+    **Time:** about twenty minutes.
+    **You need:** the [application](download.md) or an [installation from source](installation.md), a camera pointed at the maze, infrared illumination, and a speaker. No Arduino, no animal.
+    **You get:** a short recorded session, its figures, and a configuration file to run the same protocol again.
 
 !!! tip "Do this once without an animal"
     Run the whole tutorial on an empty maze first, or with a dark object you move by hand. You will find your camera and audio settings without wasting an animal's session.

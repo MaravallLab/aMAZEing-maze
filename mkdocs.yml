@@ -93,6 +93,7 @@ plugins:
 nav:
   - Home: index.md
   - Getting started:
+      - Download the application: getting-started/download.md
       - Installation: getting-started/installation.md
       - Tutorial - run your first session: getting-started/first-session.md
   - Running experiments:
@@ -105,7 +106,10 @@ nav:
   - Analysis:
       - Overview: analysis/index.md
       - Tutorial - analyse a set of sessions: analysis/tutorial.md
-      - Auditory pipeline: analysis/auditory.md
+      - Reproduce the thesis: analysis/reproduce-thesis.md
+      - "Auditory pipeline: the thesis scripts": analysis/auditory.md
+      - The value model of Experiment 2: analysis/model-validation.md
+      - Earlier batch pipeline (legacy): analysis/auditory-legacy.md
       - Tactile pipeline: analysis/tactile.md
       - Pose estimation pipeline: analysis/pose.md
       - Cropping and aligning videos: analysis/crop-align.md
@@ -115,6 +119,10 @@ nav:
       - Dimensions: hardware/dimensions.md
       - Materials: hardware/materials.md
       - Firmware: hardware/firmware.md
+  - Reference:
+      - Troubleshooting: reference/troubleshooting.md
+      - Data dictionary: reference/data-dictionary.md
+      - Glossary: reference/glossary.md
   - Development:
       - Architecture: development/architecture.md
       - Testing: development/testing.md

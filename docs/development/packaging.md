@@ -10,6 +10,17 @@ python -m venv .venv-build
 
 This runs the tests, builds `dist\amazeing-app\amazeing-app.exe` with PyInstaller, smoke-tests the executable, and zips the result as `dist\amazeing-app.zip`, which is the file name the README and the installation page tell people to download. The same executable runs the command-line tools (for example `amazeing-app.exe --entry auditory --config session.yaml`), which is how the application launches sessions on a machine without Python.
 
+## Publishing a release
+
+The [download page](../getting-started/download.md) links to `amazeing-app.zip` in the latest GitHub release. The workflow `.github/workflows/release.yml` makes that release: pushing a version tag runs the build script above on a Windows runner and attaches the zip to the release of that tag.
+
+```bash
+git tag v2.0.0
+git push origin v2.0.0
+```
+
+Started by hand from the Actions tab instead, the workflow builds the zip and keeps it as a workflow artifact for a week, without making a release, which is a way to test a build before tagging.
+
 ## Starting the application on this machine
 
 `dist\` holds two launchers, so there is one folder to look in rather than two places to remember. The build script copies them in from `packaging/dist_launchers/`, and they are not part of the release zip.
