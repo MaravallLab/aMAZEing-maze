@@ -2,6 +2,11 @@
 
 How to go from parts to a working maze. The design is deliberately reconfigurable: the floor is a grid of threaded holes and the walls slot into aluminium posts, so the same rig becomes a four-arm radial maze, an eight-arm one, or a binary decision tree by moving walls rather than building something new.
 
+!!! info "At a glance"
+    **Time:** set mainly by 3D printing and the delivery of parts; the [first run](#first-run) checks take an hour or two.
+    **You need:** the [parts](#parts) below, a 3D printer with white filament for the maze top and printed parts, and a Windows computer for the software.
+    **You get:** a working rig with the camera, lighting, detection and speaker checked, ready for a [first session](../getting-started/first-session.md).
+
 ![The maze with tuneable walls](../images/model.png)
 
 ## What you are building

@@ -4,128 +4,74 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-yellow.svg)](https://www.python.org/)
-[![Tests](https://img.shields.io/badge/tests-228%20passing-brightgreen.svg)](#testing)
-[![Documentation](https://img.shields.io/badge/docs-website-blue.svg)](https://maravalllab.github.io/aMAZEing-maze/)
+[![Tests](https://github.com/MaravallLab/aMAZEing-maze/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/MaravallLab/aMAZEing-maze/actions/workflows/tests.yml)
+[![Documentation](https://github.com/MaravallLab/aMAZEing-maze/actions/workflows/docs.yml/badge.svg?branch=main)](https://maravalllab.github.io/aMAZEing-maze/)
 
 ![The maze with tuneable walls](hardware/drawings/model.png)
 
-The maze is a reconfigurable arena filmed under infrared light, built on a drilled floor plate so the walls move and the same rig becomes a different maze. Software tracks which arm the animal is in and drives the stimuli in real time.
+The maze is a reconfigurable arena filmed under infrared light, built on a drilled floor plate so the walls move and the same rig becomes a different maze. Software tracks which arm the animal is in and drives the stimuli in real time. It runs two paradigms on the same hardware:
 
-It runs as **two paradigms**, equally developed, sharing the hardware, the tracking and the analysis tooling.
+- **The auditory maze.** Entering an arm plays its sound. Nothing is rewarded; where the animal chooses to spend its time is the measurement.
+- **The tactile maze.** A two-level decision tree cued by gratings read with the whiskers, with an automated, closed-loop pellet reward.
 
-### Auditory maze
+## Download
 
-Sound triggered by arm entry: pure tones, musical intervals, amplitude modulation, tone sequences, artificial grammars, recorded vocalisations. Nothing is rewarded and nothing is required. The animal explores, the stimulus-to-arm mapping is reshuffled between blocks, and **where it chooses to spend its time is the measurement**.
+[![Download for Windows](https://img.shields.io/badge/Download-for%20Windows-1565C0?style=for-the-badge&logo=windows)](https://maravalllab.github.io/aMAZEing-maze/getting-started/download/)
 
-### Tactile maze
-
-A two-level binary decision tree with a right answer. The cue is texture, read by the whiskers.
-
-**Three pairs of servo-driven 3D-printed gratings**, one pair before every decision point, face each other across the corridor. **The vertical grating marks the correct way**; the other is horizontal. If the reward is in the bottom right arm, the right grating is vertical at the first junction and again at the second, so the animal follows vertical twice and arrives at the reward.
-
-Reaching the correct arm is detected by the camera and releases a food pellet from an **automated reward port**: a servo rocks the dispenser while an **infrared beam watches the chute**, and stops the moment a pellet is detected falling through. The loop is closed, so a trial recorded as rewarded really was rewarded, rather than the mechanism turning by a fixed amount and hoping.
-
-A trial runs from the animal entering the maze to leaving it, and is scored as a hit, an incorrect choice, or a miss. Training proceeds through four stages of increasing difficulty.
-
-The electronics are an Arduino driving an Adafruit PCA9685 sixteen-channel PWM controller for the ten servos (six gratings, four reward ports) and four infrared detectors, alongside a BeeHive board developed at the University of Sussex.
+Windows 10 or 11, no Python needed: download `amazeing-app.zip`, extract it and run `amazeing-app.exe`. The [download page](https://maravalllab.github.io/aMAZEing-maze/getting-started/download/) walks through it, including the Windows SmartScreen prompt on first launch.
 
 ## Documentation
 
-**[maravalllab.github.io/aMAZEing-maze](https://maravalllab.github.io/aMAZEing-maze/)** has the tutorials, the guide and the reference.
+Everything is on **[maravalllab.github.io/aMAZEing-maze](https://maravalllab.github.io/aMAZEing-maze/)**.
 
 | If you want to | Start at |
 |---|---|
 | Run an auditory session | [Run your first session](https://maravalllab.github.io/aMAZEing-maze/getting-started/first-session/) |
 | Run the tactile task | [The tactile paradigm](https://maravalllab.github.io/aMAZEing-maze/guide/tactile/) |
 | Build a rig | [Build and set up the rig](https://maravalllab.github.io/aMAZEing-maze/hardware/build/) |
-| Analyse recordings | [Analyse a set of sessions](https://maravalllab.github.io/aMAZEing-maze/analysis/tutorial/) |
-| Reproduce the thesis analyses | [Auditory analysis pipelines](https://maravalllab.github.io/aMAZEing-maze/analysis/auditory/) |
+| Analyse recordings, or try it on demo data | [Analyse a set of sessions](https://maravalllab.github.io/aMAZEing-maze/analysis/tutorial/) |
+| Reproduce the thesis analyses | [Reproduce the thesis](https://maravalllab.github.io/aMAZEing-maze/analysis/reproduce-thesis/) |
+| Fix a problem | [Troubleshooting](https://maravalllab.github.io/aMAZEing-maze/reference/troubleshooting/) |
 
-## Install
+## Install from source
 
-[![Download for Windows](https://img.shields.io/badge/Download-for%20Windows-1565C0?style=for-the-badge&logo=windows)](https://maravalllab.github.io/aMAZEing-maze/getting-started/download/)
-
-Windows 10 or 11, no Python needed: download `amazeing-app.zip`, extract it and run `amazeing-app.exe`. The [download page](https://maravalllab.github.io/aMAZEing-maze/getting-started/download/) walks through it, including the Windows SmartScreen prompt on first launch.
-
-Or from source:
+For the analysis scripts, for changing the code, or on macOS and Linux:
 
 ```bash
 git clone https://github.com/MaravallLab/aMAZEing-maze.git
 cd aMAZEing-maze
 pip install -e ".[gui,analysis]"
-```
-
-## Run
-
-```bash
 amaze-app
 ```
 
-The application has a tab per task: auditory session, speaker calibration, analysis, grammar training, tactile session.
-
-Or from a terminal, which runs exactly the same code:
-
-```bash
-# auditory
-amaze-auditory --write-config my_protocol.yaml   # get a template to edit
-amaze-auditory --config my_protocol.yaml         # run it
-
-# tactile
-amaze-tactile
-```
-
-| Command | What it does |
-|---|---|
-| `amaze-app` | The graphical application |
-| `amaze-auditory` | Run one auditory session |
-| `amaze-camera-check` | Live camera and detection check, before anything is recorded |
-| `amaze-tactile` | Run one tactile session |
-| `amaze-tactile-segments` | Cut a tactile session's video into per-trial clips |
-| `amaze-grammar` | Continuous grammar playback for training days |
-| `amaze-analyse-session` | Figures for one recorded session |
-| `amaze-summary` | Figures across sessions |
-| `amaze-summary-csv` | Summary tables across sessions |
+The [installation page](https://maravalllab.github.io/aMAZEing-maze/getting-started/installation/) lists the command-line tools and the hardware.
 
 ## Repository layout
 
-```
-├── src/amazeing/       Installable package
-│   ├── auditory/         Auditory paradigm: config, session loop, audio, vision, analysis
-│   ├── simplermaze/      Tactile paradigm: session loop, grating maps, reward stages
-│   └── app/              Graphical interface
-├── analysis/           Post-hoc research pipelines: the thesis analyses of both auditory
-│                         experiments, photometry, the value model, pose estimation
-├── hardware/           CAD sources, STLs, drawings, construction photos
-├── firmware/           Arduino and MicroPython sketches: grating and reward servos, TTL sync
-├── docs/               Documentation site sources
-├── packaging/          Application build: PyInstaller spec, build script, pinned versions
-├── tools/              Utilities, including documentation screenshot generation
-├── tests/              Test suite
-└── archive/            Superseded code, kept for reference
-```
-
-## Testing
-
-```bash
-pip install -e ".[dev]"
-python -m pytest
-```
+| Folder | What it holds |
+|---|---|
+| `src/amazeing/` | The installable package: the auditory and tactile paradigms and the application |
+| `analysis/` | The research pipelines, including every thesis analysis ([`analysis/README.md`](analysis/README.md)) |
+| `hardware/`, `firmware/` | CAD sources, STLs and drawings; Arduino and MicroPython sketches |
+| `docs/` | The documentation site |
+| `packaging/` | The Windows application build |
+| `tools/`, `tests/` | Utilities and the test suite |
+| `archive/` | Superseded code, kept for reference |
 
 ## Contributing
 
-Issues and pull requests are welcome. The [architecture page](https://maravalllab.github.io/aMAZEing-maze/development/architecture/) explains how the pieces fit together and the design rules the code follows.
-
-To work on the documentation:
+Issues and pull requests are welcome. The [architecture page](https://maravalllab.github.io/aMAZEing-maze/development/architecture/) explains how the pieces fit together.
 
 ```bash
-pip install -e ".[docs]"
-mkdocs serve                      # preview at http://127.0.0.1:8000
+pip install -e ".[dev,docs]"
+python -m pytest                  # the tests
+mkdocs serve                      # preview the site at http://127.0.0.1:8000
 python tools/make_screenshots.py  # regenerate the application screenshots
 ```
 
 ## Citing
 
-The code used for the original behavioural experiments is tagged [`v1.0-thesis`](https://github.com/MaravallLab/aMAZEing-maze/releases/tag/v1.0-thesis). The analyses reported in the thesis are the scripts under `analysis/auditory/`, described on the [auditory analysis page](https://maravalllab.github.io/aMAZEing-maze/analysis/auditory/).
+The code that recorded the original behavioural experiments is tagged [`v1.0-thesis`](https://github.com/MaravallLab/aMAZEing-maze/releases/tag/v1.0-thesis). The analyses reported in the thesis are the scripts under `analysis/auditory/`, mapped figure by figure on [Reproduce the thesis](https://maravalllab.github.io/aMAZEing-maze/analysis/reproduce-thesis/).
 
 ## Contributors
 

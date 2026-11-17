@@ -52,16 +52,16 @@ Silent-baseline sessions are automatically excluded - only active test-day sessi
 | File | What it shows |
 |------|--------------|
 | `summary_A_ee_sc_per_mouse.png` | EE vs SC total time - one pair of bars per mouse, one panel per day |
-| `summary_B_preference_index.png` | EE preference index (−1 to +1) per mouse; positive = EE preference |
-| `summary_C_group_summary.png` | Group mean ± SEM time and visit count on EE vs SC arms per day |
-| `summary_D_cross_day_pi.png` | PI trajectory per mouse + group mean ± SEM across days *(multi-day only)* |
+| `summary_B_preference_index.png` | EE preference index (-1 to +1) per mouse; above zero means more time on EE arms |
+| `summary_C_group_summary.png` | Group mean and SEM of time and visit count on EE and SC arms per day |
+| `summary_D_cross_day_pi.png` | Each mouse's index across days, with the group mean and SEM *(several days only)* |
 
 **Predictive complexity (dominant / secondary / rare):**
 
 | File | What it shows |
 |------|--------------|
-| `summary_E_tier_breakdown_per_mouse.png` | Stacked bars per mouse: EE bar and SC bar each split by tier (dark → light = dominant → rare) |
-| `summary_F_group_tier_breakdown.png` | Group mean ± SEM for all 6 tier × environment combinations |
-| `summary_G_cross_day_tiers.png` | Per-tier preference across days - group mean ± SEM for each complexity level, EE and SC panels *(multi-day only)* |
+| `summary_E_tier_breakdown_per_mouse.png` | Stacked bars per mouse: the EE bar and the SC bar each split by tier, from dark (dominant) to light (rare) |
+| `summary_F_group_tier_breakdown.png` | Group mean and SEM for all six combinations of tier and environment |
+| `summary_G_cross_day_tiers.png` | Preference for each tier across days, group mean and SEM, EE and SC panels *(several days only)* |
 
 ---

@@ -48,6 +48,22 @@ It runs as two paradigms, equally developed, sharing the hardware, the tracking 
 
     [Build and set up the rig](hardware/build.md)
 
+-   :material-book-open-variant: **Reproducing the thesis**
+
+    ---
+
+    Every thesis figure and result, with the script, command and output folder behind it.
+
+    [Reproduce the thesis](analysis/reproduce-thesis.md)
+
+-   :material-lifebuoy: **Something is wrong**
+
+    ---
+
+    Fixes for the problems people meet, from installing to analysis.
+
+    [Troubleshooting](reference/troubleshooting.md)
+
 </div>
 
 ## :material-rodent: The auditory maze { .amz-auditory }
@@ -69,7 +85,7 @@ flowchart LR
     style F fill:#2E7D32,color:#fff
 ```
 
-The stimuli can be pure tones, musical intervals, amplitude modulation, tone sequences, artificial grammars or recorded vocalisations. A session runs a nine-block cycle of alternating silent and active periods, and the stimulus-to-arm mapping is reshuffled at the start of each active block. That reshuffle separates a preference for a **sound** from a preference for a **place**.
+The stimuli can be pure tones, musical intervals, amplitude modulation, tone sequences, artificial grammars or recorded vocalisations. A session runs a nine-block cycle of alternating silent and active periods. The first active block places each stimulus in the arm its place in the list gives it, and the stimulus-to-arm mapping is reshuffled at the start of every later one. That reshuffle separates a preference for a **sound** from a preference for a **place**.
 
 [Experiment modes](guide/experiment-modes.md) covers the paradigms and their parameters.
 
@@ -107,6 +123,8 @@ A trial runs from the animal entering the maze to leaving it, and is scored as a
 ## Two ways to drive it
 
 The graphical application and the command line run the same code. The application writes a configuration file and then launches exactly the commands a terminal user would type, so a session started either way is identical and reproducible from that file.
+
+On Windows, [download the application](getting-started/download.md). From source:
 
 ```bash
 pip install -e ".[gui]"
