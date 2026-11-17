@@ -1,118 +1,121 @@
 # Tactile analysis pipeline
 
-Processes DeepLabCut or SLEAP pose data alongside the trial CSVs to produce figures and statistics for the tactile paradigm.
+!!! info "At a glance"
+    **Time:** a few minutes per mouse, once the sessions are in place.
+    **You need:** one mouse's tactile sessions (the trial tables, and DeepLabCut tracking for some sessions), Python with the `[analysis]` extra.
+    **You get:** a learning curve, phase-by-phase speed, duration and path entropy, and transition maps between compartments, each comparing hit and miss trials.
 
-In addition to `requirements.txt`, the analysis pipeline needs:
+## What it does
 
-```bash
-pip install rpy2          # optional: for GLMM via R's lme4
-pip install statsmodels   # already in requirements.txt
-```
+The [tactile task](../guide/tactile.md) asks a mouse to follow the vertical grating at two junctions to reach a rewarded arm. These three scripts ask whether the mouse learned, and how its movement differs between trials it got right and trials it got wrong.
 
-If using the GLMM features, you also need R installed with the `lme4` package:
+| Script | Question | Needs tracking |
+|---|---|---|
+| `01_choice_accuracy.py` | Does the mouse choose the correct arm more often as training goes on? | No |
+| `02_metrics_and_models.py` | On hit trials, does the mouse run faster and more directly than on misses? | Yes |
+| `03_transition_probabilities.py` | Which compartment does the mouse go to next, and does that differ between hits and misses? | Yes |
 
-```r
-install.packages("lme4")
-```
+They live in `analysis/simplermaze/first_paper_exploratory_analysis/` and analyse one mouse at a time.
 
-Edit `analysis/simplermaze/first_paper_exploratory_analysis/config.py`:
+## What you need
 
-```python
-MOUSE_ID = "6357"
-BASE_PATH = os.path.join(
-    os.path.expanduser("~"), "Box", "Awake Project", "Maze data", "simplermaze"
-)
-```
+- The analysis extra: `pip install -e ".[analysis]"` from the repository root.
+- For the Gamma mixed models of `02_metrics_and_models.py` (optional): R with the `lme4` package (`install.packages("lme4")` in R) and `pip install rpy2`. Without them the script runs its other tests.
+- One mouse's sessions in this layout:
 
-The pipeline auto-discovers all sessions for the mouse. Verify with:
+    ```
+    <BASE_PATH>/mouse <MOUSE_ID>/
+      habituation/
+        mouse<ID>_session1.1_trial_info.csv
+        rois1.csv
+      <timestamp><ID>session<X.Y>/              for example 2024-08-29_10_23_026357session3.7
+        new_session<X.Y>_trials.csv             or clean_mouse<ID>_session<X.Y>_trial_info.csv
+        rois1.csv
+      deeplabcut/                               tracking, for some sessions
+        .../<ID>_<timestamp>s<X.Y>DLC_*.csv
+    ```
 
-```bash
-cd analysis/simplermaze/first_paper_exploratory_analysis
-python config.py
-```
+## Quick start
 
-This prints every detected session, whether it has DLC tracking data, and which trial CSV it found.
+1. The scripts take no command-line arguments. Open `analysis/simplermaze/first_paper_exploratory_analysis/config.py` and set the two lines at the top:
 
-```
-<BASE_PATH>/mouse <MOUSE_ID>/
-├── habituation/
-│   ├── mouse<ID>_session1.1_trial_info.csv
-│   └── rois1.csv
-├── <timestamp><ID>session<X.Y>/          # e.g. 2024-08-29_10_23_026357session3.7
-│   ├── new_session<X.Y>_trials.csv       # or clean_mouse<ID>_session<X.Y>_trial_info.csv
-│   └── rois1.csv
-└── deeplabcut/                           # DLC tracking (only some sessions)
-    └── .../<ID>_<timestamp>s<X.Y>DLC_*.csv
-```
+    ```python
+    MOUSE_ID = "6357"
+    BASE_PATH = os.path.join(os.path.expanduser("~"), "Box", "Awake Project", "Maze data", "simplermaze")
+    ```
 
-**Trial CSV columns used:**
+2. Check that the sessions are found, then run the three steps:
 
-| Column | Description |
+    ```bash
+    cd analysis/simplermaze/first_paper_exploratory_analysis
+    python config.py
+    python 01_choice_accuracy.py
+    python 02_metrics_and_models.py
+    python 03_transition_probabilities.py
+    ```
+
+    `python config.py` lists every session it found, whether it has tracking, and which trial table it will read.
+
+Everything is written to `<BASE_PATH>/mouse <MOUSE_ID>/MOUSE_<MOUSE_ID>_TOTAL_ANALYSIS/`.
+
+## Details
+
+### Step 1: choice accuracy
+
+Loads the trial tables of every session, from habituation to the last. It recomputes each trial's outcome from whether the reward area the mouse visited first (`first_reward_area_visited`, whose last letter is the arm) was the rewarded arm (`rew_location`), as a check on the `hit`, `miss` and `incorrect` columns, and leaves out trials where the mouse entered no reward arm. A binomial mixed model, `correct ~ session + (1|mouse_id)`, tests whether accuracy changes across sessions.
+
+| Output | Contents |
 |---|---|
-| `rew_location` | Correct arm letter (A/B/C/D) |
-| `first_reward_area_visited` | ROI the mouse visited first (e.g. `rewB`) |
-| `rewA`, `rewB`, `rewC`, `rewD` | Time spent in each arm (ms), empty if not visited |
-| `hit`, `miss`, `incorrect` | Original classifications (may have misdetections) |
-| `start_trial_frame`, `end_trial_frame` | Frame boundaries for DLC alignment |
+| `choice_accuracy_across_sessions.png`, `.pdf` | Correct, incorrect and no choice per session |
+| `choice_accuracy_summary.csv` | Counts and percentage correct per session |
+| printed | The mixed model's coefficients and p-values |
 
-All scripts are run from the `first_paper_exploratory_analysis/` directory.
+**Reading it.** A learning curve: if the bars move from mostly incorrect to mostly correct across sessions, the mouse is learning, and the p-value of the session coefficient says whether the trend is significant.
 
-#### Step 1: Choice accuracy across sessions
+### Step 2: metrics by phase, and models
 
-```bash
-python 01_choice_accuracy.py
-```
+For the sessions with tracking (3.6, 3.7 and 3.8), splits each trial into phase 1 (entering the maze to reaching the first reward area) and phase 2 (from there to the end of the trial). For each phase it measures duration, mean speed (cm/s, Savitzky-Golay smoothed) and spatial entropy, and compares hit with miss trials by a Mann-Whitney U test, a linear mixed model (statsmodels) and a Gamma mixed model (R, through rpy2), as speed and duration are skewed.
 
-**What it does:** Loads trial CSVs from all sessions (habituation through 3.8). Recomputes trial outcomes from `first_reward_area_visited[-1] == rew_location` as a sanity check against the `hit`/`miss`/`incorrect` columns. Excludes trials where the mouse never entered any reward arm. Fits a binomial GLMM (`correct ~ session + (1|mouse_id)`) to test whether choice accuracy changes across sessions.
-
-**Outputs** (saved to `mouse <ID>/MOUSE_<ID>_TOTAL_ANALYSIS/`):
-
-| File | Description |
+| Output | Contents |
 |---|---|
-| `choice_accuracy_across_sessions.png/.pdf` | Grouped bar chart: correct / incorrect / no-choice per session |
-| `choice_accuracy_summary.csv` | Per-session counts and percentage correct |
-| Terminal | GLMM coefficients and p-values |
+| `master_behavioural_data.csv` | One row per trial: session, outcome, duration, speed and entropy of each phase |
+| `violin_plots.png`, `.pdf` | Six panels, phase by measure, with the p-values |
+| `stats_report.csv` | Every p-value in one table |
+| printed | The Gamma mixed models from R |
 
-#### Step 2: P1/P2 metrics and statistical models
+**Reading it.** Do mice run faster in phase 1 on hit trials? Is their path more direct (lower entropy)? Do they stay longer in the reward area on hits?
 
-```bash
-python 02_metrics_and_models.py
-```
+### Step 3: transition probabilities
 
-**What it does:** For sessions with DLC data (3.6, 3.7, 3.8), splits each trial into Phase 1 (maze entry to first ROI reached) and Phase 2 (ROI to trial end). Computes per-phase duration, mean speed (cm/s, Savitzky-Golay smoothed), and spatial entropy. Runs three statistical tests comparing Hit vs Miss: Mann-Whitney U, Linear Mixed Model (statsmodels), and Gamma GLMM (rpy2/lme4) for the positively-skewed speed and duration data.
+For the sessions with tracking, assigns each frame to a compartment (`entrance1`, `entrance2`, `rewA` to `rewD`, or corridor), collapses repeats into a sequence of moves, and builds a transition matrix per trial, pooled separately for hits and misses. It also measures perseveration (how often the mouse goes back to the arm it just left), exploration entropy (how evenly it visits the arms) and the number of compartments visited.
 
-**Outputs:**
-
-| File | Description |
+| Output | Contents |
 |---|---|
-| `master_behavioural_data.csv` | Per-trial metrics: session, status, P1/P2 duration, speed, entropy |
-| `violin_plots.png/.pdf` | 2x3 grid of violin plots (P1/P2 x duration/speed/entropy) with MWU and LMM p-values |
-| `stats_report.csv` | All p-values in one table (MWU, LMM, Gamma GLMM) |
-| Terminal | Gamma GLMM summaries from R |
+| `transition_combined.png`, `.pdf` | Transition maps for hits, for misses, and their difference |
+| `exploration_metrics.png`, `.pdf` | Perseveration, exploration entropy and compartments visited, hits against misses |
+| `transition_summary.csv` | One row per trial: the sequence and the three measures |
 
-#### Step 3: Transition probabilities
+**Reading it.** Read a transition map row by row: given the mouse is in the row's compartment, how likely is it to go to the column's next? The difference map shows where hits and misses part ways.
 
-```bash
-python 03_transition_probabilities.py
-```
+??? note "Columns of the trial table the scripts use"
+    | Column | Meaning |
+    |---|---|
+    | `rew_location` | The rewarded arm (A, B, C or D) |
+    | `first_reward_area_visited` | The reward area the mouse visited first (for example `rewB`) |
+    | `rewA`, `rewB`, `rewC`, `rewD` | Time in each arm, in ms; empty if not visited |
+    | `hit`, `miss`, `incorrect` | The outcome recorded during the session |
+    | `start_trial_frame`, `end_trial_frame` | Video frames of the trial, to align the tracking |
 
-**What it does:** For sessions with DLC data, assigns each frame to an ROI (entrance1/2, rewA-D) or "corridor" using bounding-box checks. Collapses consecutive identical states to extract the sequence of compartment transitions. Builds per-trial transition matrices, aggregates separately for Hit and Miss trials, and computes derived metrics: perseveration rate (how often the mouse returns to the same arm), exploration entropy (how evenly it visits different arms), and number of unique ROIs visited.
+??? note "Settings in `config.py`"
+    Besides `MOUSE_ID` and `BASE_PATH`, `config.py` sets `FPS = 30`, the tracked body part (`BODYPART = "mid"`), the minimum tracking likelihood (`LIKELIHOOD_THRESH = 0.8`) and the scale (`PX_PER_CM = 7.5`).
 
-**Outputs:**
+## Troubleshooting
 
-| File | Description |
-|---|---|
-| `transition_combined.png/.pdf` | Side-by-side heatmaps: Hit transitions, Miss transitions, difference (Hit - Miss) |
-| `exploration_metrics.png/.pdf` | Violin plots comparing perseveration, exploration entropy, and unique ROIs (Hit vs Miss) |
-| `transition_summary.csv` | Per-trial: state sequence, perseveration rate, exploration entropy, unique ROIs |
+??? question "`python config.py` finds no sessions"
+    Check `BASE_PATH` and `MOUSE_ID`: the scripts look in `<BASE_PATH>/mouse <MOUSE_ID>/` (with a space). Session folders must contain `session<X.Y>` in their name and a trial table named as in the layout above.
 
-**Choice accuracy plot:** A learning curve. If the bars shift from mostly red (incorrect) to mostly green (correct) across sessions, the mouse is learning the task. The GLMM p-value for the session coefficient tells you whether this trend is statistically significant.
+??? question "Steps 2 and 3 skip most sessions"
+    They need tracking, and only the sessions with a DeepLabCut CSV under `deeplabcut/` have it. `python config.py` says which.
 
-**Violin plots:** Each panel shows the distribution of a metric for Hit vs Miss trials. Key comparisons:
-- P1 speed: do mice run faster on trials where they find the reward?
-- P1 entropy: do successful trials show more directed (lower entropy) trajectories?
-- P2 duration: do mice spend more time in the reward zone on Hit trials?
-
-**Transition heatmaps:** Read row-by-row: "given the mouse is in row-ROI, what is the probability it goes to column-ROI next?" The difference map highlights where Hit and Miss trials diverge -- e.g., Hit trials may show stronger corridor-to-correct-arm transitions.
-
-**Exploration metrics:** Perseveration rate > 0 means the mouse tends to revisit the same arm after leaving it. Higher exploration entropy means more uniform visiting across arms.
+??? question "The Gamma models are missing from the output"
+    R, `lme4` or `rpy2` is not installed. The other tests still run.

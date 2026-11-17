@@ -1,24 +1,19 @@
 # Pose estimation pipeline
 
-A start-to-finish guide for turning raw ventral maze videos into clean,
-analysis-ready mouse pose data. Written to be read top-to-bottom the first
-time, then used as a command reference afterwards.
+!!! info "At a glance"
+    **Time:** an hour of setup and clicking; then days of unattended computing for a few hundred videos.
+    **You need:** the session videos, an NVIDIA GPU, the trained sleap-nn models.
+    **You get:** a CSV per video with ten keypoints of the mouse in every frame, with detections outside the maze removed.
 
-The maze is a white cross/T-shaped decision tree filmed from below; a single
-mouse explores it. The pipeline crops/aligns every video to a common maze
-frame, runs a trained neural-network pose estimator, and exports per-frame
-keypoints - with a spatial filter that removes confident-but-wrong detections
-outside the maze.
+## What it does
 
----
-
-## The pipeline at a glance
+It turns raw ventral videos of the tactile maze into the position of the mouse's body parts in every frame. Each video is warped so the maze sits in one fixed place, a trained neural network predicts ten keypoints per frame, and a spatial filter removes confident but wrong detections outside the maze.
 
 ```mermaid
 flowchart LR
-    v["raw videos<br/>*.mp4<br/>per mouse and session"]
+    v["raw videos<br/>*.mp4"]
     c["*_cropped.mp4<br/>plus a calibration per rig"]
-    pr["*.predictions.slp<br/>*.labeled.mp4"]
+    pr["*.predictions.slp"]
     k["*.keypoints.csv"]
     f["*.keypoints.filtered.csv<br/>*.predictions.filtered.slp"]
 
@@ -28,345 +23,184 @@ flowchart LR
     k -->|"Stage 4<br/>in-maze filter"| f
 ```
 
-| Stage | Script | What it does | Engine |
-|------|--------|--------------|--------|
-| 1 | `analysis/crop_and_align_maze.py` | Warp every video so the maze sits in a fixed place | OpenCV |
-| 2 | `analysis/sleap_batch_processing.py` | Predict 10 mouse keypoints per frame | **sleap-nn** (PyTorch, GPU) |
-| 3 | `analysis/slp_export.py` | `.slp` → per-frame CSV (+ optional overlay video) | sleap-io / OpenCV |
-| 4 | `analysis/filter_in_maze.py` | Drop detections that fall outside the maze | sleap-io / OpenCV |
+| Stage | Script | What it does |
+|---|---|---|
+| 1 | `analysis/crop_and_align_maze.py` | Warps every video so the maze sits in a fixed place ([its own page](crop-align.md)) |
+| 2 | `analysis/sleap_batch_processing.py` | Predicts ten mouse keypoints per frame, and writes the CSV in the same pass |
+| 3 | `analysis/slp_export.py` | Regenerates the CSV from the predictions, or draws an overlay video |
+| 4 | `analysis/filter_in_maze.py` | Drops detections that fall outside the maze |
 
-The 10 keypoints (skeleton nodes) are:
-`nose, headbase, midbody, tailbase, midtail, endtail, LF_paw, RF_paw, LH_paw, RH_paw`.
+The ten keypoints are `nose`, `headbase`, `midbody`, `tailbase`, `midtail`, `endtail`, `LF_paw`, `RF_paw`, `LH_paw` and `RH_paw`.
 
-> **Just want to run it?** After one-time setup (Stage 0) and cropping (Stage 1),
-> the whole thing is a single command - jump to
-> [Run the whole pipeline](#run-the-whole-pipeline-one-command).
+## What you need
 
----
+- **An NVIDIA GPU.** The CPU works but is far slower.
+- **The trained models**: a folder holding a `*centroid*` and a `*centered_instance*` model subfolder.
+- **sleap-nn**, the PyTorch version of SLEAP, installed as a [uv](https://docs.astral.sh/uv/) tool. Classic SLEAP (`pip install sleap`) will not load these models. One-time setup, in PowerShell:
 
-## Read this first: which Python you run matters
+    ```powershell
+    powershell -c "irm https://astral.sh/uv/install.ps1 | iex"          # install uv
+    uv tool install --python 3.13 "sleap-nn[torch]" --torch-backend auto
+    sleap-nn system                                                      # should report your GPU
+    ```
 
-The single most common failure on this project is running a script with the
-**wrong Python interpreter**. The models are **sleap-nn** (the PyTorch rewrite
-of SLEAP), *not* classic TensorFlow SLEAP - so a plain `pip install sleap`
-and a bare `python script.py` will fail even though "sleap" looks installed.
+!!! warning "Run every stage with the sleap-nn Python"
+    The most common failure is running a script with the wrong Python. A project virtual environment is often activated in the terminal and shadows everything else. Call the sleap-nn interpreter by its full path. Define it once per terminal:
 
-sleap-nn is installed as an isolated **uv tool**. Always call the scripts in
-Stages 2-4 with that interpreter. Define it once per terminal:
+    ```powershell
+    $py = "$env:APPDATA\uv\tools\sleap-nn\Scripts\python.exe"
+    & $py -c "import sleap_nn, torch; print(sleap_nn.__version__, torch.cuda.is_available())"
+    ```
+
+    The second line should print a version and `True`. Stage 1 needs only OpenCV, NumPy and pandas, which this interpreter also has, so `$py` works for every stage.
+
+## Quick start
+
+From the repository root, in PowerShell, with `<videos>` your raw videos, `<out>` the output folder and `<models>` the models folder:
 
 ```powershell
-# PowerShell - the sleap-nn interpreter (has sleap_nn, torch, sleap_io, cv2, pandas)
 $py = "$env:APPDATA\uv\tools\sleap-nn\Scripts\python.exe"
+
+# Stage 1: calibrate once per rig (click the 24 maze corners), then crop every video
+& $py analysis\crop_and_align_maze.py --calibrate --input_dir <videos> --output_dir <out>
+& $py analysis\crop_and_align_maze.py --input_dir <videos> --output_dir <out> --calibration_dir <out>
+
+# Stage 2: predict keypoints (days; resumable)
+& $py analysis\sleap_batch_processing.py --input_dir <out> --models_dir <models> --device cuda
+
+# Stage 4: keep only detections on the maze
+& $py analysis\filter_in_maze.py --input_dir <out> --calibration_dir <out> --save_overlays
 ```
 
-A quick check that it's the right one:
+Stage 3 is optional: Stage 2 already writes the CSV. Before trusting the numbers, open a few `*.maze_roi.png` files: the red outline should trace the maze.
+
+!!! note "The one-command runner"
+    `analysis/run_pipeline.py` and `analysis/run_pipeline.ps1` run Stages 2 and 4 in one go. They were written to sit at the repository root, and from `analysis/` they look for `analysis\analysis\...` and stop with `ERROR: missing script`. Run the stages as above until that is fixed.
+
+## Details
+
+### Stage 1: crop and align
+
+Calibrate once per rig, by clicking the 24 maze corners on one clear frame; this writes `calibration.json` (and `calibration_rig2.json` and so on, for further rigs) into `<out>`. The batch then finds the maze in every video and warps it to a fixed frame, writing `<out>/<mouse>/<session>/<name>_cropped.mp4` and `<out>/alignment_summary.csv`.
+
+Every rig's fixed frame has its own size, and the sizes differ, so later stages can tell a video's rig from the size of its cropped video. [Cropping and aligning the videos](crop-align.md) has everything else.
+
+### Stage 2: pose inference
 
 ```powershell
-& $py -c "import sleap_nn, torch; print(sleap_nn.__version__, '| CUDA', torch.cuda.is_available())"
-# -> 0.2.0 | CUDA True
+& $py analysis\sleap_batch_processing.py --input_dir <out> --models_dir <models> --dry_run   # list what would run
+& $py analysis\sleap_batch_processing.py --input_dir <out> --models_dir <models> --device cuda
 ```
 
-> **Why:** a project virtualenv (`.venv`) is often auto-activated in the
-> terminal and shadows everything else, so bare `python` resolves to it. Calling
-> the sleap-nn interpreter by full path sidesteps that entirely.
+For each `*_cropped.mp4` it writes `<name>_cropped.predictions.slp` and `<name>_cropped.keypoints.csv` beside the video, and `sleap_inference_summary.csv` in `<out>` at the end.
 
----
+- **Resumable.** A video that already has its predictions is skipped (`--skip_existing`, on by default), so stop with Ctrl-C and run the same command again to continue.
+- **Slow.** Reading the video, not the GPU, sets the pace: about 85 to 100 frames a second whatever the batch size, and each video has about 100,000 frames. A dataset of a few hundred videos takes days. Stop the computer sleeping (`powercfg /change standby-timeout-ac 0`) and count finished videos with `(Get-ChildItem <out> -Recurse -Filter *.predictions.slp).Count`.
 
-## Stage 0 - One-time setup
+??? note "All options of `sleap_batch_processing.py`"
+    | Option | Meaning |
+    |---|---|
+    | `--input_dir DIR` | Folder searched for videos (required) |
+    | `--models_dir DIR` | Folder holding the model subfolders; the newest `*centroid*` and `*centered_instance*` pair is used |
+    | `--centroid_model DIR`, `--centered_instance_model DIR` | Name each model explicitly (overrides `--models_dir`) |
+    | `--include_pattern GLOB` | Which files count as videos (default `*_cropped.mp4`) |
+    | `--batch_size N` | Frames per batch (default 4) |
+    | `--peak_threshold F` | Minimum peak confidence (default 0.2) |
+    | `--max_instances N` | Mice per frame (default 1) |
+    | `--device` | Where to run, for example `cuda` or `cpu` (default `auto`) |
+    | `--prediction_suffix S` | Ending of the predictions file (default `.predictions.slp`) |
+    | `--write_csv`, `--no-write_csv` | Write the per-frame CSV in the same pass (on by default) |
+    | `--skip_existing`, `--no-skip_existing` | Skip videos already predicted (on by default) |
+    | `--max_videos N` | Stop after N videos |
+    | `--summary_csv PATH` | Where to write the summary |
+    | `--dry_run` | List what would run, without running it |
 
-**sleap-nn (Stages 2-4).** Installed with [uv](https://docs.astral.sh/uv/),
-which auto-resolves the correct CUDA build of PyTorch:
+### Stage 3: export (optional)
+
+Use `slp_export.py` to regenerate the CSVs from the predictions, or to draw the keypoints on the video:
 
 ```powershell
-# install uv if you don't have it:
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# install sleap-nn with GPU support:
-uv tool install --python 3.13 "sleap-nn[torch]" --torch-backend auto
-
-# verify it sees your GPU:
-sleap-nn system
+& $py analysis\slp_export.py --input_dir <out>                                          # every CSV again
+& $py analysis\slp_export.py --slp "<out>\...\<name>.predictions.slp" --render --render_frames 600
 ```
 
-You need an NVIDIA GPU for practical inference speeds (CPU works but is far
-slower). `sleap-nn system` should report your GPU and `PyTorch can use GPU`.
+The CSV has one row per video frame, so the row number is the frame number:
 
-**OpenCV stack (Stage 1).** `crop_and_align_maze.py` only needs
-`opencv-python numpy pandas` and can run in any Python - including the sleap-nn
-interpreter above (it already has them), so you can use `$py` throughout.
+```
+frame_idx, instance_score, nose.x, nose.y, nose.score, headbase.x, ..., RH_paw.score
+```
 
----
+Points not found are blank (score 0.0); frames with no mouse are blank throughout. A full overlay video is about 700 MB, so `--render_frames N` keeps it to a short preview. Overlay videos use the `mp4v` codec; play them in VLC.
 
-## Stage 1 - Crop & align the maze
+### Stage 4: keep only detections on the maze
 
-Full details live in [cropping and aligning the videos](crop-align.md). The essentials:
-
-1. **Calibrate once per rig** - click the 24 maze corners on one clear frame:
-   ```powershell
-   & $py analysis\crop_and_align_maze.py --calibrate --input_dir <videos> --output_dir <out>
-   ```
-   This writes `calibration.json` (and `calibration_rig2.json`, ... for extra
-   rigs) into `<out>`.
-
-2. **Run the batch** - locates the maze in every video and warps it to a
-   canonical frame:
-   ```powershell
-   & $py analysis\crop_and_align_maze.py --input_dir <videos> --output_dir <out> --calibration_dir <out>
-   ```
-
-Output: `<out>/<mouse>/<session>/<name>_cropped.mp4` for every video, plus
-`<out>/alignment_summary.csv`.
-
-> **Key idea that the rest of the pipeline relies on:** every video is warped so
-> the maze lands at the *same* canonical position. Each rig/calibration has its
-> own canonical frame **size**, and those sizes are unique - so later stages can
-> identify a video's rig just from its cropped dimensions.
-
----
-
-## Run the whole pipeline (one command)
-
-Once Stage 0 (setup) and Stage 1 (crop & align) are done, the repo-root runner
-does **inference + CSV export, then in-maze filtering**, end to end. There are
-two equivalent entry points - use whichever you prefer:
+The model's score is a confidence, not a check of correctness. When the mouse is absent, the model can place a confident pose on cables or reflections and score it above 0.9, so no score threshold removes these. The mouse can only be on the maze, so the filter drops any detection whose body falls outside the maze outline. The outline comes from the 24 calibration landmarks, which are already in the coordinates of the keypoints.
 
 ```powershell
-python run_pipeline.py        # Python (recommended; runs with any Python)
-.\run_pipeline.ps1            # PowerShell equivalent
+& $py analysis\filter_in_maze.py --input_dir <out> --calibration_dir <out> --save_overlays
 ```
 
-Both call the sleap-nn environment for you. Defaults are baked in for this
-dataset; override them as needed:
+For each video it writes, without touching the original predictions:
 
-```powershell
-python run_pipeline.py --input_dir D:\simplermaze_output `
-    --models_dir "D:\sleap_models" `
-    --calibration_dir D:\simplermaze_output
-```
+- `<name>.predictions.filtered.slp`, the filtered predictions;
+- `<name>.keypoints.filtered.csv`, the same format as Stage 3;
+- `<name>.maze_roi.png` (with `--save_overlays`), the maze outline drawn on the video, to check it.
 
-- **This is the multi-day step** - inference dominates (~4-5 days for a few
-  hundred ~100k-frame videos). Leave it running; it prints per-video progress.
-- **Resumable.** Stop anytime (Ctrl-C) and re-run the same command: finished
-  videos are skipped, then the filter runs.
-- **Run it detached** so it survives closing the terminal:
-  ```powershell
-  Start-Process python -ArgumentList (Resolve-Path .\run_pipeline.py) -WindowStyle Hidden
-  ```
-- Flags: `--skip_inference` (filter only), `--skip_filter` (infer only).
-  (PowerShell equivalents: `-SkipInference`, `-SkipFilter`.)
-- Keep the machine awake for the duration: `powercfg /change standby-timeout-ac 0`.
-- Monitor progress: `(Get-ChildItem <out> -Recurse -Filter *.predictions.slp).Count`
-
-The stages below explain what each part does and how to run them individually.
-
----
-
-## Stage 2 - Pose inference (sleap-nn)
-
-Predicts the 10 keypoints for every frame of every cropped video, saving a
-`.slp` next to each video.
-
-```powershell
-$py     = "$env:APPDATA\uv\tools\sleap-nn\Scripts\python.exe"
-$script = "<repo>\analysis\sleap_batch_processing.py"
-
-# preview what would run (no GPU work):
-& $py $script --input_dir <out> --models_dir <models> --dry_run
-
-# the real run:
-& $py $script --input_dir <out> --models_dir <models> --device cuda
-```
-
-- `<models>` is the folder holding the trained model subfolders (a
-  `*centroid*` and a `*centered_instance*` pair). The script auto-picks the most
-  recent pair; the maze is single-animal so `--max_instances` defaults to 1.
-- Output per video: `<name>_cropped.predictions.slp` **and**
-  `<name>_cropped.keypoints.csv` - the per-frame CSV is written in the same pass
-  by default (disable with `--no-write_csv`). A `sleap_inference_summary.csv`
-  lands in `<out>` when the run finishes.
-
-**It's resumable.** `--skip_existing` is on by default, so a video that already
-has a `.predictions.slp` is skipped. You can stop (`Ctrl-C` / `Stop-Process`)
-and re-run the same command to continue.
-
-**Expect it to be slow.** Throughput is bound by video decoding, not the GPU
-(~85-100 frames/s regardless of batch size), and the videos are large
-(~100k frames each). A full multi-hundred-video dataset can take **days**.
-Run it detached and monitor with:
-
-```powershell
-# count finished predictions:
-(Get-ChildItem <out> -Recurse -Filter "*.predictions.slp").Count
-```
-
-For multi-day runs, disable sleep: `powercfg /change standby-timeout-ac 0`.
-
----
-
-## Stage 3 - Export CSV (+ optional overlay video)
-
-Stage 2 already writes a `keypoints.csv` per video, so you usually **don't need
-this step for CSVs**. Use `slp_export.py` when you want to:
-- render an **annotated overlay video**, or
-- **regenerate** CSVs from existing `.slp` files (e.g. you ran with
-  `--no-write_csv`, or you changed the CSV format).
-
-```powershell
-$exp = "<repo>\analysis\slp_export.py"
-
-# regenerate all CSVs from existing .slp files:
-& $py $exp --input_dir <out>
-
-# one annotated preview video (keypoints drawn on the frames):
-& $py $exp --slp "<out>\...\<name>.predictions.slp" --render --render_frames 600
-```
-
-**CSV format** (`<name>.keypoints.csv`), one row per video frame, aligned to the
-video timeline:
-
-```
-frame_idx, instance_score, nose.x, nose.y, nose.score, headbase.x, ... , RH_paw.score
-```
-
-Undetected points are blank (score `0.0`); frames with no mouse are fully blank,
-so the row index always equals the real frame number.
-
-> **Rendering is opt-in and large.** A full ~100k-frame overlay is ~700 MB and
-> slow, so use `--render_frames N` for a short preview, or only render specific
-> sessions you want to eyeball. CSVs are tiny - generate those for everything.
-> Annotated videos use the `mp4v` codec; play them in **VLC**.
-
----
-
-## Stage 4 - Keep only in-maze detections
-
-**The problem.** Like DeepLabCut's likelihood, sleap-nn's `score` is a
-*confidence*, not a *correctness* check. On frames where the mouse is absent,
-the model can place a confident, internally-consistent pose on background
-clutter (cables, hardware, reflections) and score it **0.9+**. No score
-threshold removes these.
-
-**The fix is spatial.** The mouse can only ever be on the maze, so we drop any
-detection whose body falls outside the maze outline. The outline is **not**
-hand-drawn: the 24 calibration landmarks already define the maze boundary in the
-exact coordinate system of the keypoints, and a cropped video's size identifies
-its rig → its polygon (this works even for videos missing from
-`alignment_summary.csv`).
-
-```powershell
-$flt = "<repo>\analysis\filter_in_maze.py"
-
-& $py $flt --input_dir <out> --calibration_dir <out> --save_overlays
-```
-
-Per video it writes (non-destructively - raw `.slp` is untouched):
-
-- `<name>.predictions.filtered.slp` - filtered predictions (re-viewable in a GUI)
-- `<name>.keypoints.filtered.csv` - same CSV format as Stage 3, off-maze
-  detections removed
-- `<name>.maze_roi.png` (with `--save_overlays`) - the maze polygon drawn on the
-  median frame, so you can confirm the boundary is right
-
-It prints, per video, how many detections were dropped:
+It prints how many detections it dropped:
 
 ```
 rig=calibration size=362x322 | anchor=midbody margin=15px | detections=99986  dropped_off_maze=1519 (1.5%)
 ```
 
-### How the in/out test works (and how to tune it)
+??? note "How the filter decides, and how to tune it"
+    A detection is judged by its body centre (`--anchor`, default `midbody`), so an outstretched nose or tail does not pull it off the maze at the edges. It is dropped if either:
 
-A detection is judged by its **body centre** (`--anchor`, default `midbody`;
-falls back to the head/mid/tail median). Using the body centre - not the average
-of *all* nodes - stops an outstretched nose or tail from dragging the anchor
-off-maze at the edges. It is dropped if **either**:
+    - its body centre is more than `--margin_px` (default 15) outside the maze, at any confidence; or
+    - its body centre is outside the maze at all and its score is below `--min_score_outside` (default 0.5).
 
-- **clearly outside** - body centre more than `--margin_px` (default **15**)
-  beyond the boundary, at *any* confidence. This catches far hallucinations,
-  including the occasional confident one.
-- **outside + low-confidence** - body centre outside the maze at all *and*
-  instance score below `--min_score_outside` (default **0.5**). This catches
-  mouse-absent hallucinations hugging the boundary.
+    Real poses on the maze score about 0.91, false ones about 0.41, and a band of real poses at the edge (about 0.62) lies just outside the outline: the margin and the score cut keep those.
 
-Why two rules? Confidence separates the populations: real in-maze poses score
-~0.91, hallucinations ~0.41. But there's a ~13px band of *real* edge poses
-(score ~0.62) just outside the boundary - the 15px margin keeps those, and the
-0.5 score cut-off keeps them too, so real data survives while hallucinations go.
+    Then an **absent-block sweep** (on by default): a confident detection inside a long run of mostly dropped frames is itself false and is dropped too. `--no_absent_block` turns it off; `--absent_block_window` and `--absent_block_min_presence` tune it.
 
-Tuning (**err toward keeping data**):
-- Real poses being dropped? Raise `--margin_px` (e.g. 18) and/or lower
-  `--min_score_outside` (e.g. 0.4).
-- Want more aggressive noise removal? Lower `--margin_px` or raise
-  `--min_score_outside` - but watch the "real in-maze" overlay, since the edge
-  halo starts to go around 0.6.
-- `--min_score_outside 0` disables the confidence rule (pure geometry).
-- `--clip_points` (off by default) additionally NaNs *individual* stray points
-  outside the maze on otherwise-kept instances.
+    Tuning, erring toward keeping data:
 
-**Absent-block sweep (on by default).** Mouse-absent periods come in contiguous
-blocks. A *confident* detection sitting inside a sustained run of mostly-dropped
-frames is itself a hallucination, so it's dropped too. Disable with
-`--no_absent_block`; tune with `--absent_block_window` (frames) and
-`--absent_block_min_presence`. On the validation clip the model hallucinated
-until the mouse entered at ~15.6s - the filter removed 100% of that window and
-kept the real mouse. The sweep is deliberately conservative (it won't touch dense
-real activity); always eyeball a filtered overlay on a new dataset before
-trusting it.
+    - Real poses dropped: raise `--margin_px` (for example 18) or lower `--min_score_outside` (for example 0.4).
+    - More noise removal: lower `--margin_px` or raise `--min_score_outside`, watching the overlay, as real edge poses start to go around 0.6.
+    - `--min_score_outside 0` uses geometry alone.
+    - `--clip_points` also blanks single stray points outside the maze on detections that are kept.
 
-### Validate before trusting the numbers
+??? note "Output files"
+    For a source video `<name>_cropped.mp4`:
 
-Always sanity-check on a few videos first:
+    | File | Stage | Contents |
+    |---|---|---|
+    | `<name>_cropped.predictions.slp` | 2 | Raw predictions |
+    | `<name>_cropped.keypoints.csv` | 2 or 3 | Keypoints per frame, every detection |
+    | `<name>_cropped.labeled.mp4` | 3 | Overlay video, if asked for |
+    | `<name>_cropped.predictions.filtered.slp` | 4 | Predictions on the maze only |
+    | `<name>_cropped.keypoints.filtered.csv` | 4 | Keypoints per frame, on the maze only |
+    | `<name>_cropped.maze_roi.png` | 4 | The maze outline, to check |
+    | `sleap_inference_summary.csv` | 2 | One row per video: status, run time, frames |
 
-1. Open a `*.maze_roi.png` - the red polygon should trace the maze.
-2. Compare drop rates: a session where the mouse is mostly on-task should drop a
-   small percentage. A surprisingly high drop rate usually means either real
-   off-maze time (mouse absent) **or** a margin that's too tight - eyeball the
-   filtered overlay video to tell which.
+    Later stages never overwrite earlier outputs, so you can tune and run again safely.
 
----
-
-## Output files, named consistently
-
-For a source video `.../<name>_cropped.mp4`:
-
-| File | Stage | Contents |
-|------|-------|----------|
-| `<name>_cropped.predictions.slp` | 2 | raw predictions (native SLEAP) |
-| `<name>_cropped.keypoints.csv` | 3 | per-frame keypoints, all detections |
-| `<name>_cropped.labeled.mp4` | 3 | overlay preview video (opt-in) |
-| `<name>_cropped.predictions.filtered.slp` | 4 | in-maze-only predictions |
-| `<name>_cropped.keypoints.filtered.csv` | 4 | per-frame keypoints, in-maze only |
-| `<name>_cropped.maze_roi.png` | 4 | maze polygon verification image |
-| `sleap_inference_summary.csv` | 2 | one row per video (status, runtime, n_frames) |
-
-Raw outputs are never overwritten by later stages - filtering and export are
-additive, so you can re-tune and re-run safely.
-
----
+??? note "Afterwards: keypoint-MoSeq"
+    `analysis/kpms_split_bouts.py` trims the filtered keypoints to the stretches when the mouse is on the maze, before keypoint-MoSeq. Without it, the frames with no mouse (often half the recording or more) are interpolated into a frozen pose that the model learns as a behaviour. It has no command line; import `split_bouts` in the keypoint-MoSeq notebook, as its docstring shows.
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Fix |
-|--------|--------------|-----|
-| `No module named 'sleap_nn'` / `'torch'` | Wrong interpreter (`.venv` shadowing) | Use the `$py` full path (top of this guide) |
-| `'sleap' is not installed` from Stage 2 | Models are sleap-nn, not classic SLEAP | Same - run with the sleap-nn interpreter |
-| Inference very slow / GPU underused | Decode-bound, not GPU-bound | Expected; bigger `--batch_size` won't help. Plan for days; it's resumable |
-| Filter drops a huge fraction | Margin too tight, or real off-maze time | Inspect `*.maze_roi.png` + filtered video; raise `--margin_px` |
-| `no rig polygon matches cropped size` | Calibration JSON missing, or non-default `--padding` in Stage 1 | Point `--calibration_dir` at the folder with `calibration*.json`; pass the same `--padding` you cropped with |
-| Annotated video won't play | `mp4v` codec | Open in VLC |
+| Symptom | Cause | Fix |
+|---|---|---|
+| `No module named 'sleap_nn'` or `'torch'` | Wrong Python | Use `$py`, the full path, as above |
+| `'sleap' is not installed` in Stage 2 | Same: the models are sleap-nn, not classic SLEAP | Use `$py` |
+| `ERROR: missing script ...analysis\analysis\...` | `run_pipeline` looks one folder too deep | Run the stages one by one |
+| Inference slow, GPU barely used | Reading the video sets the pace | Expected; a bigger `--batch_size` will not help. It is resumable |
+| The filter drops a large share | Margin too tight, or the mouse really was off the maze | Look at `*.maze_roi.png` and an overlay video; raise `--margin_px` |
+| `no rig polygon matches cropped size` | Calibration missing, or Stage 1 used another `--padding` | Point `--calibration_dir` at the folder with `calibration*.json`; pass the same `--padding` as in Stage 1 |
+| An overlay video will not play | `mp4v` codec | Open it in VLC |
 
----
-
-## Conceptual cheat-sheet
-
-- **`.slp`** - SLEAP's native file bundling predictions + video reference. Read
-  it with `sleap-io`; everything else is derived from it.
-- **`score`** - per-point confidence (like DLC likelihood). High score ≠
-  correct. That's *why* Stage 4 exists.
-- **Rig → polygon** - each calibration warps the maze to a unique-size canonical
-  frame; cropped size identifies the rig; the 24 landmarks are the maze polygon
-  in keypoint coordinates.
-- **Coordinate frame** - keypoints, the maze polygon, and the cropped video all
-  share the same pixel coordinates, which is what makes spatial filtering exact.
-- **Resumability** - Stages 1, 2 skip already-done work; Stages 3, 4 are
-  additive. Stop and resume freely.
-```
+??? note "Words used on this page"
+    - **`.slp`**: SLEAP's file of predictions and the video they belong to. Read it with `sleap-io`; everything else comes from it.
+    - **score**: the confidence of a point or a pose, like the likelihood of DeepLabCut. A high score does not mean a correct pose, which is why Stage 4 exists.
+    - **rig to outline**: each calibration warps the maze to a frame of its own size, so the size of a cropped video says which rig it came from, and the 24 landmarks are the maze outline.
+    - **resumable**: Stages 1 and 2 skip work already done; Stages 3 and 4 only add files.
