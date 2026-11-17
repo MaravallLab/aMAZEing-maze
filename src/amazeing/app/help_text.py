@@ -158,3 +158,30 @@ SECTION_HELP = {
         "control arms rather than leaving the file empty."
     ),
 }
+
+# Help for the Analysis tab, kept apart from SECTION_HELP, whose keys are the
+# session form's group boxes.
+ANALYSIS_HELP = {
+    "research": (
+        "These are the analyses behind every number and figure in the thesis, the "
+        "scripts in <b>analysis/auditory</b>, run exactly as they are run from a "
+        "terminal. Pick the data root (the folder holding 8_arms_w_voc, grammar and "
+        "dopamine recordings) or one experiment's folder; the app finds the rest from "
+        "the layout.<br><br>"
+        "Tick the scripts to run. A script that reads another's output pulls that "
+        "script in first when its output is missing, so ticking exp1_bd_model on a new "
+        "data set runs the preference indices, the complexity analysis and the mixed "
+        "models before it. A green mark means the script's output folder exists; grey "
+        "means it has not been run; red means it cannot run here, and its tooltip says "
+        "what to install or which folder is missing.<br><br>"
+        "<b>Blocks 2 to 4 only</b> refits the stimulus comparisons without the first "
+        "sound block, which keeps the listed order by design, so that in block 1 a "
+        "stimulus and a place go together. It applies to the three scripts that take "
+        "it and writes to folders ending in _shuffled.<br><br>"
+        "Every script writes to BATCH_ANALYSIS (FIBPHO_ANALYSIS for photometry) inside "
+        "the data folder and never into the session folders. <b>Also write "
+        "thesis-style figures</b> adds the thesis versions, in the thesis fonts and "
+        "sizes, to the folder you choose; pointing it at the thesis repository's "
+        "figures folder replaces the figures there."
+    ),
+}
