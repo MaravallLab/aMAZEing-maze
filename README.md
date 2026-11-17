@@ -43,7 +43,9 @@ The electronics are an Arduino driving an Adafruit PCA9685 sixteen-channel PWM c
 
 ## Install
 
-Download `amazeing-app.zip` from the [releases page](https://github.com/MaravallLab/aMAZEing-maze/releases), unzip it and run `amazeing-app.exe`. No Python needed.
+[![Download for Windows](https://img.shields.io/badge/Download-for%20Windows-1565C0?style=for-the-badge&logo=windows)](https://maravalllab.github.io/aMAZEing-maze/getting-started/download/)
+
+Windows 10 or 11, no Python needed: download `amazeing-app.zip`, extract it and run `amazeing-app.exe`. The [download page](https://maravalllab.github.io/aMAZEing-maze/getting-started/download/) walks through it, including the Windows SmartScreen prompt on first launch.
 
 Or from source:
 

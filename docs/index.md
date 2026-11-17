@@ -8,6 +8,14 @@ It runs as two paradigms, equally developed, sharing the hardware, the tracking 
 
 <div class="grid cards" markdown>
 
+-   :material-download: **Get the application**
+
+    ---
+
+    Windows 10 or 11, nothing else to install. Download, extract, double-click.
+
+    [:material-download: Download for Windows](getting-started/download.md){ .md-button .md-button--primary }
+
 -   :material-rodent: **New here**
 
     ---

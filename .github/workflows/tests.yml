@@ -1,0 +1,31 @@
+name: Tests
+
+# Runs the test suite on every push to main and on every pull request, on
+# Windows, where the rig runs. The badge in the README shows the result of the
+# latest run on main.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      # The application tests build Qt widgets; no screen on a runner.
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install the package and its test dependencies
+        run: python -m pip install -e ".[dev]" -c packaging/requirements-lock.txt
+      - name: Run the tests
+        run: python -m pytest -q

@@ -4,14 +4,9 @@ There are two ways to install, depending on whether you want to read and change 
 
 ## The standalone application
 
-For running experiments on a rig computer with no Python installed.
+For running experiments on a Windows rig computer with no Python installed. Download `amazeing-app.zip`, extract it, and run `amazeing-app.exe`.
 
-1. Download `amazeing-app.zip` from the [releases page](https://github.com/MaravallLab/aMAZEing-maze/releases).
-2. Unzip it somewhere permanent, such as `C:\amazeing-app`.
-3. Run `amazeing-app.exe`.
-
-!!! warning "Keep the whole folder"
-    The executable needs the `_internal` folder beside it, which holds Python and every library. Copying the `.exe` on its own will not work. Move the whole folder.
+[:material-download: Download and first launch, step by step](download.md){ .md-button .md-button--primary }
 
 ## From source
 

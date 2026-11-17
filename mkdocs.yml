@@ -93,6 +93,7 @@ plugins:
 nav:
   - Home: index.md
   - Getting started:
+      - Download the application: getting-started/download.md
       - Installation: getting-started/installation.md
       - Tutorial - run your first session: getting-started/first-session.md
   - Running experiments:
