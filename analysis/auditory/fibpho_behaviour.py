@@ -423,8 +423,11 @@ def exposure_stats(e, out_path):
         "same measure at random moments outside the arms in the same session.")
     say(f"{len(e)} exposures, {e['session'].nunique()} sessions.\n")
 
+    from statsmodels.stats.multitest import multipletests
     say("1. Do the stimuli differ? Per day, response ~ C(stimulus) + C(mouse), "
-        f"stimuli with at least {MIN_EXPOSURES} exposures, type II ANOVA")
+        f"stimuli with at least {MIN_EXPOSURES} exposures, type II ANOVA; "
+        "the four days are one family of tests, Holm corrected across them")
+    days = []
     for day in DAYS:
         d = e[e["day"] == day]
         keep = d.groupby("stimulus")["rel"].transform("size") >= MIN_EXPOSURES
@@ -435,8 +438,11 @@ def exposure_stats(e, out_path):
         a = sm.stats.anova_lm(fit, typ=2)
         f, p = a.loc["C(stimulus)", "F"], a.loc["C(stimulus)", "PR(>F)"]
         df1, df2 = int(a.loc["C(stimulus)", "df"]), int(a.loc["Residual", "df"])
+        days.append((day, d, f, p, df1, df2))
+    p_holm = multipletests([p for *_, p, _, _ in days], method="holm")[1] if days else []
+    for (day, d, f, p, df1, df2), ph in zip(days, p_holm):
         say(f"  {DAY_TITLE[day]:20s} {d['stimulus'].nunique()} stimuli, {len(d)} exposures: "
-            f"F({df1}, {df2}) = {f:.2f}, p = {p:.3f}")
+            f"F({df1}, {df2}) = {f:.2f}, p = {p:.3f}, Holm p = {ph:.3f}")
         means = (d.groupby("stimulus")["rel"].agg(["mean", "sem", "size"])
                   .sort_values("mean", ascending=False))
         say("    " + means.round(3).to_string().replace("\n", "\n    "))
