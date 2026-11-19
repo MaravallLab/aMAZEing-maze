@@ -1,0 +1,17 @@
+EXPLORATORY: which listener reads the secondary melodies as their own grammar?
+
+Observed day 1 mean shares, EE minus SC grammar (dominant, secondary, rare): +0.067, +0.041, -0.003
+
+Predicted mean semantic value S per transition, EE minus SC grammar, and a one
+parameter fit (scale through the origin) to the three observed differences:
+
+  transition             S diff +0.1078 -0.1025 +0.0000  signs +--  scale +0.137  R2 -1.30  (reads secondary as the other grammar)
+  pooled                 S diff +0.0226 -0.0220 +0.0000  signs +--  scale +0.616  R2 -1.32  (reads secondary as the other grammar)
+  learning (N0 = 20)     S diff +0.0227 -0.0224 +0.0000  signs +-+  scale +0.588  R2 -1.33  (reads secondary as the other grammar)
+  learning (N0 = 200)    S diff +0.0227 -0.0223 +0.0000  signs +--  scale +0.599  R2 -1.32  (reads secondary as the other grammar)
+  level                  S diff +0.1042 +0.0995 +0.0000  signs ++-  scale +0.533  R2 +0.89  (reads secondary as its own grammar)
+
+Simulated with seed 20261119, 400 arm visits per cell, 32 melodies pooled per visit
+for the pooled and learning listeners. Only three observed differences: a
+listener with the wrong sign at the secondary level is rejected; listeners with
+the right signs cannot be ranked.
