@@ -62,7 +62,7 @@ python aesthetic_value_model_4D.py
     It runs from -1 (only silence) to +1 (only sound). Each visit is capped at 10 s.
 
 ??? note "Why visits are capped"
-    The recording code of Experiment 1 did not close a visit that ran over the end of a block, so some durations in `trials.csv` were inflated. The loader (`load_session_visits`) takes `detailed_visits.csv` as the ground truth where it exists, caps each visit at 10 s and applies sanity caps when it falls back on `trials.csv`. The cap also shortens genuine long stays, which is why the thesis scripts do not use it; `exp1_vocalisation_pi.py` computes the index both ways so the effect can be seen.
+    The 10 s cap was added against a suspected fault in which a visit still open at the end of a block ran on past it. The maze rules that out, because a new block starts only once the mouse has left the maze and entered again, and in the per-visit logs no visit over 10 s ends at its block's end. The cap therefore only shortens genuine long stays, which is why the thesis scripts do not use it; `exp1_vocalisation_pi.py` computes the index both ways so the effect can be seen. Separately, some rows of the aggregate table `trials.csv` hold a mean visit longer than any real visit, so the loader (`load_session_visits`) takes `detailed_visits.csv` as the ground truth where it exists and zeroes those rows when it falls back on `trials.csv`.
 
 ## Command-line options
 

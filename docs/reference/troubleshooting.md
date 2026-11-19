@@ -71,7 +71,7 @@ Problems and their fixes, gathered from every page and grouped by when they show
     The first version of the software recorded `time_spent` in milliseconds; the current one records seconds. `session_manifest.json` states the unit of every column. [Data dictionary](data-dictionary.md#units-and-versions)
 
 ??? question "Visits in old data are implausibly long"
-    The first version did not close a visit that ran over the end of a block. The loader of the analysis scripts works around it. [Earlier batch pipeline](../analysis/auditory-legacy.md)
+    Visits never run across blocks, since a new block starts only once the mouse has left the maze and entered again. An implausible value comes from the aggregate table `trials.csv`, some of whose rows in the first version hold a mean visit longer than any real visit. The loader of the analysis scripts reads the per-visit log where it exists and zeroes those rows otherwise. [Earlier batch pipeline](../analysis/auditory-legacy.md)
 
 ## Analysis
 

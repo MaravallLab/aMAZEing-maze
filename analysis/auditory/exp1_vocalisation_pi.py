@@ -17,15 +17,18 @@ so it exists on days 1 to 3 and the sequence day; day 4 has no silent or
 vocalisation arm, and on the vocalisation day every sound is a recording.
 
 Each index is computed twice, because the shared loader caps every visit at
-10 s to absorb a logging fault (a visit left open at the end of a block),
-and that cap also shortens genuine long stays:
+10 s by default. The cap was added against a suspected fault, a visit left
+open at the end of a block, which the maze rules out: a new block starts
+only once the mouse has left the maze and entered again. The cap therefore
+only shortens genuine long stays, and the thesis reports the uncapped
+values:
 
     capped     visits capped at 10 s, as in run_batch_preference.py
     uncapped   no cap; rows longer than a block are still removed
 
 The script also counts, where per-visit logs exist, how many visits over
-10 s end within 1 s of their block's end: those are the ones the fault
-would produce.
+10 s end within 1 s of their block's end, the visits such a fault would
+produce. There are none.
 
 Tests: per day, Wilcoxon signed-rank of each index against 0 across mice;
 over days, the same test on each mouse's mean index.

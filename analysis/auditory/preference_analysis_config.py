@@ -26,8 +26,14 @@ SOUND_TRIAL_IDS = {2, 4, 6, 8}
 SILENT_TRIAL_IDS = {3, 5, 7, 9}
 
 # Per-visit clip applied to BOTH detailed_visits and trials.csv data.
-# This catches residual cases where the "trial-boundary bug" in main.py
-# (visits not closed at trial end) bleeds a long visit into DV as well.
+# It was added against a suspected fault in which a visit still open when a
+# block ended ran on past it. The maze rules that out: a new block starts
+# only once the mouse has left the maze and entered again, so no visit spans
+# two blocks, and in the per-visit logs no visit over 10 s ends at its
+# block's end (exp1_vocalisation_pi.py counts them). The clip therefore only
+# shortens genuine long stays. The default of 10 s is kept so that earlier
+# results (run_batch_preference.py) can be reproduced; the Experiment 1
+# thesis scripts set it to 0.
 # Override with VISIT_CLIP_MS env var.  Set to 0 to disable.
 INDIVIDUAL_VISIT_CLIP_MS = int(os.environ.get("VISIT_CLIP_MS", "10000"))  # 10 s
 
@@ -257,7 +263,7 @@ def load_session_visits(sess: "SessionInfo") -> Tuple[Optional[pd.DataFrame], st
                 dv["time_spent_seconds"], errors="coerce") * 1000.0
             dv = dv.dropna(subset=["_dur_ms"])
             # Clip individual visits that exceed the per-visit cap
-            # (boundary-spanning bug residuals).
+            # (off when INDIVIDUAL_VISIT_CLIP_MS is 0; see its comment).
             if INDIVIDUAL_VISIT_CLIP_MS > 0:
                 dv["_dur_ms"] = dv["_dur_ms"].clip(upper=INDIVIDUAL_VISIT_CLIP_MS)
             agg = (dv.groupby(["trial_ID", "ROI_visited"])
@@ -278,7 +284,8 @@ def load_session_visits(sess: "SessionInfo") -> Tuple[Optional[pd.DataFrame], st
         avg = df["time_spent"] / vc
         is_sound = df["trial_ID"].isin(SOUND_TRIAL_IDS)
         is_silent = df["trial_ID"].isin(SILENT_TRIAL_IDS)
-        # Strong cap: zero-out rows physically impossible (boundary bug)
+        # Strong cap: zero out rows whose mean visit is impossibly long
+        # (the aggregator wrote the block's duration, see the caps above)
         bad = (
             (is_sound & (avg > SOUND_TRIAL_VISIT_CAP_MS))
             | (is_silent & (avg > SILENT_TRIAL_VISIT_CAP_MS))
