@@ -332,6 +332,55 @@ def fig_stimuli(root, path):
     plt.close(fig)
 
 
+VOC, SIL = "#2E7D32", "#757575"
+
+
+def fig_arms(d, path):
+    """Time per session in each kind of arm on each test day: the EE and SC
+    grammar at each level, the vocalisation and the silent arm. Bars are means
+    with their standard errors, dots are mice."""
+    kinds = [("EE", t) for t in TIERS] + [("SC", t) for t in TIERS]
+    x_of = {}
+    for i, tier in enumerate(TIERS):
+        x_of[("EE", tier)] = i - 0.18
+        x_of[("SC", tier)] = i + 0.18
+    x_of["vocalisation"], x_of["silent"] = 3.2, 3.9
+    rng = np.random.default_rng(0)
+    fig, axes = plt.subplots(2, 1, figsize=(6.3, 4.6), sharey=True, gridspec_kw={"hspace": 0.45})
+    lines = ["Mean time per session in each kind of arm (min), mean and standard error over mice"]
+    for ax, day, lab in zip(axes, ("day_1", "day_2"), ("(a) day 1", "(b) day 2")):
+        dd = d[d["day"] == day]
+        mice = sorted(dd["mouse"].unique())
+        cols = {}
+        g = dd[dd["cls"] == "grammar"].groupby(["mouse", "environment", "tier"])["time_spent_s"].sum()
+        for env, tier in kinds:
+            cols[(env, tier)] = g.xs((env, tier), level=("environment", "tier")).reindex(mice, fill_value=0)
+        for c in ("vocalisation", "silent"):
+            cols[c] = dd[dd["cls"] == c].groupby("mouse")["time_spent_s"].sum().reindex(mice, fill_value=0)
+        for key, v in cols.items():
+            v = v / 60
+            x = x_of[key]
+            colour = EE if key[0] == "EE" else SC if key[0] == "SC" else VOC if key == "vocalisation" else SIL
+            ax.bar(x, v.mean(), 0.32, color=colour, alpha=0.85, zorder=1)
+            ax.errorbar(x, v.mean(), v.sem(), color="black", lw=0.8, capsize=1.5, zorder=3)
+            ax.scatter(x + rng.uniform(-0.07, 0.07, len(v)), v, s=3, color="black", alpha=0.45,
+                       lw=0, zorder=2)
+            name = key if isinstance(key, str) else f"{key[0]} {key[1]}"
+            lines.append(f"  {day} {name:14s} {v.mean():.2f} ({v.sem():.2f})  n = {len(v)}")
+        ax.set_xticks([0, 1, 2, 3.2, 3.9])
+        ax.set_xticklabels(TIERS + ["vocalisation", "silent"])
+        ax.set_xlim(-0.55, 4.25)
+        ax.set_ylabel("Time in the arm\nper session (min)")
+        ax.set_title(lab, loc="left")
+        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    axes[0].bar([0], [0], color=EE, label="EE grammar"); axes[0].bar([0], [0], color=SC, label="SC grammar")
+    axes[0].legend(fontsize=5.5, frameon=False, loc="upper center", ncol=2)
+    for ext in ("png", "pdf"):
+        fig.savefig(f"{path}.{ext}", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return "\n".join(lines)
+
+
 MOVES = ["+1", "+2", "+3", "-1", "-2", "repeat"]
 
 
@@ -437,7 +486,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("root", nargs="?", default="D:/AuditoryExperiments/grammar")
     parser.add_argument("--thesis-figures", metavar="DIR", required=True)
-    parser.add_argument("--only", choices=["stimuli", "moves", "session", "model"],
+    parser.add_argument("--only", choices=["stimuli", "moves", "session", "arms", "model"],
                         help="draw only this figure")
     args = parser.parse_args()
     rc = {"font.family": "serif", "font.size": 7, "axes.titlesize": 7,
@@ -452,11 +501,17 @@ def main():
             with open(os.path.join(args.root, "BATCH_ANALYSIS", "exp2", "move_shares.txt"),
                       "w", encoding="utf-8") as f:
                 f.write(txt + "\n")
-        if want("session") or want("model"):
+        if want("session") or want("arms") or want("model"):
             d = pd.read_csv(os.path.join(args.root, "BATCH_ANALYSIS", "exp2", "arm_blocks.csv"))
             d["mouse"] = d["mouse"].astype(str)
             if want("session"):
                 fig_session(d, os.path.join(args.thesis_figures, "fig_exp2_session"))
+            if want("arms"):
+                txt = fig_arms(d, os.path.join(args.thesis_figures, "fig_exp2_arms"))
+                print(txt)
+                with open(os.path.join(args.root, "BATCH_ANALYSIS", "exp2", "arm_times.txt"),
+                          "w", encoding="utf-8") as f:
+                    f.write(txt + "\n")
             if want("model"):
                 fig_model(os.path.join(args.root, "model_validation_output"),
                           os.path.join(args.thesis_figures, "fig_exp2_model"))
