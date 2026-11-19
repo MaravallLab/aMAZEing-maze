@@ -147,7 +147,7 @@ MODELS = {
     "B and D, centred": ["c", "w_r", "w_V", "alpha"],
     "B and D + voc": ["c", "w_r", "w_V", "alpha", "muT_s", "muT_t", "w_voc"],
 }
-NAMES = {"intercept": "intercept only", "voc only": "vocalisation only", "fluency": "fluency",
+NAMES = {"intercept": "constant only", "voc only": "vocalisation only", "fluency": "fluency alone",
          "B and D": "Brielmann and Dayan", "B and D, centred": "B and D, world at centre",
          "B and D + voc": "B and D and vocalisation"}
 BOUNDS = {"c": (-1.0, 1.0), "w_r": (0.0, 5.0), "w_V": (0.0, 200.0), "alpha": (1e-4, 0.3),
@@ -235,9 +235,10 @@ def fig_fit(obs, preds, comparison, path):
     ax = fig.add_subplot(gs[0, :])
     ax.errorbar(x, order["pi"], yerr=order["se"], fmt="o", ms=3, color="black", lw=0.8,
                 capsize=1.5, label="mice, mean and standard error", zorder=3)
-    for name, colour, ls in (("B and D", "#1565C0", "-"), ("B and D + voc", "#2E7D32", (0, (4, 2)))):
+    # fluency alone predicts a left out day best; the vocalisation bonus fits best
+    for name, colour, ls in (("fluency", "#1565C0", "-"), ("B and D + voc", "#2E7D32", (0, (4, 2)))):
         ax.plot(x, preds[name].loc[order.index], color=colour, lw=1.1, ls=ls, marker="D", ms=2.5,
-                label=f"{name.replace('B and D', 'Brielmann and Dayan')}")
+                label=NAMES.get(name, name))
     for k, s in enumerate(OBSERVED):
         idx = np.where(order["set"].to_numpy() == s)[0]
         if k:
@@ -261,7 +262,7 @@ def fig_fit(obs, preds, comparison, path):
     ax.set_yticks(range(len(names)))
     ax.set_yticklabels([NAMES.get(n, n) for n in names], fontsize=6)
     ax.invert_yaxis()
-    ax.set_xlabel("Error predicting a\nleft out day (RMSE)")
+    ax.set_xlabel("Error predicting a left out day\n(RMSE, lower is better)")
     ax.set_title("(b) prediction", loc="left")
 
     ax = fig.add_subplot(gs[1, 1])
@@ -269,7 +270,7 @@ def fig_fit(obs, preds, comparison, path):
     ax.set_yticks(range(len(names)))
     ax.set_yticklabels([])
     ax.invert_yaxis()
-    ax.set_xlabel("AIC above the best")
+    ax.set_xlabel("AIC above the best\n(lower is better)")
     ax.set_title("(c) fit", loc="left")
     for a in fig.axes:
         a.spines["top"].set_visible(False)
@@ -440,6 +441,7 @@ def main():
         f"{int(obs['voc'].sum())} of them vocalisations")
     fits, preds, rows = {}, {}, []
     n = len(obs)
+    tss = float(np.sum(np.square(obs["pi"] - obs["pi"].mean())))   # what a constant leaves
     for model in MODELS:
         p, rss = fit(model, obs, steps, rng)
         fits[model] = p
@@ -452,10 +454,12 @@ def main():
             cv += list(predict(pt, test, steps) - test["pi"].to_numpy())
         rows.append({"model": model, "k": len(MODELS[model]), "rss": rss,
                      "rmse": np.sqrt(rss / n), "aic": aic(rss, n, len(MODELS[model])),
-                     "cv_rmse": np.sqrt(np.mean(np.square(cv)))})
+                     "cv_rmse": np.sqrt(np.mean(np.square(cv))),
+                     "explained": 1 - rss / tss})
         say(f"\n{model}: " + ", ".join(f"{k} = {v:.4g}" for k, v in p.items()))
         say(f"  RMSE {np.sqrt(rss / n):.4f}, AIC {aic(rss, n, len(MODELS[model])):.1f}, "
-            f"left out day RMSE {rows[-1]['cv_rmse']:.4f}")
+            f"left out day RMSE {rows[-1]['cv_rmse']:.4f}, "
+            f"share of the variation explained {rows[-1]['explained']:.2f}")
     comparison = pd.DataFrame(rows).set_index("model")
     say("\n" + comparison.round(4).to_string())
 
