@@ -252,6 +252,28 @@ def main():
                 fig.savefig(os.path.join(t, f"fig_model_explainer.{ext}"), dpi=300, bbox_inches="tight")
         plt.close(fig)
 
+        # Panel c on its own, for Section 6.7 (it replaces the table of observed and
+        # predicted shares): the bars are the mice, the markers the two models, and
+        # the index of EE over SC of each is written beside the legend.
+        def ee_sc(v):
+            return (v[:3].sum() - v[3:6].sum()) / (v[:3].sum() + v[3:6].sum())
+        fig, ax = plt.subplots(figsize=(WIDTH * 0.8, 2.5))
+        panel_shares(ax, obs, sem, base, full)
+        ax.legend(handles=[
+            Patch(color=EE, label="EE grammar, mice"), Patch(color=SC, label="SC grammar, mice"),
+            Patch(color=SILENT, label="Silent arm, mice"),
+            Line2D([], [], ls="none", marker="o", ms=4.5, mfc="white", mec=INK, mew=0.8,
+                   label="Predicted without semantic value"),
+            Line2D([], [], ls="none", marker="D", ms=3.8, color=INK, label="Predicted with semantic value")],
+            loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False, handletextpad=0.4)
+        ax.text(1.03, 0.08, "Index, EE over SC\n"
+                f"mice {num(ee_sc(obs), 3)}\nwithout {num(ee_sc(base), 3)}\nwith {num(ee_sc(full), 3)}",
+                transform=ax.transAxes, ha="left", va="bottom", fontsize=7)
+        for t in targets:
+            for ext in ("png", "pdf"):
+                fig.savefig(os.path.join(t, f"fig_exp2_shares.{ext}"), dpi=300, bbox_inches="tight")
+        plt.close(fig)
+
     names = ["EE dominant", "EE secondary", "EE rare", "SC dominant", "SC secondary", "SC rare", "silent"]
     lines = [f"Mice: {len(Y)}; weights of the full model (Dirichlet, whole sessions): "
              f"wr {w[0]:+.3f}, wV {w[1]:+.3f}, wS {w[2]:+.3f}",
