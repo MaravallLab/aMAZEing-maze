@@ -337,44 +337,52 @@ VOC, SIL = "#2E7D32", "#757575"
 
 def fig_arms(d, path):
     """Time per session in each kind of arm on each test day: the EE and SC
-    grammar at each level, the vocalisation and the silent arm. Bars are means
-    with their standard errors, dots are mice."""
-    kinds = [("EE", t) for t in TIERS] + [("SC", t) for t in TIERS]
-    x_of = {}
-    for i, tier in enumerate(TIERS):
-        x_of[("EE", tier)] = i - 0.18
-        x_of[("SC", tier)] = i + 0.18
-    x_of["vocalisation"], x_of["silent"] = 3.2, 3.9
-    rng = np.random.default_rng(0)
-    fig, axes = plt.subplots(2, 1, figsize=(6.3, 4.6), sharey=True, gridspec_kw={"hspace": 0.45})
+    grammar at each level, the vocalisation and the silent arm, both days on one
+    axis. Bars are means with their standard errors; day 1 solid, day 2 lighter."""
+    from matplotlib.colors import to_rgb
+    from matplotlib.patches import Patch
+    # within each group the bars touch: EE day 1, EE day 2, SC day 1, SC day 2
+    w = 0.2
+    groups = [(tier, [("EE", tier), ("SC", tier)]) for tier in TIERS] + \
+             [("vocalisation", ["vocalisation"]), ("silent", ["silent"])]
+    centres = [0, 1, 2, 3, 3.75]
+    colour = {"EE": EE, "SC": SC, "vocalisation": VOC, "silent": SIL}
+    data = {}
     lines = ["Mean time per session in each kind of arm (min), mean and standard error over mice"]
-    for ax, day, lab in zip(axes, ("day_1", "day_2"), ("(a) day 1", "(b) day 2")):
+    for day in ("day_1", "day_2"):
         dd = d[d["day"] == day]
         mice = sorted(dd["mouse"].unique())
-        cols = {}
         g = dd[dd["cls"] == "grammar"].groupby(["mouse", "environment", "tier"])["time_spent_s"].sum()
-        for env, tier in kinds:
-            cols[(env, tier)] = g.xs((env, tier), level=("environment", "tier")).reindex(mice, fill_value=0)
+        for tier in TIERS:
+            for env in ("EE", "SC"):
+                data[(day, (env, tier))] = g.xs((env, tier), level=("environment", "tier")) \
+                    .reindex(mice, fill_value=0) / 60
         for c in ("vocalisation", "silent"):
-            cols[c] = dd[dd["cls"] == c].groupby("mouse")["time_spent_s"].sum().reindex(mice, fill_value=0)
-        for key, v in cols.items():
-            v = v / 60
-            x = x_of[key]
-            colour = EE if key[0] == "EE" else SC if key[0] == "SC" else VOC if key == "vocalisation" else SIL
-            ax.bar(x, v.mean(), 0.32, color=colour, alpha=0.85, zorder=1)
-            ax.errorbar(x, v.mean(), v.sem(), color="black", lw=0.8, capsize=1.5, zorder=3)
-            ax.scatter(x + rng.uniform(-0.07, 0.07, len(v)), v, s=3, color="black", alpha=0.45,
-                       lw=0, zorder=2)
-            name = key if isinstance(key, str) else f"{key[0]} {key[1]}"
+            data[(day, c)] = dd[dd["cls"] == c].groupby("mouse")["time_spent_s"].sum() \
+                .reindex(mice, fill_value=0) / 60
+    fig, ax = plt.subplots(figsize=(6.3, 2.7))
+    for (label, keys), c0 in zip(groups, centres):
+        bars = [(k, day) for k in keys for day in ("day_1", "day_2")]
+        start = c0 - w * (len(bars) - 1) / 2
+        for j, (k, day) in enumerate(bars):
+            v = data[(day, k)]
+            base = colour[k[0] if isinstance(k, tuple) else k]
+            col = base if day == "day_1" else tuple(1 - 0.45 * (1 - c) for c in to_rgb(base))
+            x = start + j * w
+            ax.bar(x, v.mean(), w, color=col, edgecolor="white", lw=0.4, zorder=1)
+            ax.errorbar(x, v.mean(), v.sem(), color="black", lw=0.7, capsize=1.2, zorder=3)
+            name = k if isinstance(k, str) else f"{k[0]} {k[1]}"
             lines.append(f"  {day} {name:14s} {v.mean():.2f} ({v.sem():.2f})  n = {len(v)}")
-        ax.set_xticks([0, 1, 2, 3.2, 3.9])
-        ax.set_xticklabels(TIERS + ["vocalisation", "silent"])
-        ax.set_xlim(-0.55, 4.25)
-        ax.set_ylabel("Time in the arm\nper session (min)")
-        ax.set_title(lab, loc="left")
-        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
-    axes[0].bar([0], [0], color=EE, label="EE grammar"); axes[0].bar([0], [0], color=SC, label="SC grammar")
-    axes[0].legend(fontsize=5.5, frameon=False, loc="upper center", ncol=2)
+    ax.set_xticks(centres)
+    ax.set_xticklabels(TIERS + ["vocalisation", "silent"])
+    ax.set_xlim(-0.55, 4.1)
+    ax.set_ylabel("Time in the arm\nper session (min)")
+    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    light = lambda c: tuple(1 - 0.45 * (1 - x) for x in to_rgb(c))
+    handles = [Patch(color=EE, label="EE grammar, day 1"), Patch(color=light(EE), label="EE grammar, day 2"),
+               Patch(color=SC, label="SC grammar, day 1"), Patch(color=light(SC), label="SC grammar, day 2")]
+    ax.legend(handles=handles, fontsize=5.5, frameon=False, loc="upper center", ncol=4,
+              bbox_to_anchor=(0.5, 1.12))
     for ext in ("png", "pdf"):
         fig.savefig(f"{path}.{ext}", dpi=200, bbox_inches="tight")
     plt.close(fig)
