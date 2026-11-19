@@ -84,23 +84,33 @@ def fig_session(d, path):
     ax.set_ylabel("Time in the grammar arms\nper session (min)")
     ax.set_title("(a) day 1", loc="left")
 
+    # (b) the EE and SC grammar arm side by side at each level: bars are means with
+    # their standard errors, dots are mice; the stars test the index of each level
+    # against zero (Wilcoxon), corrected by Holm's method across the levels
     ax = axes[1]
     pis = {tier: per_mouse_index(d1, tier) for tier in TIERS}
     ph = multipletests([wilcoxon(pis[t_]).pvalue for t_ in TIERS], method="holm")[1]
+    g1 = d1[d1["cls"] == "grammar"]
     for i, tier in enumerate(TIERS):
-        x = pis[tier]
-        cols = [GROUP[int(groups[m])] for m in x.index]
-        ax.scatter(i + rng.uniform(-0.15, 0.15, len(x)), x, s=5, c=cols, lw=0, zorder=2)
-        ax.plot([i - 0.25, i + 0.25], [x.median()] * 2, color="black", lw=1.6, zorder=3)
-        ax.text(i, 0.93, stars(ph[i]), ha="center", va="bottom", fontsize=7)
-    ax.axhline(0, color="black", lw=0.6, ls=(0, (4, 2)))
+        s = (g1[g1["tier"] == tier].groupby(["mouse", "environment"])["time_spent_s"].sum()
+             .unstack(fill_value=0).reindex(pis[tier].index)) / 60
+        xs = [i - 0.18, i + 0.18]
+        for x, col, c in ((xs[0], "EE", EE), (xs[1], "SC", SC)):
+            ax.bar(x, s[col].mean(), 0.32, color=c, alpha=0.85, zorder=1)
+            ax.errorbar(x, s[col].mean(), s[col].sem(), color="black", lw=0.8, capsize=1.5, zorder=3)
+            ax.scatter(x + rng.uniform(-0.07, 0.07, len(s)), s[col], s=3, color="black",
+                       alpha=0.45, lw=0, zorder=2)
+        top = s.values.max()
+        ax.plot([xs[0], xs[0], xs[1], xs[1]], [top * 1.03, top * 1.06, top * 1.06, top * 1.03],
+                color="black", lw=0.6)
+        ax.text(i, top * 1.07, stars(ph[i]), ha="center", va="bottom", fontsize=7)
     ax.set_xticks(range(3)); ax.set_xticklabels(TIERS)
-    ax.set_ylim(-1.0, 1.05)
-    ax.set_ylabel("EE-SC index of time")
+    ax.set_xlim(-0.55, 2.55)
+    ax.set_ylabel("Time in the arm\nper session (min)")
     ax.set_title("(b) day 1, by level of predictability", loc="left")
-    for g_, c in GROUP.items():
-        ax.scatter([], [], s=8, color=c, label=f"group {g_} (EE = grammar {'A' if g_ == 1 else 'B'})")
-    ax.legend(fontsize=5.5, frameon=False, loc="lower left")
+    ax.bar([0], [0], color=EE, label="EE grammar"); ax.bar([0], [0], color=SC, label="SC grammar")
+    ax.legend(fontsize=5.5, frameon=False, loc="upper right")
+    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
 
     ax = axes[2]
     a, b = per_mouse_index(d1), per_mouse_index(d2)

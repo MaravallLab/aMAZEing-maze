@@ -207,6 +207,16 @@ for (day in c("day_1", "day_2")) {
   x <- s3[, c("tier", "contrast", "estimate", "lower.CL", "upper.CL", "p.value", "p.holm")]
   num <- sapply(x, is.numeric); x[num] <- lapply(x[num], function(v) signif(v, 3)); print(x, row.names = FALSE)
   s3$model <- paste("session", day, "by level")
+  # The same differences read as percentages of time: a difference d on the log
+  # scale means about exp(d) times as much time with the EE grammar (exactly so
+  # for 1 + time), that is 100 (exp(d) - 1) percent more.
+  pct <- function(e) sprintf("%+.0f%%", 100 * (exp(e) - 1))
+  cat("  the same, as percentages more time with the EE grammar (95% interval):\n")
+  cat(sprintf("    overall    %s (%s to %s)\n", pct(t1$estimate), pct(t1$lower.CL), pct(t1$upper.CL)))
+  for (i in seq_len(nrow(s3))) {
+    cat(sprintf("    %-10s %s (%s to %s)\n", s3$tier[i], pct(s3$estimate[i]),
+                pct(s3$lower.CL[i]), pct(s3$upper.CL[i])))
+  }
   cat("  difference between the groups in EE - SC, at each level:\n")
   t4 <- show_log(contrast(emmeans(m, ~ environment * group | tier), interaction = "pairwise"),
                  "group difference by level", "tier")
