@@ -1,0 +1,78 @@
+EXPLORATORY, viva version only: transitions a listener needs to tell the cages apart
+
+Evidence accumulation with walls at 95% and 5% belief that the arm
+belongs to the EE cage. Visits of up to 5 melodies (55 transitions).
+4000 simulated visits per group, cage and level; averaged over both cages and
+both groups (weights 15 and 17 mice); seed 20261119.
+W is the memory window in transitions. Right, wrong, undecided: share of visits
+ending at each wall by the end of the visit. Transitions to the right wall:
+median [quartiles] among visits that reached it.
+
+transition listener
+  dominant  W           1  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  dominant  W           2  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  2 [2, 2]
+  dominant  W           3  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  2 [2, 2]
+  dominant  W           4  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  2 [2, 2]
+  dominant  W           5  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  2 [2, 2]
+  dominant  W           6  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  2 [2, 2]
+  dominant  W           8  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  2 [2, 2]
+  dominant  W          11  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  2 [2, 2]
+  dominant  W          22  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  2 [2, 2]
+  dominant  W whole visit  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  2 [2, 2]
+
+  secondary W           1  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  secondary W           2  right   0.0%  wrong 100.0%  undecided   0.0%  transitions to the right wall -
+  secondary W           3  right   0.0%  wrong 100.0%  undecided   0.0%  transitions to the right wall -
+  secondary W           4  right   0.0%  wrong 100.0%  undecided   0.0%  transitions to the right wall -
+  secondary W           5  right   0.0%  wrong 100.0%  undecided   0.0%  transitions to the right wall -
+  secondary W           6  right   0.0%  wrong 100.0%  undecided   0.0%  transitions to the right wall -
+  secondary W           8  right   0.0%  wrong 100.0%  undecided   0.0%  transitions to the right wall -
+  secondary W          11  right   0.0%  wrong 100.0%  undecided   0.0%  transitions to the right wall -
+  secondary W          22  right   0.0%  wrong 100.0%  undecided   0.0%  transitions to the right wall -
+  secondary W whole visit  right   0.0%  wrong 100.0%  undecided   0.0%  transitions to the right wall -
+
+  rare      W           1  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           2  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           3  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           4  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           5  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           6  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           8  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W          11  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W          22  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W whole visit  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+
+level listener
+  dominant  W           1  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  dominant  W           2  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  dominant  W           3  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  dominant  W           4  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  dominant  W           5  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  5 [5, 5]
+  dominant  W           6  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  5 [5, 5]
+  dominant  W           8  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  5 [5, 5]
+  dominant  W          11  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  5 [5, 5]
+  dominant  W          22  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  5 [5, 5]
+  dominant  W whole visit  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  5 [5, 5]
+
+  secondary W           1  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  secondary W           2  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  3 [2, 4]
+  secondary W           3  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  3 [2, 4]
+  secondary W           4  right 100.0%  wrong   0.0%  undecided   0.0%  transitions to the right wall  3 [2, 4]
+  secondary W           5  right  96.9%  wrong   3.1%  undecided   0.0%  transitions to the right wall  2 [2, 3]
+  secondary W           6  right  96.9%  wrong   3.1%  undecided   0.0%  transitions to the right wall  2 [2, 3]
+  secondary W           8  right  96.9%  wrong   3.1%  undecided   0.0%  transitions to the right wall  2 [2, 3]
+  secondary W          11  right  96.9%  wrong   3.1%  undecided   0.0%  transitions to the right wall  2 [2, 3]
+  secondary W          22  right  96.9%  wrong   3.1%  undecided   0.0%  transitions to the right wall  2 [2, 3]
+  secondary W whole visit  right  96.9%  wrong   3.1%  undecided   0.0%  transitions to the right wall  2 [2, 3]
+
+  rare      W           1  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           2  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           3  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           4  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           5  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           6  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W           8  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W          11  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W          22  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+  rare      W whole visit  right   0.0%  wrong   0.0%  undecided 100.0%  transitions to the right wall -
+

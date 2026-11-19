@@ -170,6 +170,29 @@ python bayes_principle_figure.py --thesis-figures <thesis>/figures
 
 The `exp2_*` scripts read `model_validation/` (its data loading, exclusions and features) but never change it or its outputs.
 
+### Exploratory, viva version only
+
+These two scripts are exploratory. They are not part of the preregistered or confirmatory analyses and are left out of the submitted thesis. Their results appear only in the viva version (`future_main.pdf`, the passages inside `\ifdefined\FUTUREVERSION` in `chapters/discussion.tex`).
+
+| Script | Question | Output |
+|---|---|---|
+| `exp2_listener_check.py` | Which simple listener reads a secondary melody as its own grammar? (no mouse data) | `exp2_listener_check.txt`, and with `ddm`, `exp2_listener_ddm.txt`, next to the script |
+| `exp2_evidence_accumulation.py` | How many tone transitions does a listener, and a mouse, need to tell which cage a melody belongs to, at each level? | `exp2_evidence_accumulation/` next to the script |
+
+```bash
+cd analysis/auditory
+python exp2_evidence_accumulation.py D:/AuditoryExperiments/grammar
+```
+
+??? note "`exp2_evidence_accumulation.py`"
+    The question in plain words: if you hear a piano melody, how many notes do you need before you can say whether it is classical or jazz? Here the two styles are the grammar of the enriched cage (EE) and the grammar of the standard cage (SC). Many single steps are shared by the two grammars, so one transition is rarely enough.
+
+    **Part 1, simulation (reads no data).** A listener hears the melodies of one arm and after each transition adds that step's evidence (the log of how much more likely the step is under the EE grammar than under the SC grammar) to a running total. The total moves like a ball rolling towards one of two walls, a drift diffusion process; the walls are at 95 and 5 percent belief, and the listener decides when the ball first touches one. The listener keeps only its last W transitions in mind, W from 1 to a whole melody (11), two melodies (22) and the whole visit (5 melodies, 55 transitions). A leaky accumulator, which forgets a little of the old evidence at every step, behaves much like a short window, so the two cannot be told apart. Two listeners, both from `exp2_listener_check.py`: the step by step listener (each step weighed against the full grammars) and the listener that also infers the level of the melody (each cage a mixture of its three level restricted chains). For each level it gives the share of visits reaching the right wall, the wrong wall or neither, and the transitions to a decision, against transitions heard and against W. Averaged over both cages and both counterbalancing groups (15 and 17 mice), seed 20261119, 4000 simulated visits per group, cage and level.
+
+    **Part 2, mouse data (test day 1).** Each arm entry starts a fresh melody (melody, 2 s gap, repeat), so a visit's length gives the transitions the mouse heard: one per 0.2 s within a melody, counted once the second tone has ended, nothing new in the gap. Reads the per visit tables (`*_grammar_detailed_visits.csv`) of the day 1 sessions through `model_validation.data_loading` (same exclusions as the other `exp2_*` scripts) and checks that their times add up to the trials tables. Two simple measures per level, both pooled over mice with 95 percent intervals from a bootstrap over mice (2000 resamples): the EE share of the visits that lasted at least n transitions, and the leaving rate (of the visits still going after n transitions, the share that ended before the next) in EE and SC arms. Each is given for all visits and for the first visit to each arm in each block. No p values and no correction: read the onsets as a rough range.
+
+    Writes to `analysis/auditory/exp2_evidence_accumulation/`: `simulation.txt`, `simulation_summary.csv`, `simulation_curves.csv` (Part 1); `mice.txt`, `mice_survivor_share.csv`, `mice_leave_rates.csv` (Part 2, summaries only); `evidence_accumulation.png` and `.pdf` (the figure, copied into the thesis as `figures/fig_exp2_evidence_accumulation.pdf`). Without the data folder only Part 1 runs and the figure has no mouse row. Takes about a minute.
+
 ## Stimulus measures
 
 `stimulus_complexity.py` holds the measures of how complex a stimulus is. Run on its own, it prints a worked table.
