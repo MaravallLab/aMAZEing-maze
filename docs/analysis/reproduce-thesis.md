@@ -56,6 +56,7 @@ flowchart LR
         O[exp1_order_place] --> A
         X[exp1_exploration]
         S --> I[exp1_individuals]
+        S --> M[exp1_familiarity]
         L --> I
         S --> F[pi_fisher_figure]
         L --> F
@@ -110,6 +111,7 @@ flowchart LR
 |---|---|---|---|
 | Figure 4.9, vocalisations and synthetic sounds (Section 4.4) | `exp1_vocalisation_pi.py` | `python exp1_vocalisation_pi.py D:/AuditoryExperiments/8_arms_w_voc` | `vocalisation_pi/` |
 | Each stimulus against silence (Section 4.5); Figure 4.15, consonance and roughness (Section 4.7) | `exp1_stimulus_pi.py` | `python exp1_stimulus_pi.py D:/AuditoryExperiments/8_arms_w_voc` | `stimulus_pi/` |
+| Whether a recording heard on days 1 to 5 is preferred on the vocalisation day (Section 4.5) | `exp1_familiarity.py` | `python exp1_familiarity.py D:/AuditoryExperiments/8_arms_w_voc` | `familiarity/` |
 | The mixed models behind Sections 4.4, 4.5 and 4.7 | `exp1_lmm.py`, `exp1_lmm.R` | `python exp1_lmm.py D:/AuditoryExperiments/8_arms_w_voc` | `lmm/` |
 | Figure 4.10, each stimulus against silence mouse by mouse (Section 4.5); Figures 4.11 to 4.14, individual mice (Section 4.6) | `exp1_individuals.py`, `exp1_individuals.R` | `python exp1_individuals.py D:/AuditoryExperiments/8_arms_w_voc` | `individuals/` |
 | Figure B.3, consonance mouse by mouse, and the place check (Sections 4.7 and 4.10) | `exp1_consistency_checks.py` | `python exp1_consistency_checks.py D:/AuditoryExperiments/8_arms_w_voc` | `consistency/` |

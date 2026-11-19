@@ -57,6 +57,7 @@ It runs from -1 (only b) to +1 (only a). Visits are not capped. See the [glossar
 |---|---|---|
 | `exp1_vocalisation_pi.py` | Do mice prefer the vocalisation to silence and to the synthetic sounds? | `vocalisation_pi/` |
 | `exp1_stimulus_pi.py` | Is each stimulus preferred to the silent arm? | `stimulus_pi/` |
+| `exp1_familiarity.py` | Is the recording a mouse heard on days 1 to 5 preferred on the vocalisation day? | `familiarity/` |
 | `exp1_lmm.py` | Does visit length depend on the kind of stimulus? | `lmm/` |
 | `exp1_individuals.py` | Do the averages hold mouse by mouse? | `individuals/` |
 | `exp1_consistency_checks.py` | Are some mice consistent about consonance, and does sound magnify place preference? | `consistency/` |
