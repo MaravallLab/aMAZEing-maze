@@ -15,9 +15,16 @@ Experiment 2: Thesis Figures
                       known semantic weight; (b) the semantic weight at three
                       grains of observation; (c) the predicted and observed share
                       of time in each arm type (per-mouse cell means)
+    fig_exp2_stimuli  the two grammars and one melody of each at each level
+    fig_exp2_moves    the moves each kind of melody makes: (a, b) the secondary
+                      melody of each grammar from fig_exp2_stimuli, each step
+                      labelled, the moves borrowed from the other grammar in that
+                      grammar's colour; (c) the share of each move in all the
+                      melodies played at test, for each grammar at each level
+                      (also written to BATCH_ANALYSIS/exp2/move_shares.txt)
 
 Usage:
-    python exp2_figures.py [GRAMMAR_DIR] --thesis-figures DIR
+    python exp2_figures.py [GRAMMAR_DIR] --thesis-figures DIR [--only NAME]
 
     run exp2_lmm.py first (it writes BATCH_ANALYSIS/exp2/arm_blocks.csv).
 """
@@ -315,20 +322,134 @@ def fig_stimuli(root, path):
     plt.close(fig)
 
 
+MOVES = ["+1", "+2", "+3", "-1", "-2", "repeat"]
+
+
+def move_of(a, b, n=6):
+    """The step between two tones, counted round the ring of six tones."""
+    d = (b - a) % n
+    return {0: "repeat", 1: "+1", 2: "+2", 3: "+3", 4: "-2", 5: "-1"}[d]
+
+
+def fig_moves(root, path):
+    """The moves of each kind of melody: the secondary melodies borrow the other
+    grammar's most common move, yet each melody kind has its own set of moves."""
+    import sys
+    from matplotlib.gridspec import GridSpec
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from amazeing.auditory.grammar_stimuli import config as gcfg
+    from model_validation.data_loading import load_arm_blocks
+    arms = load_arm_blocks(root).arm_blocks
+    sym = gcfg.TONE_SYMBOLS
+    khz = [gcfg.TONES[s] / 1000 for s in sym]
+    colour = {"A": "#00695C", "B": "#6A1B9A"}
+    examples, counts = {}, {}
+    for (grammar, tier), sub in arms[arms["arm_type"] == "grammar"].groupby(["grammar", "tier"]):
+        mels = [m for ms in sub["melodies"] for m in ms]
+        if not mels:
+            continue
+        examples[(grammar, tier)] = mels[0]          # the melody shown in fig_exp2_stimuli
+        c = dict.fromkeys(MOVES, 0)
+        for m in mels:
+            idx = [sym.index(s) for s in m]
+            for a, b in zip(idx[:-1], idx[1:]):
+                c[move_of(a, b)] += 1
+        counts[(grammar, tier)] = c
+    # each grammar's most common move, drawn in that grammar's colour wherever it appears
+    move_colour = {"+1": colour["A"], "+3": colour["B"], "+2": "#9E9E9E",
+                   "-1": "#CFCFCF", "-2": "#E3E3E3", "repeat": "#F2F2F2"}
+
+    fig = plt.figure(figsize=(6.3, 5.0))
+    gs = GridSpec(2, 2, figure=fig, height_ratios=[1.25, 1.0], hspace=0.55, wspace=0.18)
+    for k, g in enumerate(("A", "B")):
+        ax = fig.add_subplot(gs[0, k])
+        mel = examples[(g, "secondary")]
+        idx = [sym.index(s) for s in mel]
+        for i, y in enumerate(idx):
+            ax.barh(y, 0.15, left=i * 0.2, height=0.6, color=colour[g], zorder=3)
+        for i in range(len(idx) - 1):
+            mv = move_of(idx[i], idx[i + 1])
+            borrowed = (g == "A" and mv == "+3") or (g == "B" and mv == "+1")
+            c = colour["B" if g == "A" else "A"] if borrowed else "#9E9E9E"
+            x0, x1 = i * 0.2 + 0.15, (i + 1) * 0.2
+            ax.annotate("", xy=(x1, idx[i + 1]), xytext=(x0, idx[i]),
+                        arrowprops=dict(arrowstyle="-|>", color=c, lw=1.4 if borrowed else 0.8,
+                                        mutation_scale=7, shrinkA=0, shrinkB=0), zorder=2)
+            ax.text((x0 + x1) / 2, max(idx[i], idx[i + 1]) + 0.55, mv, ha="center", va="bottom",
+                    fontsize=5.5, color=c, fontweight="bold" if borrowed else None)
+        ax.set_xlim(-0.05, 2.45); ax.set_ylim(-0.6, 6.4)
+        ax.set_yticks(range(6))
+        ax.set_yticklabels([f"{s} {f:.1f}" for s, f in zip(sym, khz)] if k == 0 else [])
+        ax.set_xlabel("Time (s)")
+        if k == 0:
+            ax.set_ylabel("Tone (kHz)")
+        other = "B" if g == "A" else "A"
+        ax.set_title(f"({'ab'[k]}) grammar {g}, secondary\nmoves borrowed from grammar {other} in colour",
+                     loc="left")
+        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+
+    ax = fig.add_subplot(gs[1, :])
+    kinds = [(g, t) for g in ("A", "B") for t in TIERS]
+    y = np.arange(len(kinds))[::-1]
+    for yi, kind in zip(y, kinds):
+        c = counts[kind]
+        tot = sum(c.values())
+        left = 0.0
+        for mv in MOVES:
+            share = c[mv] / tot if tot else 0
+            if share > 0:
+                ax.barh(yi, share, left=left, height=0.62, color=move_colour[mv],
+                        edgecolor="white", lw=0.6)
+                if share > 0.06:
+                    ax.text(left + share / 2, yi, mv, ha="center", va="center", fontsize=6,
+                            color="white" if mv in ("+1", "+3", "+2") else "black")
+            left += share
+    ax.set_yticks(y)
+    ax.set_yticklabels([f"grammar {g}, {t}" for g, t in kinds])
+    for lab, (g, _) in zip(ax.get_yticklabels(), kinds):
+        lab.set_color(colour[g])
+    ax.set_xlim(0, 1)
+    ax.set_xlabel("share of the moves in the melodies played at test")
+    ax.set_title("(c) the moves each kind of melody makes", loc="left")
+    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    for ext in ("png", "pdf"):
+        fig.savefig(f"{path}.{ext}", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    lines = ["Share of the moves in the melodies played at test, by kind of melody"]
+    for kind in kinds:
+        c = counts[kind]; tot = sum(c.values())
+        lines.append(f"  grammar {kind[0]}, {kind[1]:9s} n = {tot:6d}  " +
+                     "  ".join(f"{mv} {c[mv] / tot:.3f}" for mv in MOVES))
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("root", nargs="?", default="D:/AuditoryExperiments/grammar")
     parser.add_argument("--thesis-figures", metavar="DIR", required=True)
+    parser.add_argument("--only", choices=["stimuli", "moves", "session", "model"],
+                        help="draw only this figure")
     args = parser.parse_args()
-    d = pd.read_csv(os.path.join(args.root, "BATCH_ANALYSIS", "exp2", "arm_blocks.csv"))
-    d["mouse"] = d["mouse"].astype(str)
-    with plt.rc_context({"font.family": "serif", "font.size": 7, "axes.titlesize": 7,
-                         "axes.labelsize": 7, "xtick.labelsize": 6, "ytick.labelsize": 6,
-                         "pdf.fonttype": 42}):
-        fig_stimuli(args.root, os.path.join(args.thesis_figures, "fig_exp2_stimuli"))
-        fig_session(d, os.path.join(args.thesis_figures, "fig_exp2_session"))
-        fig_model(os.path.join(args.root, "model_validation_output"),
-                  os.path.join(args.thesis_figures, "fig_exp2_model"))
+    rc = {"font.family": "serif", "font.size": 7, "axes.titlesize": 7,
+          "axes.labelsize": 7, "xtick.labelsize": 6, "ytick.labelsize": 6, "pdf.fonttype": 42}
+    want = (lambda name: args.only in (None, name))
+    with plt.rc_context(rc):
+        if want("stimuli"):
+            fig_stimuli(args.root, os.path.join(args.thesis_figures, "fig_exp2_stimuli"))
+        if want("moves"):
+            txt = fig_moves(args.root, os.path.join(args.thesis_figures, "fig_exp2_moves"))
+            print(txt)
+            with open(os.path.join(args.root, "BATCH_ANALYSIS", "exp2", "move_shares.txt"),
+                      "w", encoding="utf-8") as f:
+                f.write(txt + "\n")
+        if want("session") or want("model"):
+            d = pd.read_csv(os.path.join(args.root, "BATCH_ANALYSIS", "exp2", "arm_blocks.csv"))
+            d["mouse"] = d["mouse"].astype(str)
+            if want("session"):
+                fig_session(d, os.path.join(args.thesis_figures, "fig_exp2_session"))
+            if want("model"):
+                fig_model(os.path.join(args.root, "model_validation_output"),
+                          os.path.join(args.thesis_figures, "fig_exp2_model"))
     print("written to", args.thesis_figures)
 
 
