@@ -9,10 +9,12 @@ then renormalising within that subset.
 - ``secondary``: 2 columns / row -> 1 bit of within-row entropy
 - ``rare``:      2 columns / row -> 1 bit of within-row entropy
 
-Because only one tier is active per melody (on training days: dominant only;
-on test day: the tier assigned to the arm), the *effective* matrix used for
-a given melody is a restricted, renormalised version of the stored row -
-but the stored row itself is never mutated.
+On training days no tier is active: melodies are sampled from the full
+matrix (``config.TRAINING_COMPLEXITY == config.FULL_TIER``, every transition
+at its own probability). On test days one tier is active per melody (the
+tier assigned to the arm), so the *effective* matrix used for a given melody
+is a restricted, renormalised version of the stored row - but the stored row
+itself is never mutated.
 """
 
 from __future__ import annotations
