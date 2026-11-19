@@ -163,8 +163,81 @@ def cell_values(listener, rng, **kw):
     return ee, sc
 
 
+WALL = 0.95                       # belief at which the listener counts as decided
+MAX_MELODIES = 5                  # stream of the same arm, 11 transitions per melody
+
+
+def decide(listener, R, Mee, Msc, own_is_ee, rng):
+    """Drift diffusion reading of the filter: transitions until the belief in
+    one cage reaches WALL. Belief is carried across the melodies of one arm.
+    Returns (outcome, transitions): outcome 'right', 'wrong' or 'none'."""
+    if listener == "level":
+        chains = [[(1 - EPS) * restricted(M, lv) + EPS * M for lv in LEVELS] for M in (Mee, Msc)]
+        w = np.full((2, 3), 1 / 6)
+    b, n = 0.5, 0
+    for _ in range(MAX_MELODIES):
+        mel = sample(R, rng)
+        for a, c in zip(mel[:-1], mel[1:]):
+            n += 1
+            if listener == "transition":
+                bbar = STAY * b + (1 - STAY) * (1 - b)
+                le, ls = Mee[a, c], Msc[a, c]
+                b = le * bbar / (le * bbar + ls * (1 - bbar))
+            else:
+                bc = w.sum(1)
+                bbar = STAY * bc[0] + (1 - STAY) * bc[1]
+                split = w / w.sum(1, keepdims=True)
+                wbar = np.vstack([bbar * split[0], (1 - bbar) * split[1]])
+                like = np.array([[chains[k][j][a, c] for j in range(3)] for k in range(2)])
+                w = like * wbar
+                w = w / w.sum()
+                b = w[0].sum()
+            right = b if own_is_ee else 1 - b
+            if right >= WALL:
+                return "right", n
+            if right <= 1 - WALL:
+                return "wrong", n
+    return "none", n
+
+
+def ddm_report(rng):
+    lines = ["",
+             "DRIFT DIFFUSION READING (exploratory): how many tone transitions a listener needs",
+             f"before it is {WALL:.0%} sure which cage a melody comes from. The belief update of",
+             "the model adds a fixed amount of evidence with every transition, so it behaves",
+             "like a drift diffusion process with walls at 95% and 5%. Melodies of one arm are",
+             f"heard in a row (up to {MAX_MELODIES} melodies, {MAX_MELODIES * 11} transitions); "
+             "averaged over both cages and both groups.",
+             ""]
+    for listener in ("transition", "level"):
+        for lv in LEVELS:
+            res = {"right": [], "wrong": [], "none": []}
+            for g in GROUP_N:
+                Mee = gcfg.GRAMMARS[gcfg.COUNTERBALANCE[g]["EE"]]
+                Msc = gcfg.GRAMMARS[gcfg.COUNTERBALANCE[g]["SC"]]
+                for arm_M, own_is_ee in ((Mee, True), (Msc, False)):
+                    R = restricted(arm_M, lv)
+                    for _ in range(N_SIM):
+                        out, n = decide(listener, R, Mee, Msc, own_is_ee, rng)
+                        res[out].append(n)
+            tot = sum(len(v) for v in res.values())
+            def med(v):
+                return f"{np.median(v):.0f}" if v else "-"
+            lines.append(f"  {listener:10s} {lv:9s} right wall {len(res['right']) / tot:6.1%} "
+                         f"(median {med(res['right'])} transitions), wrong wall "
+                         f"{len(res['wrong']) / tot:6.1%} (median {med(res['wrong'])}), "
+                         f"undecided {len(res['none']) / tot:6.1%}")
+    return lines
+
+
 def main():
     rng = np.random.default_rng(20261119)
+    if len(sys.argv) > 1 and sys.argv[1] == "ddm":
+        text = "\n".join(ddm_report(rng))
+        print(text)
+        with open(os.path.join(HERE, "exp2_listener_ddm.txt"), "w", encoding="utf-8") as f:
+            f.write(text.lstrip("\n") + "\n")
+        return
     obs_d = OBS_EE - OBS_SC
     lines = ["EXPLORATORY: which listener reads the secondary melodies as their own grammar?",
              "",

@@ -1,0 +1,12 @@
+DRIFT DIFFUSION READING (exploratory): how many tone transitions a listener needs
+before it is 95% sure which cage a melody comes from. The belief update of
+the model adds a fixed amount of evidence with every transition, so it behaves
+like a drift diffusion process with walls at 95% and 5%. Melodies of one arm are
+heard in a row (up to 5 melodies, 55 transitions); averaged over both cages and both groups.
+
+  transition dominant  right wall 100.0% (median 2 transitions), wrong wall   0.0% (median -), undecided   0.0%
+  transition secondary right wall   0.0% (median - transitions), wrong wall 100.0% (median 3), undecided   0.0%
+  transition rare      right wall   0.0% (median - transitions), wrong wall   0.0% (median -), undecided 100.0%
+  level      dominant  right wall 100.0% (median 5 transitions), wrong wall   0.0% (median -), undecided   0.0%
+  level      secondary right wall  96.2% (median 2 transitions), wrong wall   3.8% (median 5), undecided   0.0%
+  level      rare      right wall   0.0% (median - transitions), wrong wall   0.0% (median -), undecided 100.0%
