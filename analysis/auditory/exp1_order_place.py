@@ -187,8 +187,14 @@ def fig_order(blocks, path, thesis=False):
 
 
 def fig_place(arms, consistency, path, thesis=False):
-    fig, axes = plt.subplots(1, 2, figsize=(6.3, 2.4) if thesis else (10, 3.4),
-                             gridspec_kw={"width_ratios": [1.6, 1]})
+    """Each arm's share of the time; the batch version adds the histogram of the
+    habituation against sound-block correlations, which the thesis gives in the text."""
+    if thesis:
+        fig, ax = plt.subplots(1, 1, figsize=(4.4, 2.4))
+        axes = [ax]
+    else:
+        fig, axes = plt.subplots(1, 2, figsize=(10, 3.4),
+                                 gridspec_kw={"width_ratios": [1.6, 1]})
     ax = axes[0]
     colours = {"habituation": "#9E9E9E", "silent": "#424242", "sound": "#E65100"}
     for j, phase in enumerate(("habituation", "silent", "sound")):
@@ -205,17 +211,16 @@ def fig_place(arms, consistency, path, thesis=False):
     ax.set_xlabel("Arm")
     ax.set_ylabel("Share of the time in the arms (%)")
     ax.legend(fontsize=6 if thesis else 8, frameon=False, ncol=3, loc="upper left")
-    ax.set_title("(a) each arm, over all sessions" if thesis else "Each arm, over all sessions",
-                 loc="left" if thesis else "center")
-    ax = axes[1]
-    c = consistency.dropna()
-    ax.hist(c, bins=np.linspace(-1, 1, 21), color="#1F3864", alpha=0.8)
-    ax.axvline(0, color="black", lw=0.6, ls=(0, (4, 2)))
-    ax.axvline(np.median(c), color="#E65100", lw=1.2)
-    ax.set_xlabel("Spearman correlation of arm shares,\nhabituation against sound blocks")
-    ax.set_ylabel("Sessions")
-    ax.set_title("(b) the same arms favoured" if thesis else "The same arms favoured",
-                 loc="left" if thesis else "center")
+    if not thesis:
+        ax.set_title("Each arm, over all sessions")
+        ax = axes[1]
+        c = consistency.dropna()
+        ax.hist(c, bins=np.linspace(-1, 1, 21), color="#1F3864", alpha=0.8)
+        ax.axvline(0, color="black", lw=0.6, ls=(0, (4, 2)))
+        ax.axvline(np.median(c), color="#E65100", lw=1.2)
+        ax.set_xlabel("Spearman correlation of arm shares,\nhabituation against sound blocks")
+        ax.set_ylabel("Sessions")
+        ax.set_title("The same arms favoured")
     for a in axes:
         a.spines["top"].set_visible(False)
         a.spines["right"].set_visible(False)
