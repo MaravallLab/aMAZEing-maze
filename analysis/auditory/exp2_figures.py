@@ -65,7 +65,7 @@ def per_mouse_index(d, tier=None):
 def fig_session(d, path):
     d1, d2 = d[d["day"] == "day_1"], d[d["day"] == "day_2"]
     groups = d.groupby("mouse")["group"].first()
-    fig, axes = plt.subplots(1, 3, figsize=(6.3, 2.5), gridspec_kw={"width_ratios": [0.8, 1.4, 0.9]})
+    fig, axes = plt.subplots(1, 3, figsize=(6.3, 2.9), gridspec_kw={"width_ratios": [0.65, 1.55, 0.9]})
     rng = np.random.default_rng(0)
 
     ax = axes[0]
@@ -78,8 +78,9 @@ def fig_session(d, path):
     for x, c in ((0, "EE"), (1, "SC")):
         ax.plot([x - 0.2, x + 0.2], [t[c].median()] * 2, color="black", lw=1.6, zorder=3)
     p = wilcoxon(t["EE"], t["SC"]).pvalue
-    ax.text(0.5, t.values.max() * 1.02, stars(p), ha="center", va="bottom", fontsize=7)
-    ax.set_xticks([0, 1]); ax.set_xticklabels(["EE\ngrammar", "SC\ngrammar"])
+    ax.text(0.5, t.values.max() * 1.02, stars(p), ha="center", va="bottom", fontsize=9)
+    ax.set_xticks([0, 1]); ax.set_xticklabels(["EE", "SC"])
+    ax.set_ylim(top=t.values.max() * 1.14)
     ax.set_xlim(-0.5, 1.5)
     ax.set_ylabel("Time in the grammar arms\nper session (min)")
     ax.set_title("(a) day 1", loc="left")
@@ -103,13 +104,14 @@ def fig_session(d, path):
         top = s.values.max()
         ax.plot([xs[0], xs[0], xs[1], xs[1]], [top * 1.03, top * 1.06, top * 1.06, top * 1.03],
                 color="black", lw=0.6)
-        ax.text(i, top * 1.07, stars(ph[i]), ha="center", va="bottom", fontsize=7)
+        ax.text(i, top * 1.07, stars(ph[i]), ha="center", va="bottom", fontsize=9)
     ax.set_xticks(range(3)); ax.set_xticklabels(TIERS)
     ax.set_xlim(-0.55, 2.55)
     ax.set_ylabel("Time in the arm\nper session (min)")
     ax.set_title("(b) day 1, by level of predictability", loc="left")
+    ax.set_ylim(0, ax.get_ylim()[1] * 1.3)
     ax.bar([0], [0], color=EE, label="EE grammar"); ax.bar([0], [0], color=SC, label="SC grammar")
-    ax.legend(fontsize=5.5, frameon=False, loc="upper right")
+    ax.legend(fontsize=7.5, frameon=False, loc="upper right", ncol=2)
     ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
 
     ax = axes[2]
@@ -120,7 +122,7 @@ def fig_session(d, path):
     for x, v in ((0, a), (1, b)):
         ax.scatter(np.full(len(v), x), v, s=5, color="#424242", lw=0, zorder=2)
         ax.plot([x - 0.2, x + 0.2], [v.median()] * 2, color="black", lw=1.6, zorder=3)
-        ax.text(x, 0.55, stars(wilcoxon(v).pvalue), ha="center", va="bottom", fontsize=7)
+        ax.text(x, 0.55, stars(wilcoxon(v).pvalue), ha="center", va="bottom", fontsize=9)
     ax.axhline(0, color="black", lw=0.6, ls=(0, (4, 2)))
     ax.set_xticks([0, 1]); ax.set_xticklabels(["day 1", "day 2"])
     ax.set_xlim(-0.5, 1.5); ax.set_ylim(-0.35, 0.65)
@@ -137,7 +139,12 @@ def fig_session(d, path):
 def fig_model(mv, path):
     res = json.load(open(os.path.join(mv, "results.json")))
     grain = json.load(open(os.path.join(mv, "grain_results.json")))
-    fig, axes = plt.subplots(1, 3, figsize=(6.3, 2.4), gridspec_kw={"width_ratios": [0.9, 1.0, 1.5]})
+    # (a) and (b) side by side, (c) across the full width below, so the seven
+    # kinds of arm have room for their names
+    fig = plt.figure(figsize=(6.3, 5.0))
+    gs = fig.add_gridspec(2, 2, height_ratios=[1, 1], width_ratios=[0.8, 1.2],
+                          hspace=0.6, wspace=0.55)
+    axes = [fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[1, :])]
 
     ax = axes[0]
     grid = res["recovery"]["parameter_recovery"]["grid"]
@@ -165,20 +172,21 @@ def fig_model(mv, path):
     ax.set_title("(b) by grain", loc="left")
 
     ax = axes[2]
-    cells = ["EE\ndom.", "EE\nsec.", "EE\nrare", "SC\ndom.", "SC\nsec.", "SC\nrare", "silent"]
+    cells = ["EE\ndominant", "EE\nsecondary", "EE\nrare", "SC\ndominant", "SC\nsecondary",
+             "SC\nrare", "silent"]
     obs, pred = grain["grainB_observed_mean"], grain["grainB_ppc_predicted"]
     x = np.arange(7)
     colours = [EE] * 3 + [SC] * 3 + ["#9E9E9E"]
     ax.bar(x - 0.2, obs, 0.38, color=colours, alpha=0.9, label="observed")
     ax.bar(x + 0.2, pred, 0.38, color="white", edgecolor=colours, lw=0.9, label="model")
     ax.axhline(1 / 7, color="grey", lw=0.5, ls=(0, (4, 2)))
-    ax.set_xticks(x); ax.set_xticklabels(cells, fontsize=5.5)
-    ax.set_ylabel("Share of time (mean over mice)")
-    ax.set_title("(c) observed and predicted", loc="left")
-    ax.legend(fontsize=5.5, frameon=False, loc="upper right")
+    ax.set_xticks(x); ax.set_xticklabels(cells)
+    ax.set_ylabel("Share of time\n(mean over mice)")
+    ax.set_title("(c) observed and predicted share of time in each kind of arm", loc="left")
+    ax.legend(frameon=False, loc="upper center", ncol=2)
+    ax.set_ylim(0, max(max(obs), max(pred)) * 1.2)
     for ax in axes:
         ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
-    fig.tight_layout()
     for ext in ("png", "pdf"):
         fig.savefig(f"{path}.{ext}", dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -225,12 +233,12 @@ def draw_chain(ax, M, sym, khz, colour):
             # the dominant ones; the matrix above gives the rest
             if not (i == 0 or p > 0.5):
                 continue
-            ax.text(*at, f"{p:.2f}", ha="center", va="center", fontsize=5 if p < 0.5 else 5.4,
+            ax.text(*at, f"{p:.2f}", ha="center", va="center", fontsize=6 if p < 0.5 else 6.5,
                     color=tint(colour, max(share, 0.75)), fontweight="bold" if p > 0.5 else None,
                     zorder=5, bbox=dict(boxstyle="round,pad=0.08", fc="white", ec="none", alpha=0.85))
     for k, (p, c) in enumerate(zip(pos, nodes)):
         ax.add_patch(c)
-        ax.text(*p, f"{sym[k]}\n{khz[k]:.1f}", ha="center", va="center", fontsize=5,
+        ax.text(*p, f"{sym[k]}\n{khz[k]:.1f}", ha="center", va="center", fontsize=5.5,
                 color="white", fontweight="bold", zorder=5, linespacing=0.9)
         # staying on the same tone, a loop outside the node
         out = p / np.linalg.norm(p)
@@ -238,7 +246,7 @@ def draw_chain(ax, M, sym, khz, colour):
                          color=tint(colour, 0.38), lw=0.6, zorder=1))
         if k == 0:
             ax.text(*(p + out * (r_node + 0.25)), f"{M[k, k]:.2f}", ha="center", va="center",
-                    fontsize=5, color=tint(colour, 0.75))
+                    fontsize=6, color=tint(colour, 0.75))
     ax.set_xlim(-1.45, 1.45)
     ax.set_ylim(-1.45, 1.45)
     ax.set_aspect("equal")
@@ -313,7 +321,7 @@ def fig_stimuli(root, path):
             # the first melody of a row lines up with the left column above
             titles.append((ax, 0 if col == 0 else f"m{row}{col}", f"({next(letters)}) {g}, {tier}"))
             ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
-    fig.text(0.02, 0.24, "Tone (kHz)", rotation=90, va="center", fontsize=7)
+    fig.text(0.02, 0.24, "Tone (kHz)", rotation=90, va="center", fontsize=9)
     # Panel letters in a column share one left edge, the leftmost drawn edge
     # (tick labels and axis labels included) of the panels in that column, so
     # that (a), (c) and (e) line up, and (b) and (d).
@@ -360,7 +368,7 @@ def fig_arms(d, path):
         for c in ("vocalisation", "silent"):
             data[(day, c)] = dd[dd["cls"] == c].groupby("mouse")["time_spent_s"].sum() \
                 .reindex(mice, fill_value=0) / 60
-    fig, ax = plt.subplots(figsize=(6.3, 2.7))
+    fig, ax = plt.subplots(figsize=(6.3, 3.0))
     for (label, keys), c0 in zip(groups, centres):
         bars = [(k, day) for k in keys for day in ("day_1", "day_2")]
         start = c0 - w * (len(bars) - 1) / 2
@@ -381,7 +389,7 @@ def fig_arms(d, path):
     light = lambda c: tuple(1 - 0.45 * (1 - x) for x in to_rgb(c))
     handles = [Patch(color=EE, label="EE grammar, day 1"), Patch(color=light(EE), label="EE grammar, day 2"),
                Patch(color=SC, label="SC grammar, day 1"), Patch(color=light(SC), label="SC grammar, day 2")]
-    ax.legend(handles=handles, fontsize=5.5, frameon=False, loc="upper center", ncol=4,
+    ax.legend(handles=handles, fontsize=7.5, frameon=False, loc="upper center", ncol=4,
               bbox_to_anchor=(0.5, 1.12))
     for ext in ("png", "pdf"):
         fig.savefig(f"{path}.{ext}", dpi=200, bbox_inches="tight")
@@ -397,14 +405,14 @@ def fig_ic(root, path):
     ic = ic[(ic["grain"] == "session") & (ic["likelihood"] == "Dirichlet")].set_index("model")
     order = ["intercept", "fluency", "baseline", "full"]
     names = ["Even spread", "Fluency alone", "Brielmann and Dayan", "With semantic value"]
-    fig, axes = plt.subplots(1, 2, figsize=(6.3, 1.9), sharey=True, gridspec_kw={"wspace": 0.12})
+    fig, axes = plt.subplots(1, 2, figsize=(6.3, 2.3), sharey=True, gridspec_kw={"wspace": 0.12})
     lines = ["AIC and BIC above the best model (Dirichlet, whole sessions, day 1)"]
     for ax, crit in zip(axes, ("AIC", "BIC")):
         d = ic.loc[order, crit] - ic.loc[order, crit].min()
         y = np.arange(len(order))[::-1]
         ax.barh(y, d.to_numpy(), 0.6, color=["#9E9E9E"] * 3 + ["#2E7D32"], zorder=2)
         for yy, v in zip(y, d.to_numpy()):
-            ax.text(v + 0.8, yy, f"{v:.1f}" if v > 0 else "best", va="center", fontsize=6)
+            ax.text(v + 0.8, yy, f"{v:.1f}" if v > 0 else "best", va="center", fontsize=8)
         ax.axvline(10, color="black", lw=0.6, ls=(0, (4, 2)), zorder=1)
         ax.set_yticks(y)
         ax.set_yticklabels(names)
@@ -473,7 +481,7 @@ def fig_moves(root, path):
                         arrowprops=dict(arrowstyle="-|>", color=c, lw=1.4 if borrowed else 0.8,
                                         mutation_scale=7, shrinkA=0, shrinkB=0), zorder=2)
             ax.text((x0 + x1) / 2, max(idx[i], idx[i + 1]) + 0.55, mv, ha="center", va="bottom",
-                    fontsize=5.5, color=c, fontweight="bold" if borrowed else None)
+                    fontsize=6.5, color=c, fontweight="bold" if borrowed else None)
         ax.set_xlim(-0.05, 2.45); ax.set_ylim(-0.6, 6.4)
         ax.set_yticks(range(6))
         ax.set_yticklabels([f"{s} {f:.1f}" for s, f in zip(sym, khz)] if k == 0 else [])
@@ -481,7 +489,7 @@ def fig_moves(root, path):
         if k == 0:
             ax.set_ylabel("Tone (kHz)")
         other = "B" if g == "A" else "A"
-        ax.set_title(f"({'ab'[k]}) grammar {g}, secondary\nmoves borrowed from grammar {other} in colour",
+        ax.set_title(f"({'ab'[k]}) grammar {g}, secondary\nborrowed from {other} in colour",
                      loc="left")
         ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
 
@@ -498,7 +506,7 @@ def fig_moves(root, path):
                 ax.barh(yi, share, left=left, height=0.62, color=move_colour[mv],
                         edgecolor="white", lw=0.6)
                 if share > 0.06:
-                    ax.text(left + share / 2, yi, mv, ha="center", va="center", fontsize=6,
+                    ax.text(left + share / 2, yi, mv, ha="center", va="center", fontsize=8,
                             color="white" if mv in ("+1", "+3", "+2") else "black")
             left += share
     ax.set_yticks(y)
@@ -520,15 +528,100 @@ def fig_moves(root, path):
     return "\n".join(lines)
 
 
+def _dots(ax, x, v, colour, rng, size=5):
+    """Mice as jittered dots with their median as a bar."""
+    ax.scatter(x + rng.uniform(-0.12, 0.12, len(v)), v, s=size, color=colour, lw=0, zorder=2)
+    ax.plot([x - 0.25, x + 0.25], [v.median()] * 2, color="black", lw=1.6, zorder=3)
+
+
+def fig_groups(d, path):
+    """Day 1, all four blocks: each mouse's time with grammar A and with grammar
+    B in each counterbalancing group, each bar coloured by the cage that grammar
+    was heard in (blue enriched, red standard). In group 1 the enriched cage
+    grammar is A, in group 2 it is B, and in both the blue bar is the taller, so
+    the preference follows the cage and not the grammar. Stars test each mouse's
+    EE-SC index of time against zero (Wilcoxon), as quoted in the text."""
+    from exp2_lmm import per_mouse, is_env
+    d1 = d[d["day"] == "day_1"]
+    g1 = d1[d1["cls"] == "grammar"]
+    rng = np.random.default_rng(1)
+    fig, axes = plt.subplots(1, 2, figsize=(5.2, 2.6), sharey=True)
+    lines = []
+    for ax, grp in zip(axes, (1, 2)):
+        t = (g1[g1["group"] == grp].groupby(["mouse", "grammar"])["time_spent_s"].sum()
+             .unstack(fill_value=0)) / 60
+        ee = "A" if grp == 1 else "B"
+        for _, r in t.iterrows():
+            ax.plot([0, 1], [r["A"], r["B"]], color="#BDBDBD", lw=0.5, zorder=1)
+        for x, gram in enumerate(("A", "B")):
+            c = EE if gram == ee else SC
+            ax.bar(x, t[gram].mean(), 0.55, color=c, alpha=0.85, zorder=0)
+            ax.errorbar(x, t[gram].mean(), t[gram].sem(), color="black", lw=0.8, capsize=2, zorder=3)
+            ax.scatter(np.full(len(t), x) + rng.uniform(-0.08, 0.08, len(t)), t[gram], s=5,
+                       color="black", alpha=0.5, lw=0, zorder=2)
+        v = per_mouse(d1[d1["group"] == grp], is_env("EE"), is_env("SC"), "time")
+        p = wilcoxon(v).pvalue
+        top = t.values.max()
+        ax.plot([0, 0, 1, 1], [top * 1.03, top * 1.06, top * 1.06, top * 1.03], color="black", lw=0.6)
+        ax.text(0.5, top * 1.07, stars(p), ha="center", va="bottom", fontsize=9)
+        lines.append(f"group {grp} (EE = {ee}): index median {v.median():+.3f}, "
+                     f"{int((v > 0).sum())} of {len(v)} above 0, p = {p:.4f}")
+        ax.set_xticks([0, 1])
+        ax.set_xticklabels([f"grammar A\n({'EE' if ee == 'A' else 'SC'})",
+                            f"grammar B\n({'EE' if ee == 'B' else 'SC'})"])
+        ax.set_xlim(-0.6, 1.6)
+        ax.set_title(f"({'ab'[grp - 1]}) group {grp}", loc="left")
+        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    axes[0].set_ylabel("Time in the grammar arms\nper session (min)")
+    fig.tight_layout()
+    for ext in ("png", "pdf"):
+        fig.savefig(f"{path}.{ext}", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return "\n".join(lines)
+
+
+def fig_enter_stay(d, path):
+    """Day 1, all four blocks: each mouse's EE-SC index of entries per arm (a)
+    and of mean visit length (b), over all levels and at each level. Stars test
+    each index against zero (Wilcoxon), uncorrected, as quoted in the text."""
+    from exp2_lmm import per_mouse, is_env
+    d1 = d[d["day"] == "day_1"]
+    rng = np.random.default_rng(2)
+    fig, axes = plt.subplots(1, 2, figsize=(6.3, 2.3), sharey=True)
+    lines = []
+    for ax, (measure, title) in zip(axes, (("enter", "(a) entering, entries per arm"),
+                                           ("stay", "(b) staying, mean visit length"))):
+        labels = ["all\nlevels"] + TIERS
+        for i, tier in enumerate([None] + TIERS):
+            v = per_mouse(d1, is_env("EE", tier), is_env("SC", tier), measure)
+            _dots(ax, i, v, "#424242" if tier is None else EE, rng, size=4)
+            p = wilcoxon(v).pvalue
+            ax.text(i, 0.62, stars(p), ha="center", va="bottom", fontsize=9)
+            lines.append(f"{measure} {tier or 'all levels'}: median {v.median():+.3f}, "
+                         f"{int((v > 0).sum())} of {len(v)} above 0, p = {p:.4f}")
+        ax.axhline(0, color="black", lw=0.6, ls=(0, (4, 2)))
+        ax.set_xticks(range(4)); ax.set_xticklabels(labels)
+        ax.set_xlim(-0.6, 3.6); ax.set_ylim(-0.75, 0.75)
+        ax.set_title(title, loc="left")
+        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    axes[0].set_ylabel("EE-SC index")
+    fig.tight_layout()
+    for ext in ("png", "pdf"):
+        fig.savefig(f"{path}.{ext}", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("root", nargs="?", default="D:/AuditoryExperiments/grammar")
     parser.add_argument("--thesis-figures", metavar="DIR", required=True)
-    parser.add_argument("--only", choices=["stimuli", "moves", "session", "arms", "ic", "model"],
+    parser.add_argument("--only", choices=["stimuli", "moves", "session", "groups", "enterstay",
+                                           "arms", "ic", "model"],
                         help="draw only this figure")
     args = parser.parse_args()
-    rc = {"font.family": "serif", "font.size": 7, "axes.titlesize": 7,
-          "axes.labelsize": 7, "xtick.labelsize": 6, "ytick.labelsize": 6, "pdf.fonttype": 42}
+    rc = {"font.family": "serif", "font.size": 9, "axes.titlesize": 9,
+          "axes.labelsize": 9, "xtick.labelsize": 8, "ytick.labelsize": 8, "legend.fontsize": 7.5, "pdf.fonttype": 42}
     want = (lambda name: args.only in (None, name))
     with plt.rc_context(rc):
         if want("stimuli"):
@@ -541,11 +634,15 @@ def main():
             with open(os.path.join(args.root, "BATCH_ANALYSIS", "exp2", "move_shares.txt"),
                       "w", encoding="utf-8") as f:
                 f.write(txt + "\n")
-        if want("session") or want("arms") or want("model"):
+        if any(want(n) for n in ("session", "groups", "enterstay", "arms", "model")):
             d = pd.read_csv(os.path.join(args.root, "BATCH_ANALYSIS", "exp2", "arm_blocks.csv"))
             d["mouse"] = d["mouse"].astype(str)
             if want("session"):
                 fig_session(d, os.path.join(args.thesis_figures, "fig_exp2_session"))
+            if want("groups"):
+                print(fig_groups(d, os.path.join(args.thesis_figures, "fig_exp2_groups")))
+            if want("enterstay"):
+                print(fig_enter_stay(d, os.path.join(args.thesis_figures, "fig_exp2_enter_stay")))
             if want("arms"):
                 txt = fig_arms(d, os.path.join(args.thesis_figures, "fig_exp2_arms"))
                 print(txt)

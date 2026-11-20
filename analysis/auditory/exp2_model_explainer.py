@@ -58,8 +58,8 @@ INK, MUTED, LIGHT = "#222222", "#8C8C8C", "#D5D8DC"
 STYLE = {
     "font.family": "serif", "font.serif": ["cmr10"], "mathtext.fontset": "cm",
     "axes.unicode_minus": False, "axes.formatter.use_mathtext": True,
-    "font.size": 8, "axes.labelsize": 8, "axes.titlesize": 8, "xtick.labelsize": 7,
-    "ytick.labelsize": 7, "legend.fontsize": 7, "axes.linewidth": 0.6,
+    "font.size": 9, "axes.labelsize": 9, "axes.titlesize": 9, "xtick.labelsize": 8,
+    "ytick.labelsize": 8, "legend.fontsize": 8, "axes.linewidth": 0.6,
     "xtick.major.width": 0.6, "ytick.major.width": 0.6, "xtick.major.size": 3,
     "ytick.major.size": 3, "axes.spines.top": False, "axes.spines.right": False,
     "pdf.fonttype": 42,
@@ -76,7 +76,7 @@ BAR = 0.34
 
 def letter(ax, text, x=-0.02, y=1.02):
     # cmr10 has no bold weight, so the letter is set in bold maths
-    ax.text(x, y, rf"$\mathbf{{{text}}}$", transform=ax.transAxes, fontsize=10,
+    ax.text(x, y, rf"$\mathbf{{{text}}}$", transform=ax.transAxes, fontsize=11,
             ha="right", va="bottom")
 
 
@@ -117,9 +117,10 @@ def panel_example(ax, scores, w, pred, obs):
         ys = top - np.arange(4)
         for i, (y, v) in enumerate(zip(ys, vals)):
             ax.barh(y, v, 0.62, color=colour, alpha=1.0 if i == 3 else 0.42, zorder=2)
-        ax.text(-0.33, top + 0.72, head, ha="left", va="center", fontsize=7)
-        ax.text(0.60, ys[2], f"Predicted {pred[cell] * 100:.1f}%", ha="right", va="center", fontsize=7)
-        ax.text(0.60, ys[3], f"Mice {obs[cell] * 100:.1f}%", ha="right", va="center", fontsize=7)
+        ax.text(-0.33, top + 0.72, head, ha="left", va="center", fontsize=8.5, zorder=5,
+                bbox=dict(boxstyle="square,pad=0.1", fc="white", ec="none"))
+        ax.text(0.78, ys[2], f"Predicted {pred[cell] * 100:.1f}%", ha="right", va="center", fontsize=8.5)
+        ax.text(0.78, ys[3], f"Mice {obs[cell] * 100:.1f}%", ha="right", va="center", fontsize=8.5)
         ticks += list(ys)
         labels += list(names)
     ax.axvline(0, color=INK, lw=0.6, zorder=3)
@@ -127,7 +128,7 @@ def panel_example(ax, scores, w, pred, obs):
     ax.set_yticklabels(labels)
     ax.tick_params(axis="y", length=0)
     ax.set_xticks([-0.2, 0, 0.2])
-    ax.set_xlim(-0.33, 0.60)
+    ax.set_xlim(-0.33, 0.78)
     ax.set_ylim(-5.0, 5.2)
     ax.set_xlabel("Weight $\\times$ score")
     ax.spines["left"].set_visible(False)
@@ -163,7 +164,7 @@ def panel_recovery(ax, grid, fpr):
     ax.set_ylim(-0.2, 2.3)
     ax.set_xlabel("Semantic weight put in")
     ax.set_ylabel("Weight recovered")
-    ax.text(2.25, -0.1, f"False positives\n{fpr * 100:.1f}%", ha="right", va="bottom", fontsize=7)
+    ax.text(2.25, -0.1, f"False positives\n{fpr * 100:.1f}%", ha="right", va="bottom", fontsize=8.5)
 
 
 def panel_bars(ax, labels, values, xlabel, fmt, xlim, highlight):
@@ -174,7 +175,7 @@ def panel_bars(ax, labels, values, xlabel, fmt, xlim, highlight):
     span = xlim[1] - xlim[0]
     for yy, v in zip(y, values):
         # every value is written to the right of zero, clear of the row labels
-        ax.text(max(v, 0) + 0.03 * span, yy, fmt(v), ha="left", va="center", fontsize=7)
+        ax.text(max(v, 0) + 0.03 * span, yy, fmt(v), ha="left", va="center", fontsize=8.5)
     ax.set_yticks(y)
     ax.set_yticklabels(labels)
     ax.tick_params(axis="y", length=0)
@@ -220,7 +221,7 @@ def main():
         ax_a = [fig.add_subplot(top[0, 0])]
         ax_a += [fig.add_subplot(top[0, k], sharey=ax_a[0]) for k in (1, 2)]
         panel_scores(ax_a, scores)
-        letter(ax_a[0], "a", x=-0.28)
+        letter(ax_a[0], "a", x=-0.36)
         mid = outer[1].subgridspec(1, 2, width_ratios=[1.0, 1.0], wspace=0.42)
         ax_b = fig.add_subplot(mid[0, 0])
         panel_example(ax_b, scores, w, full, obs)
@@ -238,8 +239,8 @@ def main():
         letter(ax_e, "e", x=-0.72)
         ax_f = fig.add_subplot(bot[0, 2])
         panel_bars(ax_f, ["Baseline alone", "Fluency", "Brielmann\nand Dayan", "With semantic\nvalue"],
-                   d_aic.to_numpy(), "Change in AIC from\nBrielmann and Dayan",
-                   lambda v: "$0$" if abs(v) < 0.05 else num(v, 1), (-40, 22), 3)
+                   d_aic.to_numpy(), "Change in AIC\nfrom Brielmann\nand Dayan",
+                   lambda v: "$0$" if abs(v) < 0.05 else num(v, 1), (-40, 26), 3)
         letter(ax_f, "f", x=-0.72)
         fig.legend(handles=[Patch(color=EE, label="Enriched cage grammar"),
                             Patch(color=SC, label="Standard cage grammar"),
@@ -249,7 +250,7 @@ def main():
         targets = [out] + ([args.thesis_figures] if args.thesis_figures else [])
         for t in targets:
             for ext in ("png", "pdf"):
-                fig.savefig(os.path.join(t, f"fig_model_explainer.{ext}"), dpi=300, bbox_inches="tight")
+                fig.savefig(os.path.join(t, f"fig_exp2_model_explainer.{ext}"), dpi=300, bbox_inches="tight")
         plt.close(fig)
 
         # Panel c on its own, for Section 6.7 (it replaces the table of observed and
@@ -268,7 +269,7 @@ def main():
             loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False, handletextpad=0.4)
         ax.text(1.03, 0.08, "Index, EE over SC\n"
                 f"mice {num(ee_sc(obs), 3)}\nwithout {num(ee_sc(base), 3)}\nwith {num(ee_sc(full), 3)}",
-                transform=ax.transAxes, ha="left", va="bottom", fontsize=7)
+                transform=ax.transAxes, ha="left", va="bottom", fontsize=8.5)
         for t in targets:
             for ext in ("png", "pdf"):
                 fig.savefig(os.path.join(t, f"fig_exp2_shares.{ext}"), dpi=300, bbox_inches="tight")
