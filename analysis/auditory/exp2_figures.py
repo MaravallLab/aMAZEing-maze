@@ -141,7 +141,7 @@ def fig_model(mv, path):
     grain = json.load(open(os.path.join(mv, "grain_results.json")))
     # (a) and (b) side by side, (c) across the full width below, so the seven
     # kinds of arm have room for their names
-    fig = plt.figure(figsize=(6.3, 5.0))
+    fig = plt.figure(figsize=(6.3, 3.9))
     gs = fig.add_gridspec(2, 2, height_ratios=[1, 1], width_ratios=[0.8, 1.2],
                           hspace=0.6, wspace=0.55)
     axes = [fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1]), fig.add_subplot(gs[1, :])]
@@ -405,18 +405,20 @@ def fig_ic(root, path):
     ic = ic[(ic["grain"] == "session") & (ic["likelihood"] == "Dirichlet")].set_index("model")
     order = ["intercept", "fluency", "baseline", "full"]
     names = ["Even spread", "Fluency alone", "Brielmann and Dayan", "With semantic value"]
-    fig, axes = plt.subplots(1, 2, figsize=(6.3, 2.3), sharey=True, gridspec_kw={"wspace": 0.12})
+    # drawn at the thesis text width (426.79 pt) so that the fonts print at their size
+    fig, axes = plt.subplots(1, 2, figsize=(426.79 / 72.27, 2.7), sharey=True,
+                             gridspec_kw={"wspace": 0.15})
     lines = ["AIC and BIC above the best model (Dirichlet, whole sessions, day 1)"]
     for ax, crit in zip(axes, ("AIC", "BIC")):
         d = ic.loc[order, crit] - ic.loc[order, crit].min()
         y = np.arange(len(order))[::-1]
         ax.barh(y, d.to_numpy(), 0.6, color=["#9E9E9E"] * 3 + ["#2E7D32"], zorder=2)
         for yy, v in zip(y, d.to_numpy()):
-            ax.text(v + 0.8, yy, f"{v:.1f}" if v > 0 else "best", va="center", fontsize=8)
+            ax.text(v + 0.8, yy, f"{v:.1f}" if v > 0 else "best", va="center", fontsize=9)
         ax.axvline(10, color="black", lw=0.6, ls=(0, (4, 2)), zorder=1)
         ax.set_yticks(y)
         ax.set_yticklabels(names)
-        ax.set_xlim(0, max(42, d.max() * 1.15))
+        ax.set_xlim(0, max(48, d.max() * 1.25))
         ax.set_xlabel(f"{crit} above the best model\n(lower is better)")
         ax.set_title(f"({'ab'[axes.tolist().index(ax)]}) {crit}", loc="left")
         ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)

@@ -258,18 +258,22 @@ def main():
         # the index of EE over SC of each is written beside the legend.
         def ee_sc(v):
             return (v[:3].sum() - v[3:6].sum()) / (v[:3].sum() + v[3:6].sum())
-        fig, ax = plt.subplots(figsize=(WIDTH * 0.8, 2.5))
+        # full text width, legend above the plot, so the figure is not shrunk on
+        # the page and its text prints at its size
+        fig, ax = plt.subplots(figsize=(WIDTH, 3.3))
         panel_shares(ax, obs, sem, base, full)
         ax.legend(handles=[
             Patch(color=EE, label="EE grammar, mice"), Patch(color=SC, label="SC grammar, mice"),
             Patch(color=SILENT, label="Silent arm, mice"),
-            Line2D([], [], ls="none", marker="o", ms=4.5, mfc="white", mec=INK, mew=0.8,
+            Line2D([], [], ls="none", marker="o", ms=5, mfc="white", mec=INK, mew=0.8,
                    label="Predicted without semantic value"),
-            Line2D([], [], ls="none", marker="D", ms=3.8, color=INK, label="Predicted with semantic value")],
-            loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False, handletextpad=0.4)
-        ax.text(1.03, 0.08, "Index, EE over SC\n"
+            Line2D([], [], ls="none", marker="D", ms=4.2, color=INK, label="Predicted with semantic value")],
+            loc="lower center", bbox_to_anchor=(0.5, 1.02), ncol=2, frameon=False,
+            handletextpad=0.4, columnspacing=1.2)
+        ax.set_ylim(0, ax.get_ylim()[1] * 1.35)
+        ax.text(0.99, 0.98, "Index, EE over SC\n"
                 f"mice {num(ee_sc(obs), 3)}\nwithout {num(ee_sc(base), 3)}\nwith {num(ee_sc(full), 3)}",
-                transform=ax.transAxes, ha="left", va="bottom", fontsize=8.5)
+                transform=ax.transAxes, ha="right", va="top", fontsize=9)
         for t in targets:
             for ext in ("png", "pdf"):
                 fig.savefig(os.path.join(t, f"fig_exp2_shares.{ext}"), dpi=300, bbox_inches="tight")
