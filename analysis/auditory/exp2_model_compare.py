@@ -17,7 +17,9 @@ A = w0 + wr r + wV dV + wS S (w0 cancels in the softmax; the silent arm has all
 three terms zero; the vocalisation is held out). Two likelihoods: a Dirichlet
 with a fitted concentration (shares clipped at 1e-6 and renormalised, as in the
 earlier models), and a Gaussian on the shares (least squares), so that the
-comparison does not rest on one choice. Parameters counted: the free weights
+comparison does not rest on one choice. The full model is also refitted once
+without each mouse, to show that its semantic weight does not rest on a few
+animals. Parameters counted: the free weights
 and the concentration or the residual variance. Fitted by maximum likelihood
 (L-BFGS-B; wr and wV constrained non-negative, as in the earlier priors).
 
@@ -186,6 +188,15 @@ def main():
     lines.append("  mean share of time (observed | baseline | full):")
     for i, c in enumerate(names_cells):
         lines.append(f"    {c:13s} {obs[i]:.3f} | {preds['baseline'][i]:.3f} | {preds['full'][i]:.3f}")
+    # leave one mouse out: the full model refitted without each mouse in turn
+    mice = sorted(feat_all["mouse"].astype(str).unique())
+    ws = []
+    for m in mice:
+        Xm, Ym = session_data(feat_all[feat_all["mouse"].astype(str) != m])
+        ws.append(fit_dirichlet(Xm, Ym, MODELS["full"])[1][COL["wS"]])
+    ws = np.array(ws)
+    lines.append(f"  leave one mouse out, Dirichlet ({len(ws)} refits of the full model): wS from "
+                 f"{ws.min():+.3f} to {ws.max():+.3f}, {int((ws > 0).sum())} of {len(ws)} positive")
     ee = [0, 1, 2]; sc = [3, 4, 5]
     for lab, v in (("observed", obs), ("baseline", preds["baseline"]), ("full", preds["full"])):
         idx = (v[ee].sum() - v[sc].sum()) / (v[ee].sum() + v[sc].sum())

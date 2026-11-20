@@ -3,7 +3,7 @@ EXPLORATORY, viva version only: transitions a listener needs to tell the cages a
 Evidence accumulation with walls at 95% and 5% belief that the arm
 belongs to the EE cage. Visits of up to 5 melodies (55 transitions).
 4000 simulated visits per group, cage and level; averaged over both cages and
-both groups (weights 15 and 17 mice); seed 20261119.
+both groups (weights 15 and 15 mice); seed 20261119.
 W is the memory window in transitions. Right, wrong, undecided: share of visits
 ending at each wall by the end of the visit. Transitions to the right wall:
 median [quartiles] among visits that reached it.

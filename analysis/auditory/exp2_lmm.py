@@ -30,7 +30,8 @@ four blocks, and for block 1 alone, with day 1 primary and day 2 separate:
   mixed models (exp2_lmm.R, lme4), with the arm as a random effect.
 
 Exclusions are those of the earlier analysis (model_validation/data_loading.py,
-read only): mouse 13533 (light artefact), the session with EE and SC swapped,
+read only): mouse 13533 (light artefact), mice 13603 and 13604 (cage 6339,
+identity uncertain and placed with males by mistake), the session with EE and SC swapped,
 and duplicate filings.
 
 Usage:
@@ -269,6 +270,13 @@ def main():
                 for tier in TIERS:
                     say(f"      {tier:9s} " + describe(per_mouse(y, is_grammar("A", tier),
                                                              is_grammar("B", tier), measure)))
+    # day 1 against day 2: each mouse's index of time over all four blocks
+    both = pd.DataFrame({day: per_mouse(d[d["day"] == day], is_env("EE"), is_env("SC"), "time")
+                         for day in DAYS}).dropna()
+    drop = both["day_2"] - both["day_1"]
+    say(f"\nDay 2 against day 1, index of time, all four blocks: lower on day 2 in "
+        f"{int((drop < 0).sum())} of {len(drop)} mice, median change {drop.median():+.3f}, "
+        f"Wilcoxon p = {wilcoxon(both['day_1'], both['day_2']).pvalue:.4f}")
     with open(os.path.join(out, "stats.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 

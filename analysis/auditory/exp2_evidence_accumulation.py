@@ -46,7 +46,7 @@ up to 5 melodies (55 transitions). For each level the script gives the share
 of visits that reach the right wall, the wrong wall or neither, and the
 transitions to a decision, against transitions heard and against W. Averaged
 over both cages (the arm plays the EE or the SC grammar) and both
-counterbalancing groups (15 and 17 mice), fixed seed.
+counterbalancing groups (15 and 15 mice), fixed seed.
 
 Part 2, mouse data (test day 1). Each arm entry starts a fresh melody
 (experiments.GrammarStimulus.render: melody, 2 s gap, repeat), so the length
@@ -65,7 +65,7 @@ visits and for the first visit to each arm in each block (before the mouse can
 know from memory what an arm plays; few visits). The onset is compared with
 Part 1. 95 percent intervals come from a
 bootstrap over mice (resampling whole mice). No p values: this is exploratory
-and the curves are read by eye. Day 1 has 32 mice and most visits are short
+and the curves are read by eye. Day 1 has 30 mice and most visits are short
 (median under 1 s), so only a rough range can be read off.
 
 Usage:

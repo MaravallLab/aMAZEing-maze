@@ -34,7 +34,7 @@ Section 6.7):
 
 For each listener the script computes the mean semantic value S per transition
 of a melody of each grammar at each level, averaged over the two
-counterbalancing groups (15 and 17 mice), and the difference between the
+counterbalancing groups (15 and 15 mice), and the difference between the
 enriched cage and the standard cage grammar at each level. It compares the sign
 and ordering of that difference with the observed day 1 mean shares of time
 (Table 6.10, from exp2_model_compare.py), and fits one scale factor by least
@@ -59,7 +59,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "src"))
 from amazeing.auditory.grammar_stimuli import config as gcfg  # noqa: E402
 
 LEVELS = ["dominant", "secondary", "rare"]
-GROUP_N = {1: 15, 2: 17}          # mice per counterbalancing group on day 1
+GROUP_N = {1: 15, 2: 15}          # mice per counterbalancing group on day 1 (13603, 13604 excluded)
 STAY = 0.99                       # persistence of a context between transitions
 N_MELODIES = 32                   # melodies per arm visit pooled, about 140 s / 4.4 s
 N_SIM = 400                       # simulated arm visits per cell

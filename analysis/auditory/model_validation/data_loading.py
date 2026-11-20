@@ -20,7 +20,8 @@ REAL SCHEMA (the originally-assumed columns were wrong):
 NAMED, AUDITABLE EXCLUSIONS (logged with a reason, never silent drops):
   * EXCLUDED_ANIMALS: mouse 13533 (light event triggered all ROIs on both test
     days; tracking artifact). Removing the id and re-running is the whole change
-    needed once the artifact frames are cleaned.
+    needed once the artifact frames are cleaned. Mice 13603 and 13604 (cage
+    6339): identity uncertain and mistakenly placed with males before testing.
   * the `wentagainbymistake_swap_SCandEE` session (EE/SC swapped).
   * duplicate filings of the same session (same mouse+day+timestamp under two
     parent folders, e.g. day_1/ and a cage folder) are de-duplicated keeping the
@@ -49,6 +50,21 @@ EXCLUDED_ANIMALS: Dict[str, str] = {
         "tracking contaminated. Perceived environment unchanged (cage+maze "
         "covered) - tracking artifact, not a perceptual confound. PI untrusted "
         "until artifact frames are removed by hand."
+    ),
+    # Cage 6339 (tested 2026-06-01; its sessions are also filed apart in
+    # grammar/6339_day1, set aside for this reason at the time): the young
+    # females could not be told apart and were repeatedly put by mistake in
+    # cages with males, which mated with them. Reported to the supervisor on
+    # the day. 13603 was the mouse most often mixed up.
+    "13603": (
+        "Cage 6339: identity uncertain (repeatedly mixed up with cagemates) and "
+        "repeatedly placed by mistake with males, which mated with her; her "
+        "experience of the enriched cage may have been aversive."
+    ),
+    "13604": (
+        "Cage 6339: identity uncertain (mixed up with cagemates) and placed by "
+        "mistake with males, which mated with her; her experience of the "
+        "enriched cage may have been aversive."
     ),
 }
 
