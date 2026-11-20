@@ -389,6 +389,36 @@ def fig_arms(d, path):
     return "\n".join(lines)
 
 
+def fig_ic(root, path):
+    """AIC and BIC of the four nested models, fitted to the session shares of
+    day 1 with the Dirichlet likelihood (exp2_model_compare.py), each shown above
+    the best model; lower is better, and a difference above 10 is strong evidence."""
+    ic = pd.read_csv(os.path.join(root, "BATCH_ANALYSIS", "exp2_model", "information_criteria.csv"))
+    ic = ic[(ic["grain"] == "session") & (ic["likelihood"] == "Dirichlet")].set_index("model")
+    order = ["intercept", "fluency", "baseline", "full"]
+    names = ["Even spread", "Fluency alone", "Brielmann and Dayan", "With semantic value"]
+    fig, axes = plt.subplots(1, 2, figsize=(6.3, 1.9), sharey=True, gridspec_kw={"wspace": 0.12})
+    lines = ["AIC and BIC above the best model (Dirichlet, whole sessions, day 1)"]
+    for ax, crit in zip(axes, ("AIC", "BIC")):
+        d = ic.loc[order, crit] - ic.loc[order, crit].min()
+        y = np.arange(len(order))[::-1]
+        ax.barh(y, d.to_numpy(), 0.6, color=["#9E9E9E"] * 3 + ["#2E7D32"], zorder=2)
+        for yy, v in zip(y, d.to_numpy()):
+            ax.text(v + 0.8, yy, f"{v:.1f}" if v > 0 else "best", va="center", fontsize=6)
+        ax.axvline(10, color="black", lw=0.6, ls=(0, (4, 2)), zorder=1)
+        ax.set_yticks(y)
+        ax.set_yticklabels(names)
+        ax.set_xlim(0, max(42, d.max() * 1.15))
+        ax.set_xlabel(f"{crit} above the best model\n(lower is better)")
+        ax.set_title(f"({'ab'[axes.tolist().index(ax)]}) {crit}", loc="left")
+        ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+        lines += [f"  {crit} {n:20s} {v:.1f}" for n, v in zip(names, d.to_numpy())]
+    for ext in ("png", "pdf"):
+        fig.savefig(f"{path}.{ext}", dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    return "\n".join(lines)
+
+
 MOVES = ["+1", "+2", "+3", "-1", "-2", "repeat"]
 
 
@@ -494,7 +524,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("root", nargs="?", default="D:/AuditoryExperiments/grammar")
     parser.add_argument("--thesis-figures", metavar="DIR", required=True)
-    parser.add_argument("--only", choices=["stimuli", "moves", "session", "arms", "model"],
+    parser.add_argument("--only", choices=["stimuli", "moves", "session", "arms", "ic", "model"],
                         help="draw only this figure")
     args = parser.parse_args()
     rc = {"font.family": "serif", "font.size": 7, "axes.titlesize": 7,
@@ -503,6 +533,8 @@ def main():
     with plt.rc_context(rc):
         if want("stimuli"):
             fig_stimuli(args.root, os.path.join(args.thesis_figures, "fig_exp2_stimuli"))
+        if want("ic"):
+            print(fig_ic(args.root, os.path.join(args.thesis_figures, "fig_exp2_ic")))
         if want("moves"):
             txt = fig_moves(args.root, os.path.join(args.thesis_figures, "fig_exp2_moves"))
             print(txt)
