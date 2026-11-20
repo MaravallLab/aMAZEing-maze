@@ -201,6 +201,12 @@ for (day in c("day_1", "day_2")) {
   t1 <- show_log(contrast(emmeans(m, ~ environment), ee_sc), "overall")
   cat("  by group, averaged over level:\n")
   t2 <- show_log(contrast(emmeans(m, ~ environment | group), ee_sc), "by group", "group")
+  pct <- function(e) sprintf("%+.0f%%", 100 * (exp(e) - 1))
+  cat("  the same by group, as percentages more time with the EE grammar (95% interval):\n")
+  for (i in seq_len(nrow(t2))) {
+    cat(sprintf("    group %s    %s (%s to %s)\n", t2$group[i], pct(t2$estimate[i]),
+                pct(t2$lower.CL[i]), pct(t2$upper.CL[i])))
+  }
   cat("  by level, averaged over group (p.holm across the three):\n")
   ct3 <- contrast(emmeans(m, ~ environment | tier), ee_sc)
   s3 <- as.data.frame(summary(ct3, infer = c(TRUE, TRUE))); s3$p.holm <- p.adjust(s3$p.value, "holm")
